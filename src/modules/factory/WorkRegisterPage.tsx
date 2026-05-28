@@ -185,13 +185,38 @@ export default function WorkRegisterPage({
   
 };
 useEffect(() => {
-  if (!initialWorkName) return;
+
+  if (!initialWorkName) {
+    return;
+  }
 
   const targetName = initialWorkName;
 
-  setWorkName(targetName);
+  setTimeout(() => {
+    setWorkName(targetName);
+  }, 0);
 
-  void handleLoadWorkOrder(targetName, false);
+  const loadData = async () => {
+    try {
+      await handleLoadWorkOrder(
+        targetName,
+        false
+       ).catch((error) => {
+         console.error(
+           "작업불러오기 오류:",
+           error
+         );
+       });
+    } catch (error) {
+      console.error(
+        "작업불러오기 오류:",
+        error
+      );
+    }
+  };
+
+  void loadData();
+
 }, [initialWorkName]);
 
 useEffect(() => {
@@ -200,7 +225,10 @@ useEffect(() => {
 
   async function setInitialNextWorkName() {
     const nextWorkName = await getNextWorkName();
-    setWorkName(nextWorkName);
+
+    setTimeout(() => {
+      setWorkName(nextWorkName);
+    }, 0);
   }
 
   void setInitialNextWorkName();
@@ -256,26 +284,27 @@ useEffect(() => {
   );
 }
 async function handlePrint() {
-  const currentWorkName = workName;
+  try {
+    const currentWorkName = workName;
 
-  const saved = await handleSave();
+    const saved = await handleSave();
 
-  if (!saved) {
-    return;
+    if (!saved) {
+      return;
+    }
+
+    onSelectMenu({
+      id: "factory-work-print",
+      title: "출력모드",
+      data: {
+        workName: currentWorkName,
+      },
+    });
+  } catch (error) {
+    console.error("출력 처리 오류:", error);
+    alert("출력 처리 중 오류가 발생했습니다.");
   }
-
-const nextWorkName = await getNextWorkName();
-
-onSelectMenu({
-  id: "factory-work-print",
-  title: "출력모드",
-  data: {
-    workName: currentWorkName,
-    nextWorkName,
-  },
-});
 }
-
 function formatWorkName(value: string) {
   const numbers = value.replace(/\D/g, "");
 
@@ -406,117 +435,134 @@ async function getNextWorkName() {
   return `${prefix}-${String(maxNumber + 1).padStart(3, "0")}`;
 }
 
-  async function handleSave(_printAfterSave = false) {
+async function handleSave() {
+  console.log("handleSave 시작");
+  try {
     const targetWorkName = workName;
 
-  if (!workName) {
-    alert("작명을 입력하세요.");
-    return false;
-  }
-
-  if (!carNumber) {
-    alert("차량번호를 입력하세요.");
-    return false;
-  }
-
-  const orderPayload = {
-    work_name: workName,
-    car_maker: carMaker,
-    car_model: carModel,
-    car_number: carNumber,
-    phone_number: phoneNumber,
-    car_year: carYear,
-    vin,
-    mileage,
-    color_code: colorCode,
-
-    inbound_date: inboundDate || null,
-    outbound_date: outboundDate || null,
-    release_date: releaseDate || null,
-
-    rental_company: rentalCompany,
-    rental_phone_number: rentalPhoneNumber,
-    tow_yn: towYn,
-    delivery_yn: deliveryYn,
-    partner_company: partnerCompany,
-
-    category,
-    insurance_company: company,
-    other_insurance_company: otherCompany,
-    coverage_type: coverageType,
-
-    receipt_number: receiptNumber,
-    own_receipt_number: ownReceiptNumber,
-    other_receipt_number: otherReceiptNumber,
-
-    fault_rate: faultRate,
-
-    manager_name: managerName,
-    own_manager_name: ownManagerName,
-    other_manager_name: otherManagerName,
-
-    vat_yn: vatYn,
-    deductible_amount: deductibleAmount,
-
-    message,
-  };
-
-  const { error: orderError } = isEditMode
-    ? await supabase
-        .from("work_orders")
-        .update(orderPayload)
-        .eq("work_name", targetWorkName)
-    : await supabase.from("work_orders").insert(orderPayload);
-
-  if (orderError) {
-    alert(
-      isEditMode
-        ? "작업등록 수정 실패: " + orderError.message
-        : "작업등록 저장 실패: " + orderError.message
-    );
-    return false;
-  }
-
-  if (isEditMode) {
-    const { error: deleteDetailError } = await supabase
-      .from("work_details")
-      .delete()
-      .eq("work_name", targetWorkName)
-
-    if (deleteDetailError) {
-      alert("기존 작업내용 삭제 실패: " + deleteDetailError.message);
+    if (!workName) {
+      alert("작명을 입력하세요.");
       return false;
     }
-  }
 
-  const detailRows = workRows
-    .filter((row) => row.side || row.part || row.work)
-    .map((row, index) => ({
+    if (!carNumber) {
+      alert("차량번호를 입력하세요.");
+      return false;
+    }
+
+    const orderPayload = {
       work_name: workName,
-      line_no: index + 1,
-      side: row.side,
-      part: row.part,
-      work_type: row.work,
-    }));
+      car_maker: carMaker,
+      car_model: carModel,
+      car_number: carNumber,
+      phone_number: phoneNumber,
+      car_year: carYear,
+      vin,
+      mileage,
+      color_code: colorCode,
 
-  if (detailRows.length > 0) {
-    const { error: detailError } = await supabase
-      .from("work_details")
-      .insert(detailRows);
+      inbound_date: inboundDate || null,
+      outbound_date: outboundDate || null,
+      release_date: releaseDate || null,
 
-    if (detailError) {
-      alert("작업내용 저장 실패: " + detailError.message);
+      rental_company: rentalCompany,
+      rental_phone_number: rentalPhoneNumber,
+      tow_yn: towYn,
+      delivery_yn: deliveryYn,
+      partner_company: partnerCompany,
+
+      category,
+      insurance_company: company,
+      other_insurance_company: otherCompany,
+      coverage_type: coverageType,
+
+      receipt_number: receiptNumber,
+      own_receipt_number: ownReceiptNumber,
+      other_receipt_number: otherReceiptNumber,
+
+      fault_rate: faultRate,
+
+      manager_name: managerName,
+      own_manager_name: ownManagerName,
+      other_manager_name: otherManagerName,
+
+      vat_yn: vatYn,
+      deductible_amount: deductibleAmount,
+
+      message,
+    };
+console.log("orderPayload", orderPayload);
+
+
+    const { error: orderError } = isEditMode
+      ? await supabase
+          .from("work_orders")
+          .update(orderPayload)
+          .eq("work_name", targetWorkName)
+      : await supabase
+          .from("work_orders")
+          .insert([orderPayload]);
+
+    if (orderError) {
+      alert(
+        isEditMode
+          ? "작업등록 수정 실패: " + orderError.message
+          : "작업등록 저장 실패: " + orderError.message
+      );
       return false;
     }
+
+console.log("orderError", orderError);
+
+
+
+    if (isEditMode) {
+      const { error: deleteDetailError } = await supabase
+        .from("work_details")
+        .delete()
+        .eq("work_name", targetWorkName);
+
+      if (deleteDetailError) {
+        alert("기존 작업내용 삭제 실패: " + deleteDetailError.message);
+        return false;
+      }
+    }
+
+    const detailRows = workRows
+      .filter((row) => row.side || row.part || row.work)
+      .map((row, index) => ({
+        work_name: workName,
+        line_no: index + 1,
+        side: row.side,
+        part: row.part,
+        work_type: row.work,
+      }));
+
+console.log("detailRows", detailRows);
+
+    if (detailRows.length > 0) {
+      const { error: detailError } = await supabase
+        .from("work_details")
+        .insert(detailRows);
+
+      if (detailError) {
+        alert("작업내용 저장 실패: " + detailError.message);
+        return false;
+      }
+    }
+
+    alert(isEditMode ? "수정되었습니다." : "저장되었습니다.");
+
+
+
+    return true;
+  } catch (error) {
+    console.error("작업 저장 오류:", error);
+    alert("작업 저장 중 오류가 발생했습니다.");
+    return false;
   }
-
-  alert(isEditMode ? "수정되었습니다." : "저장되었습니다.");
-
-  setIsEditMode(true);
-
-  return true;
 }
-  
+ 
   const rentalCompanies: Record<string, string> = {
   "": "",
   N: "",
@@ -528,6 +574,7 @@ async function getNextWorkName() {
   라움렌터카: "",
   에이스렌터카: "",
 };
+
   const [workRows, setWorkRows] = useState(     
   Array.from({ length: 19 }, () => ({
     side: "",
@@ -535,6 +582,7 @@ async function getNextWorkName() {
     work: "",
   }))
 );
+
   function handleWorkRowChange(
   index: number,
   key: "side" | "part" | "work",
@@ -1129,7 +1177,9 @@ function handleClearWorkRow(index: number) {
       <div className="flex justify-end gap-2">
   <button
     type="button"
-    onClick={() => handleSave(false)}
+    onClick={() => {
+  void handleSave();
+}}
     className="rounded-lg bg-blue-600 px-6 py-3 text-sm font-semibold text-white hover:bg-blue-700"
   >
     {isEditMode ? "수정 후 저장" : "저장"}
@@ -1137,7 +1187,9 @@ function handleClearWorkRow(index: number) {
 
   <button
   type="button"
-  onClick={handlePrint}
+  onClick={() => {
+  void handlePrint();
+}}
   className="rounded-lg bg-slate-900 px-6 py-3 text-sm font-semibold text-white hover:bg-slate-800"
 >
   출력
