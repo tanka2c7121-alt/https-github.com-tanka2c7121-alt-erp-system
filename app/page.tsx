@@ -32,6 +32,28 @@ export default function Home() {
     setTimeout(() => {
       setUser(JSON.parse(savedUser));
     }, 0);
+  useEffect(() => {
+  const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+    console.error("전역 Promise 오류:", event.reason);
+
+    if (event.reason instanceof Event) {
+      console.error("이벤트 타입:", event.reason.type);
+      event.preventDefault();
+    }
+  };
+
+  window.addEventListener(
+    "unhandledrejection",
+    handleUnhandledRejection
+  );
+
+  return () => {
+    window.removeEventListener(
+      "unhandledrejection",
+      handleUnhandledRejection
+    );
+  };
+}, []);
   };
 
   void loadUser();
@@ -55,7 +77,7 @@ export default function Home() {
 
         localStorage.removeItem("erpUser");
 
-        setUser(null);
+        setUser(null);   
 
       }}
     />
