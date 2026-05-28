@@ -264,36 +264,16 @@ async function handlePrint() {
     return;
   }
 
- const nextWorkName = await getNextWorkName();
-
-const handleAfterPrint = () => {
-
-  onSelectMenu({
-    id: "factory-work-register",
-    title: "작업등록",
-    data: {
-      nextWorkName,
-    },
-  });
-
-  window.removeEventListener(
-    "afterprint",
-    handleAfterPrint
-  );
-};
-
-window.addEventListener(
-  "afterprint",
-  handleAfterPrint
-);
+const nextWorkName = await getNextWorkName();
 
 onSelectMenu({
   id: "factory-work-print",
   title: "출력모드",
   data: {
     workName: currentWorkName,
+    nextWorkName,
   },
- });
+});
 }
 
 function formatWorkName(value: string) {
