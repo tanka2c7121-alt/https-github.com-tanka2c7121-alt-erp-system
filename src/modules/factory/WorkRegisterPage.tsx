@@ -264,28 +264,38 @@ async function handlePrint() {
     return;
   }
 
-  const nextWorkName = await getNextWorkName();
+ const nextWorkName = await getNextWorkName();
 
-  window.onafterprint = () => {
-    onSelectMenu({
-      id: "factory-work-register",
-      title: "작업등록",
-      data: {
-        nextWorkName,
-      },
-    });
-
-    window.onafterprint = null;
-  };
+const handleAfterPrint = () => {
 
   onSelectMenu({
-    id: "factory-work-print",
-    title: "출력모드",
+    id: "factory-work-register",
+    title: "작업등록",
     data: {
-      workName: currentWorkName,
+      nextWorkName,
     },
   });
+
+  window.removeEventListener(
+    "afterprint",
+    handleAfterPrint
+  );
+};
+
+window.addEventListener(
+  "afterprint",
+  handleAfterPrint
+);
+
+onSelectMenu({
+  id: "factory-work-print",
+  title: "출력모드",
+  data: {
+    workName: currentWorkName,
+  },
+ });
 }
+
 function formatWorkName(value: string) {
   const numbers = value.replace(/\D/g, "");
 
