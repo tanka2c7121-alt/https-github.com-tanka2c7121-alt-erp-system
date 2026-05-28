@@ -1,0 +1,117 @@
+"use client";
+
+import { useState } from "react";
+import Sidebar from "../sidebar/Sidebar";
+import Topbar from "../topbar/Topbar";
+import Statusbar from "../statusbar/Statusbar";
+import type { MenuItem } from "../../data/menuData";
+
+import WorkRegisterPage from "../../modules/factory/WorkRegisterPage";
+import WorkPrintPage from "../../modules/factory/WorkPrintPage";
+import InboundStatusPage from "../../modules/factory/InboundstatusPage";
+import FactorySettlementPage from "../../modules/factory/FactorySettlementPage";
+import SettlementRegisterPage from "../../modules/factory/SettlementRegisterPage";
+import DailyCashPage from "../../modules/factory/DailyCashPage";
+import DailyCashPrintPage from "../../modules/factory/DailyCashPrintPage";
+import DailyCashRegisterPage from "../../modules/factory/DailyCashRegisterPage";
+import SettlementMainPage from "../../modules/factory/SettlementMainPage";
+import EmployeeManagePage from "../../modules/admin/EmployeeManagePage";
+
+type MainLayoutProps = {
+  user: any;
+  onLogout: () => void;
+};
+
+export default function MainLayout({
+  user,
+  onLogout,
+}: MainLayoutProps) {
+
+  const isAdmin = user?.role === "ADMIN";
+
+  const [selectedMenu, setSelectedMenu] = useState<MenuItem>({
+    id: "dashboard",
+    title: "대시보드",
+  });
+
+  return (
+    <div className="flex h-screen flex-col bg-slate-100">
+      <Topbar
+        user={user}
+        onLogout={onLogout}
+      />
+
+      <div className="flex flex-1 overflow-hidden">
+        <Sidebar
+          selectedMenuId={selectedMenu.id}
+          onSelectMenu={setSelectedMenu}
+          isAdmin={isAdmin}
+        />
+
+        <main className="flex-1 overflow-y-auto p-6">    
+
+          <section className="min-h-[500px] rounded-2xl border bg-white p-6 shadow-sm">
+            
+     {selectedMenu.id === "employee-manage" && !isAdmin ? (
+       <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-red-700">
+         직원관리 페이지는 관리자만 접근할 수 있습니다.
+       </div>
+     ) : selectedMenu.id === "employee-manage" ? (
+        <EmployeeManagePage />
+     ) : selectedMenu.id === "factory-settlement" ? (
+        <SettlementMainPage />
+     ) : selectedMenu.id === "factory-settlement-repair-register" ? (
+        <SettlementRegisterPage
+          initialWorkName={
+          (selectedMenu.data as { workName?: string } | undefined)
+            ?.workName
+  }
+ />
+  ) : selectedMenu.id === "factory-settlement-repair" ? (
+    <FactorySettlementPage onSelectMenu={setSelectedMenu} view="all" />
+  ) : selectedMenu.id === "factory-settlement-daily-cash-register" ? (
+    <DailyCashRegisterPage editData={selectedMenu.data as any} />
+  ) : selectedMenu.id === "factory-settlement-daily-cash-print" ? (
+    <DailyCashPrintPage />
+  ) : selectedMenu.id === "factory-settlement-daily-cash" ? (
+    <DailyCashPage onSelectMenu={setSelectedMenu} />
+  ) : selectedMenu.id === "factory-inbound" ? (
+    <InboundStatusPage onSelectMenu={setSelectedMenu} />
+  ) : selectedMenu.id === "factory-work-register" ? (
+    <WorkRegisterPage
+  onSelectMenu={setSelectedMenu}
+  initialWorkName={
+    (selectedMenu.data as { workName?: string; nextWorkName?: string } | undefined)
+      ?.workName ??
+    (selectedMenu.data as { workName?: string; nextWorkName?: string } | undefined)
+      ?.nextWorkName
+  }
+/>
+  ) : selectedMenu.id === "factory-work-print" ? (
+  <WorkPrintPage
+    workName={
+      (selectedMenu.data as { workName?: string; nextWorkName?: string } | undefined)?.workName ??
+      (selectedMenu.data as { workName?: string; nextWorkName?: string } | undefined)?.nextWorkName 
+    }
+  />
+) : ( 
+  
+    <>
+      <div className="text-sm text-slate-500">작업 화면 영역</div>
+
+      <div className="mt-6 rounded-xl border border-dashed p-10 text-center text-slate-600">
+        현재 선택된 메뉴:{" "}
+        <span className="font-semibold text-slate-900">
+          {selectedMenu.title}
+        </span>
+      </div>
+   </>
+  )}  
+</section>
+        </main>
+      </div>
+
+      <Statusbar user={user} />
+    </div>
+  );
+}
