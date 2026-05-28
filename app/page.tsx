@@ -20,8 +20,6 @@ export default function Home() {
 
   useEffect(() => {
 
-  const loadUser = async () => {
-
     const savedUser =
       localStorage.getItem("erpUser");
 
@@ -29,36 +27,9 @@ export default function Home() {
       return;
     }
 
-    setTimeout(() => {
-      setUser(JSON.parse(savedUser));
-    }, 0);
-  useEffect(() => {
-  const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
-    console.error("전역 Promise 오류:", event.reason);
+    setUser(JSON.parse(savedUser));
 
-    if (event.reason instanceof Event) {
-      console.error("이벤트 타입:", event.reason.type);
-      event.preventDefault();
-    }
-  };
-
-  window.addEventListener(
-    "unhandledrejection",
-    handleUnhandledRejection
-  );
-
-  return () => {
-    window.removeEventListener(
-      "unhandledrejection",
-      handleUnhandledRejection
-    );
-  };
-}, []);
-  };
-
-  void loadUser();
-
-}, []);
+  }, []);
 
   if (!user) {
     return (
@@ -77,7 +48,7 @@ export default function Home() {
 
         localStorage.removeItem("erpUser");
 
-        setUser(null);   
+        setUser(null);
 
       }}
     />

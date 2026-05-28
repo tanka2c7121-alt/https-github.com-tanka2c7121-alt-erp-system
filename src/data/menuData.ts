@@ -59,15 +59,15 @@ export const menuData: MenuItem[] = [
         title: "정산관리",
         children: [
           {
-        id: "factory-settlement-repair",
-        title: "차량정산",
-         children: [
-    {
-        id: "factory-settlement-repair-register",
-        title: "정산등록",
-    },
-  ],
-},
+            id: "factory-settlement-repair",
+            title: "차량정산",
+            children: [
+              {
+                id: "factory-settlement-repair-register",
+                title: "정산등록",
+              },
+            ],
+          },
 
           {
             id: "factory-settlement-daily-cash",
@@ -89,7 +89,7 @@ export const menuData: MenuItem[] = [
     ],
   },
 
-    {
+  {
     id: "sales",
     title: "매출현황",
     children: [

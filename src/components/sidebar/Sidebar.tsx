@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { menuData, type MenuItem } from "../../data/menuData";
+
 type SidebarProps = {
   selectedMenuId: string;
   onSelectMenu: (menu: MenuItem) => void;
@@ -28,15 +29,12 @@ export default function Sidebar({
 
   const renderMenu = (items: MenuItem[], depth = 0) => {
     return items.map((item) => {
-      const userRole =
-        isAdmin ? "ADMIN" : "STAFF";
+      const userRole = isAdmin ? "ADMIN" : "STAFF";
 
-       if (
-         item.roles &&
-         !item.roles.includes(userRole)
-       ) {
-          return null;
-        }
+      if (item.roles && !item.roles.includes(userRole)) {
+        return null;
+      }
+
       const hasChildren = Boolean(item.children && item.children.length > 0);
       const isOpen = openMenus[item.id];
       const isSelected = selectedMenuId === item.id;
@@ -72,7 +70,7 @@ export default function Sidebar({
   };
 
   return (
-    <aside className="w-64 bg-slate-900 text-white p-4 overflow-y-auto">
+    <aside className="w-64 overflow-y-auto bg-slate-900 p-4 text-white">
       <div className="mb-6">
         <div className="text-lg font-bold">ERP MENU</div>
         <div className="text-xs text-slate-400">업무 메뉴</div>

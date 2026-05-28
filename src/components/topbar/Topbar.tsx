@@ -3,12 +3,9 @@ type Props = {
   onLogout: () => void;
 };
 
-export default function Topbar({
-  user,
-  onLogout,
-}: Props) {
+export default function Topbar({ user, onLogout }: Props) {
   return (
-    <header className="h-16 border-b bg-white px-6 flex items-center justify-between">
+    <header className="flex h-16 items-center justify-between border-b bg-white px-6">
       <div>
         <h1 className="text-xl font-bold text-slate-900">
           신흥현대서비스 ERP
@@ -18,18 +15,19 @@ export default function Topbar({
         </p>
       </div>
 
-      <div className="text-sm text-slate-600">
-        {user?.role === "ADMIN" ? "관리자 모드" : "직원 모드"}
+      <div className="flex items-center gap-4">
+        <div className="text-sm text-slate-600">
+          {user?.role === "ADMIN" ? "관리자 모드" : "직원 모드"}
+        </div>
+
+        <button
+          type="button"
+          onClick={onLogout}
+          className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700"
+        >
+          로그아웃
+        </button>
       </div>
-      <div>
-      <button
-        type="button"
-        onClick={onLogout}
-        className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700"
-      >
-       로그아웃
-     </button>
-     </div>
     </header>
   );
 }

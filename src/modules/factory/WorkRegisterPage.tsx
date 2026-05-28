@@ -197,17 +197,12 @@ useEffect(() => {
   }, 0);
 
   const loadData = async () => {
-    try {
-      await handleLoadWorkOrder(
-        targetName,
-        false
-       ).catch((error) => {
-         console.error(
-           "작업불러오기 오류:",
-           error
-         );
-       });
-    } catch (error) {
+  try {
+    await handleLoadWorkOrder(
+      targetName,
+      false
+    );
+  } catch (error) {
       console.error(
         "작업불러오기 오류:",
         error
