@@ -20,6 +20,8 @@ export default function Home() {
 
   useEffect(() => {
 
+  const loadUser = async () => {
+
     const savedUser =
       localStorage.getItem("erpUser");
 
@@ -27,9 +29,14 @@ export default function Home() {
       return;
     }
 
-    setUser(JSON.parse(savedUser));
+    setTimeout(() => {
+      setUser(JSON.parse(savedUser));
+    }, 0);
+  };
 
-  }, []);
+  void loadUser();
+
+}, []);
 
   if (!user) {
     return (
