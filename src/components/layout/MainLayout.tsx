@@ -4,7 +4,7 @@ import { useState } from "react";
 import Sidebar from "../sidebar/Sidebar";
 import Topbar from "../topbar/Topbar";
 import Statusbar from "../statusbar/Statusbar";
-import type { MenuItem } from "../../data/menuData";
+import { menuData, type MenuItem } from "../../data/menuData";
 
 import WorkRegisterPage from "../../modules/factory/WorkRegisterPage";
 import WorkPrintPage from "../../modules/factory/WorkPrintPage";
@@ -36,6 +36,7 @@ type MainLayoutProps = {
 
 export default function MainLayout({ user, onLogout }: MainLayoutProps) {
   const isAdmin = user?.role === "ADMIN";
+  const userRole = isAdmin ? "ADMIN" : "STAFF";
 
   const [selectedMenu, setSelectedMenu] = useState<MenuItem>({
     id: "dashboard",
@@ -45,20 +46,53 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
   const selectedData = selectedMenu.data as
     | { workName?: string; nextWorkName?: string }
     | undefined;
+  const mobileMenus = flattenMenus(menuData, userRole);
+  const displayedMobileMenus = mobileMenus.some(
+    (menu) => menu.id === selectedMenu.id
+  )
+    ? mobileMenus
+    : [selectedMenu, ...mobileMenus];
+
+  const handleMobileMenuChange = (menuId: string) => {
+    const nextMenu = displayedMobileMenus.find((menu) => menu.id === menuId);
+
+    if (nextMenu) {
+      setSelectedMenu(nextMenu);
+    }
+  };
 
   return (
     <div className="flex h-screen flex-col bg-slate-100">
       <Topbar user={user} onLogout={onLogout} />
 
       <div className="flex flex-1 overflow-hidden">
-        <Sidebar
-          selectedMenuId={selectedMenu.id}
-          onSelectMenu={setSelectedMenu}
-          isAdmin={isAdmin}
-        />
+        <div className="hidden w-64 shrink-0 bg-slate-900 md:block">
+          <Sidebar
+            selectedMenuId={selectedMenu.id}
+            onSelectMenu={setSelectedMenu}
+            isAdmin={isAdmin}
+          />
+        </div>
 
-        <main className="flex-1 overflow-y-auto p-6">
-          <section className="min-h-[500px] rounded-2xl border bg-white p-6 shadow-sm">
+        <main className="flex-1 overflow-y-auto p-3 md:p-6">
+          <div className="mb-3 rounded-xl border border-slate-200 bg-white p-3 md:hidden">
+            <label className="mb-1 block text-xs font-semibold text-slate-500">
+              메뉴 선택
+            </label>
+            <select
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-900"
+              value={selectedMenu.id}
+              onChange={(event) => handleMobileMenuChange(event.target.value)}
+            >
+              {displayedMobileMenus.map((menu) => (
+                <option key={menu.id} value={menu.id}>
+                  {menu.title}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <section className="min-h-[500px] rounded-xl border bg-white p-3 shadow-sm md:rounded-2xl md:p-6">
             {selectedMenu.id === "dashboard" ? (
               <HomeDashboardPage
                 isAdmin={isAdmin}
@@ -142,4 +176,22 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
       <Statusbar user={user} />
     </div>
   );
+}
+
+function flattenMenus(items: MenuItem[], role: "ADMIN" | "STAFF"): MenuItem[] {
+  const result: MenuItem[] = [];
+
+  items.forEach((item) => {
+    if (item.roles && !item.roles.includes(role)) {
+      return;
+    }
+
+    result.push(item);
+
+    if (item.children?.length) {
+      result.push(...flattenMenus(item.children, role));
+    }
+  });
+
+  return result;
 }
