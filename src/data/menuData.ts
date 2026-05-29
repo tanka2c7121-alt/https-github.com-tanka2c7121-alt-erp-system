@@ -36,7 +36,6 @@ export const menuData: MenuItem[] = [
           { id: "factory-work-print", title: "출력모드" },
         ],
       },
-      { id: "factory-progress", title: "진행현황" },
       { id: "factory-outbound", title: "출고현황" },
       {
         id: "factory-settlement",
