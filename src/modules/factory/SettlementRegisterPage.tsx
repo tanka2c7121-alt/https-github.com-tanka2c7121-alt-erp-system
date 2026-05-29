@@ -190,6 +190,10 @@ const handlePaymentChange = (
     [field]: value,
   };
 
+  if (field === "date" && value) {
+    updated[index].paymentStatus = "수금";
+  }
+
   setPaymentRows(updated);
 };
 const addPaymentRow = () => {
@@ -592,7 +596,7 @@ await supabase
     (row) =>
       row.amount &&
       row.date &&
-      row.paymentStatus === "수금"
+      row.method
   )
   .map((row) => ({
     date: row.date,
@@ -914,6 +918,11 @@ const receivableAmount = paymentRows
             ? {
                 ...item,
                 invoiceIssued: checked,
+                paymentStatus: checked
+                  ? item.date
+                    ? "수금"
+                    : "청구"
+                  : item.paymentStatus,
               }
             : item
         )
