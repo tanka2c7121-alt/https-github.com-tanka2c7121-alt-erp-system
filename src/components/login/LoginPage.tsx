@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { supabase } from "../../lib/supabase";
 
@@ -16,10 +16,24 @@ type Props = {
   onLogin: (user: LoginUser) => void;
 };
 
+const rememberedUserIdKey = "erpRememberedUserId";
+
 export default function LoginPage({ onLogin }: Props) {
   const [userId, setUserId] = useState("");
   const [password, setPassword] = useState("");
+  const [rememberId, setRememberId] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const rememberedUserId = localStorage.getItem(rememberedUserIdKey);
+
+    if (!rememberedUserId) {
+      return;
+    }
+
+    setUserId(rememberedUserId);
+    setRememberId(true);
+  }, []);
 
   async function handleLogin() {
     if (!userId || !password) {
@@ -44,7 +58,12 @@ export default function LoginPage({ onLogin }: Props) {
       return;
     }
 
-    localStorage.setItem("erpUser", JSON.stringify(data));
+    if (rememberId) {
+      localStorage.setItem(rememberedUserIdKey, userId);
+    } else {
+      localStorage.removeItem(rememberedUserIdKey);
+    }
+
     onLogin(data);
   }
 
@@ -74,6 +93,16 @@ export default function LoginPage({ onLogin }: Props) {
             placeholder="비밀번호"
             className="w-full rounded-xl border border-slate-300 px-4 py-3"
           />
+
+          <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-600">
+            <input
+              type="checkbox"
+              checked={rememberId}
+              onChange={(event) => setRememberId(event.target.checked)}
+              className="h-4 w-4"
+            />
+            아이디 기억하기
+          </label>
 
           <button
             type="button"
