@@ -18,6 +18,7 @@ import DailyCashPrintPage from "../../modules/factory/DailyCashPrintPage";
 import DailyCashRegisterPage from "../../modules/factory/DailyCashRegisterPage";
 import SettlementMainPage from "../../modules/factory/SettlementMainPage";
 import EmployeeManagePage from "../../modules/admin/EmployeeManagePage";
+import EmployeeStatusPage from "../../modules/employee/EmployeeStatusPage";
 
 type LoginUser = {
   id: string | number;
@@ -57,7 +58,32 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
 
         <main className="flex-1 overflow-y-auto p-6">
           <section className="min-h-[500px] rounded-2xl border bg-white p-6 shadow-sm">
-            {selectedMenu.id === "employee-manage" && !isAdmin ? (
+            {selectedMenu.id === "employee" ||
+            selectedMenu.id === "employee-admin" ||
+            selectedMenu.id === "employee-body" ||
+            selectedMenu.id === "employee-paint" ||
+            selectedMenu.id === "employee-repair" ? (
+              <EmployeeStatusPage
+                canManage={isAdmin}
+                departmentFilter={
+                  selectedMenu.id === "employee-admin"
+                    ? "관리부"
+                    : selectedMenu.id === "employee-body"
+                      ? "판금부"
+                      : selectedMenu.id === "employee-paint"
+                        ? "도장부"
+                        : selectedMenu.id === "employee-repair"
+                          ? "정비부"
+                          : undefined
+                }
+                onOpenManage={() =>
+                  setSelectedMenu({
+                    id: "employee-manage",
+                    title: "직원관리",
+                  })
+                }
+              />
+            ) : selectedMenu.id === "employee-manage" && !isAdmin ? (
               <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-red-700">
                 직원관리 페이지는 관리자만 접근할 수 있습니다.
               </div>
