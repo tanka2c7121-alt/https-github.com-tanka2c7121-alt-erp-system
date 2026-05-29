@@ -9,6 +9,7 @@ import type { MenuItem } from "../../data/menuData";
 import WorkRegisterPage from "../../modules/factory/WorkRegisterPage";
 import WorkPrintPage from "../../modules/factory/WorkPrintPage";
 import InboundStatusPage from "../../modules/factory/InboundstatusPage";
+import OutboundStatusPage from "../../modules/factory/OutboundStatusPage";
 import FactorySettlementPage from "../../modules/factory/FactorySettlementPage";
 import SettlementRegisterPage from "../../modules/factory/SettlementRegisterPage";
 import DailyCashPage from "../../modules/factory/DailyCashPage";
@@ -17,8 +18,16 @@ import DailyCashRegisterPage from "../../modules/factory/DailyCashRegisterPage";
 import SettlementMainPage from "../../modules/factory/SettlementMainPage";
 import EmployeeManagePage from "../../modules/admin/EmployeeManagePage";
 
+type LoginUser = {
+  id: string | number;
+  user_id: string;
+  user_name: string;
+  role: "ADMIN" | "STAFF";
+  is_active: boolean;
+};
+
 type MainLayoutProps = {
-  user: any;
+  user: LoginUser;
   onLogout: () => void;
 };
 
@@ -67,6 +76,8 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
               <DailyCashPage onSelectMenu={setSelectedMenu} />
             ) : selectedMenu.id === "factory-inbound" ? (
               <InboundStatusPage onSelectMenu={setSelectedMenu} />
+            ) : selectedMenu.id === "factory-outbound" ? (
+              <OutboundStatusPage onSelectMenu={setSelectedMenu} />
             ) : selectedMenu.id === "factory-work-register" ? (
               <WorkRegisterPage
                 onSelectMenu={setSelectedMenu}
