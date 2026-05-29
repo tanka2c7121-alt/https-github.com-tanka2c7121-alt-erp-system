@@ -31,6 +31,8 @@ export default function OutboundStatusPage({
   const [sortField, setSortField] = useState<keyof WorkItem>("release_date");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [searchText, setSearchText] = useState("");
+  const [selectedYear, setSelectedYear] = useState("");
+  const [selectedMonth, setSelectedMonth] = useState("");
   const [workList, setWorkList] = useState<WorkItem[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
 
@@ -95,6 +97,14 @@ export default function OutboundStatusPage({
 
     return [...workList]
       .filter((item) => {
+        if (!selectedYear) return true;
+        return item.release_date.startsWith(selectedYear);
+      })
+      .filter((item) => {
+        if (!selectedMonth) return true;
+        return item.release_date.slice(5, 7) === selectedMonth;
+      })
+      .filter((item) => {
         if (!keyword) return true;
 
         return [
@@ -119,7 +129,17 @@ export default function OutboundStatusPage({
         if (aValue > bValue) return sortOrder === "asc" ? 1 : -1;
         return 0;
       });
-  }, [searchText, sortField, sortOrder, workList]);
+  }, [searchText, selectedMonth, selectedYear, sortField, sortOrder, workList]);
+
+  const yearOptions = useMemo(() => {
+    return Array.from(
+      new Set(
+        workList
+          .map((item) => item.release_date.slice(0, 4))
+          .filter(Boolean)
+      )
+    ).sort((a, b) => b.localeCompare(a));
+  }, [workList]);
 
   const totalPages = Math.max(1, Math.ceil(filteredList.length / pageSize));
   const safeCurrentPage = Math.min(currentPage, totalPages);
@@ -154,8 +174,46 @@ export default function OutboundStatusPage({
 
       <div className="rounded-xl border border-slate-200 bg-white p-4">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <div className="text-sm text-slate-600">
-            총 {filteredList.length.toLocaleString()}대
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="text-sm font-semibold text-slate-700">
+              총 {filteredList.length.toLocaleString()}대
+            </div>
+
+            <select
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900"
+              value={selectedYear}
+              onChange={(event) => {
+                setSelectedYear(event.target.value);
+                setCurrentPage(1);
+              }}
+            >
+              <option value="">전체 연도</option>
+              {yearOptions.map((year) => (
+                <option key={year} value={year}>
+                  {year}년
+                </option>
+              ))}
+            </select>
+
+            <select
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900"
+              value={selectedMonth}
+              onChange={(event) => {
+                setSelectedMonth(event.target.value);
+                setCurrentPage(1);
+              }}
+            >
+              <option value="">전체 월</option>
+              {Array.from({ length: 12 }, (_, index) => {
+                const month = String(index + 1).padStart(2, "0");
+
+                return (
+                  <option key={month} value={month}>
+                    {index + 1}월
+                  </option>
+                );
+              })}
+            </select>
           </div>
 
           <input
