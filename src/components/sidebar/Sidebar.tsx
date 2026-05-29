@@ -70,7 +70,7 @@ export default function Sidebar({
   };
 
   return (
-    <aside className="w-64 overflow-y-auto bg-slate-900 p-4 text-white">
+    <aside className="h-full w-64 overflow-y-auto bg-slate-900 p-4 text-white">
       <div className="mb-6">
         <div className="text-lg font-bold">ERP MENU</div>
         <div className="text-xs text-slate-400">업무 메뉴</div>
