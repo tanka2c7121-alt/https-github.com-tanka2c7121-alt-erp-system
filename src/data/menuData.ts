@@ -24,7 +24,6 @@ export const menuData: MenuItem[] = [
       { id: "employee-repair", title: "정비부" },
     ],
   },
-
   {
     id: "factory",
     title: "공장현황",
@@ -33,27 +32,12 @@ export const menuData: MenuItem[] = [
         id: "factory-inbound",
         title: "입고현황",
         children: [
-          {
-            id: "factory-work-register",
-            title: "작업등록",
-          },
-          {
-            id: "factory-work-print",
-            title: "출력모드",
-          },
+          { id: "factory-work-register", title: "작업등록" },
+          { id: "factory-work-print", title: "출력모드" },
         ],
       },
-
-      {
-        id: "factory-progress",
-        title: "진행현황",
-      },
-
-      {
-        id: "factory-outbound",
-        title: "출고현황",
-      },
-
+      { id: "factory-progress", title: "진행현황" },
+      { id: "factory-outbound", title: "출고현황" },
       {
         id: "factory-settlement",
         title: "정산관리",
@@ -62,13 +46,9 @@ export const menuData: MenuItem[] = [
             id: "factory-settlement-repair",
             title: "차량정산",
             children: [
-              {
-                id: "factory-settlement-repair-register",
-                title: "정산등록",
-              },
+              { id: "factory-settlement-repair-register", title: "정산등록" },
             ],
           },
-
           {
             id: "factory-settlement-daily-cash",
             title: "일일입출금",
@@ -77,7 +57,6 @@ export const menuData: MenuItem[] = [
                 id: "factory-settlement-daily-cash-register",
                 title: "입출금등록",
               },
-
               {
                 id: "factory-settlement-daily-cash-print",
                 title: "출력모드",
@@ -88,7 +67,6 @@ export const menuData: MenuItem[] = [
       },
     ],
   },
-
   {
     id: "sales",
     title: "매출현황",
@@ -99,7 +77,6 @@ export const menuData: MenuItem[] = [
       { id: "sales-blue", title: "BLUE포인트" },
     ],
   },
-
   {
     id: "settings",
     title: "설정관리",
