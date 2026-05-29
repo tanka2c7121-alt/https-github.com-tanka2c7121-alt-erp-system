@@ -182,6 +182,7 @@ export default function WorkRegisterPage({
   "K8": ["ABP"],
   "싼타페": ["W3A","WW2","PB2"],
   "쏘나타": ["T2G"],
+  "K7":["STM"]
   
 };
 useEffect(() => {
