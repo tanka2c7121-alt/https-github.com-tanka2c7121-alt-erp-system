@@ -159,7 +159,7 @@ export default function WorkRegisterPage({
   const [releaseDate, setReleaseDate] = useState("");
 
   const colorOptions: Record<string, string[]> = {
-  "그랜저": ["A2B", "WC9", "T2G","TB7"],
+  "그랜저": ["A2B", "WC9", "T2G","TB7","V7S"],
   "쏘렌토": ["AGT", "SWP", "MZH"],
   "카니발": ["SNR", "SWP"],
   "니로": ["ABP", "SWP", "AGT"],
@@ -170,7 +170,7 @@ export default function WorkRegisterPage({
   "스토닉": ["ABP", "SWP", "MZH"],
   "레이": ["ABP", "SWP", "MZH"],
   "봉고3": ["ABP", "SWP", "MZH"],
-  "아반떼": ["SAW","WAW","A5G"],
+  "아반떼": ["SAW","WAW","A5G","PE2"],
   "GV80": ["UYH","NRB","NCM"],
   "G80": ["SSS","UYH","PH3"],
   "코나": ["SAW"],
@@ -179,11 +179,11 @@ export default function WorkRegisterPage({
   "스포티지": ["SWP"],
   "팰리세이드": ["RB5","P7V"],
   "GV70": ["SSS"],
-  "K8": ["ABP"],
+  "K8": ["ABP","B4U"],
   "싼타페": ["W3A","WW2","PB2"],
   "쏘나타": ["T2G"],
-  "K7":["STM"]
-  
+  "K7":["STM"],
+  "포터":["KG","ZV","OA"]
 };
 useEffect(() => {
 
@@ -859,6 +859,7 @@ function handleClearWorkRow(index: number) {
   <option value="BNK캐피탈">BNK캐피탈</option>
   <option value="오픈링크">오픈링크</option>
   <option value="오부장">오부장</option>
+  <option value="오부장">경인렌터카</option>
 </select>
 </div>
       </section>
