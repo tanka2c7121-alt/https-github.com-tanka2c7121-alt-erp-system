@@ -290,6 +290,19 @@ export default function DailyCashPage({ onSelectMenu }: DailyCashPageProps) {
     >
       입출금 등록
     </button>
+
+    <button
+      type="button"
+      onClick={() =>
+        onSelectMenu({
+          id: "factory-settlement-daily-cash-print",
+          title: "출력모드",
+        })
+      }
+      className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+    >
+      출력
+    </button>
   </div>
 </div>
       

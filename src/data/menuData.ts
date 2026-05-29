@@ -15,14 +15,12 @@ export type MenuItem = {
 
 export const menuData: MenuItem[] = [
   {
+    id: "dashboard",
+    title: "업무홈",
+  },
+  {
     id: "employee",
     title: "직원현황",
-    children: [
-      { id: "employee-admin", title: "관리부" },
-      { id: "employee-body", title: "판금부" },
-      { id: "employee-paint", title: "도장부" },
-      { id: "employee-repair", title: "정비부" },
-    ],
   },
   {
     id: "factory",
@@ -33,7 +31,6 @@ export const menuData: MenuItem[] = [
         title: "입고현황",
         children: [
           { id: "factory-work-register", title: "작업등록" },
-          { id: "factory-work-print", title: "출력모드" },
         ],
       },
       { id: "factory-outbound", title: "출고현황" },
@@ -55,10 +52,6 @@ export const menuData: MenuItem[] = [
               {
                 id: "factory-settlement-daily-cash-register",
                 title: "입출금등록",
-              },
-              {
-                id: "factory-settlement-daily-cash-print",
-                title: "출력모드",
               },
             ],
           },

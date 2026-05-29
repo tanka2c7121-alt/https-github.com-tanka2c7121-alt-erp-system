@@ -19,6 +19,7 @@ import DailyCashRegisterPage from "../../modules/factory/DailyCashRegisterPage";
 import SettlementMainPage from "../../modules/factory/SettlementMainPage";
 import EmployeeManagePage from "../../modules/admin/EmployeeManagePage";
 import EmployeeStatusPage from "../../modules/employee/EmployeeStatusPage";
+import HomeDashboardPage from "../../modules/home/HomeDashboardPage";
 
 type LoginUser = {
   id: string | number;
@@ -58,7 +59,13 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
 
         <main className="flex-1 overflow-y-auto p-6">
           <section className="min-h-[500px] rounded-2xl border bg-white p-6 shadow-sm">
-            {selectedMenu.id === "employee" ||
+            {selectedMenu.id === "dashboard" ? (
+              <HomeDashboardPage
+                isAdmin={isAdmin}
+                userName={user?.user_name}
+                onSelectMenu={setSelectedMenu}
+              />
+            ) : selectedMenu.id === "employee" ||
             selectedMenu.id === "employee-admin" ||
             selectedMenu.id === "employee-body" ||
             selectedMenu.id === "employee-paint" ||
