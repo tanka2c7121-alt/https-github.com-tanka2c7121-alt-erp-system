@@ -72,26 +72,26 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
       <Topbar user={user} onLogout={onLogout} />
 
       <div className="flex flex-1 overflow-hidden">
-        <div className="group/sidebar fixed bottom-10 left-0 top-16 z-30 hidden w-72 md:block">
+        <div
+          className={[
+            "group/sidebar relative hidden h-full shrink-0 overflow-hidden bg-slate-900 transition-[width] duration-200 ease-out md:block",
+            isSidebarOpen ? "w-64" : "w-4 hover:w-64",
+          ].join(" ")}
+        >
           <button
             type="button"
             aria-label="메뉴 열기"
             onClick={() => setIsSidebarOpen((prev) => !prev)}
-            className="absolute inset-y-0 left-0 w-4 bg-slate-900/90 transition-colors group-hover/sidebar:bg-slate-900"
+            className="absolute inset-y-0 left-0 z-20 w-4 bg-slate-900/90 transition-colors group-hover/sidebar:bg-slate-900"
           />
           <button
             type="button"
             onClick={() => setIsSidebarOpen((prev) => !prev)}
-            className="absolute left-0 top-1/2 -translate-y-1/2 rounded-r-lg bg-slate-900 px-1 py-8 text-[10px] font-semibold text-slate-300 shadow-md"
+            className="absolute left-0 top-1/2 z-30 -translate-y-1/2 rounded-r-lg bg-slate-900 px-1 py-8 text-[10px] font-semibold text-slate-300 shadow-md"
           >
             MENU
           </button>
-          <div
-            className={[
-              "h-full w-64 overflow-hidden bg-slate-900 shadow-2xl transition-transform duration-200 ease-out group-hover/sidebar:translate-x-0",
-              isSidebarOpen ? "translate-x-0" : "-translate-x-64",
-            ].join(" ")}
-          >
+          <div className="h-full w-64 bg-slate-900 shadow-2xl">
             <Sidebar
               selectedMenuId={selectedMenu.id}
               onSelectMenu={handleSelectMenu}
@@ -99,14 +99,6 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
             />
           </div>
         </div>
-        {isSidebarOpen && (
-          <button
-            type="button"
-            aria-label="메뉴 닫기"
-            onClick={() => setIsSidebarOpen(false)}
-            className="fixed bottom-10 left-64 right-0 top-16 z-20 hidden bg-slate-900/10 md:block"
-          />
-        )}
 
         <main className="flex-1 overflow-y-auto p-3 md:p-6">
           <div className="mb-3 rounded-xl border border-slate-200 bg-white p-3 md:hidden">
