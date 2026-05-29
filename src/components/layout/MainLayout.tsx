@@ -8,6 +8,7 @@ import type { MenuItem } from "../../data/menuData";
 
 import WorkRegisterPage from "../../modules/factory/WorkRegisterPage";
 import WorkPrintPage from "../../modules/factory/WorkPrintPage";
+import FactoryDashboardPage from "../../modules/factory/FactoryDashboardPage";
 import InboundStatusPage from "../../modules/factory/InboundstatusPage";
 import OutboundStatusPage from "../../modules/factory/OutboundStatusPage";
 import FactorySettlementPage from "../../modules/factory/FactorySettlementPage";
@@ -62,6 +63,8 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
               </div>
             ) : selectedMenu.id === "employee-manage" ? (
               <EmployeeManagePage />
+            ) : selectedMenu.id === "factory" ? (
+              <FactoryDashboardPage onSelectMenu={setSelectedMenu} />
             ) : selectedMenu.id === "factory-settlement" ? (
               <SettlementMainPage />
             ) : selectedMenu.id === "factory-settlement-repair-register" ? (
