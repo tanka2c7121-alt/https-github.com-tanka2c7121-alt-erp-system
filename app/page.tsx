@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import MainLayout from "../src/components/layout/MainLayout";
 import LoginPage from "../src/components/login/LoginPage";
@@ -14,43 +14,11 @@ type LoginUser = {
 };
 
 export default function Home() {
-
-  const [user, setUser] =
-    useState<LoginUser | null>(null);
-
-  useEffect(() => {
-
-    const savedUser =
-      localStorage.getItem("erpUser");
-
-    if (!savedUser) {
-      return;
-    }
-
-    setUser(JSON.parse(savedUser));
-
-  }, []);
+  const [user, setUser] = useState<LoginUser | null>(null);
 
   if (!user) {
-    return (
-      <LoginPage
-        onLogin={(loginUser) =>
-          setUser(loginUser)
-        }
-      />
-    );
+    return <LoginPage onLogin={(loginUser) => setUser(loginUser)} />;
   }
 
-  return (
-    <MainLayout
-      user={user}
-      onLogout={() => {
-
-        localStorage.removeItem("erpUser");
-
-        setUser(null);
-
-      }}
-    />
-  );
+  return <MainLayout user={user} onLogout={() => setUser(null)} />;
 }
