@@ -42,6 +42,7 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
     id: "dashboard",
     title: "대시보드",
   });
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const selectedData = selectedMenu.data as
     | { workName?: string; nextWorkName?: string }
@@ -61,24 +62,51 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
     }
   };
 
+  const handleSelectMenu = (menu: MenuItem) => {
+    setSelectedMenu(menu);
+    setIsSidebarOpen(false);
+  };
+
   return (
     <div className="flex h-screen flex-col bg-slate-100">
       <Topbar user={user} onLogout={onLogout} />
 
       <div className="flex flex-1 overflow-hidden">
         <div className="group/sidebar fixed bottom-10 left-0 top-16 z-30 hidden w-72 md:block">
-          <div className="absolute inset-y-0 left-0 w-4 bg-slate-900/90 transition-colors group-hover/sidebar:bg-slate-900" />
-          <div className="absolute left-0 top-1/2 -translate-y-1/2 rounded-r-lg bg-slate-900 px-1 py-8 text-[10px] font-semibold text-slate-300 shadow-md">
+          <button
+            type="button"
+            aria-label="메뉴 열기"
+            onClick={() => setIsSidebarOpen((prev) => !prev)}
+            className="absolute inset-y-0 left-0 w-4 bg-slate-900/90 transition-colors group-hover/sidebar:bg-slate-900"
+          />
+          <button
+            type="button"
+            onClick={() => setIsSidebarOpen((prev) => !prev)}
+            className="absolute left-0 top-1/2 -translate-y-1/2 rounded-r-lg bg-slate-900 px-1 py-8 text-[10px] font-semibold text-slate-300 shadow-md"
+          >
             MENU
-          </div>
-          <div className="h-full w-64 -translate-x-64 overflow-hidden bg-slate-900 shadow-2xl transition-transform duration-200 ease-out group-hover/sidebar:translate-x-0">
+          </button>
+          <div
+            className={[
+              "h-full w-64 overflow-hidden bg-slate-900 shadow-2xl transition-transform duration-200 ease-out group-hover/sidebar:translate-x-0",
+              isSidebarOpen ? "translate-x-0" : "-translate-x-64",
+            ].join(" ")}
+          >
             <Sidebar
               selectedMenuId={selectedMenu.id}
-              onSelectMenu={setSelectedMenu}
+              onSelectMenu={handleSelectMenu}
               isAdmin={isAdmin}
             />
           </div>
         </div>
+        {isSidebarOpen && (
+          <button
+            type="button"
+            aria-label="메뉴 닫기"
+            onClick={() => setIsSidebarOpen(false)}
+            className="fixed bottom-10 left-64 right-0 top-16 z-20 hidden bg-slate-900/10 md:block"
+          />
+        )}
 
         <main className="flex-1 overflow-y-auto p-3 md:p-6">
           <div className="mb-3 rounded-xl border border-slate-200 bg-white p-3 md:hidden">
@@ -103,7 +131,7 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
               <HomeDashboardPage
                 isAdmin={isAdmin}
                 userName={user?.user_name}
-                onSelectMenu={setSelectedMenu}
+                onSelectMenu={handleSelectMenu}
               />
             ) : selectedMenu.id === "employee" ||
             selectedMenu.id === "employee-admin" ||
@@ -124,7 +152,7 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
                           : undefined
                 }
                 onOpenManage={() =>
-                  setSelectedMenu({
+                  handleSelectMenu({
                     id: "employee-manage",
                     title: "직원관리",
                   })
@@ -137,26 +165,26 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
             ) : selectedMenu.id === "employee-manage" ? (
               <EmployeeManagePage />
             ) : selectedMenu.id === "factory" ? (
-              <FactoryDashboardPage onSelectMenu={setSelectedMenu} />
+              <FactoryDashboardPage onSelectMenu={handleSelectMenu} />
             ) : selectedMenu.id === "factory-settlement" ? (
-              <SettlementMainPage onSelectMenu={setSelectedMenu} />
+              <SettlementMainPage onSelectMenu={handleSelectMenu} />
             ) : selectedMenu.id === "factory-settlement-repair-register" ? (
               <SettlementRegisterPage initialWorkName={selectedData?.workName} />
             ) : selectedMenu.id === "factory-settlement-repair" ? (
-              <FactorySettlementPage onSelectMenu={setSelectedMenu} view="all" />
+              <FactorySettlementPage onSelectMenu={handleSelectMenu} view="all" />
             ) : selectedMenu.id === "factory-settlement-daily-cash-register" ? (
               <DailyCashRegisterPage editData={selectedMenu.data as any} />
             ) : selectedMenu.id === "factory-settlement-daily-cash-print" ? (
               <DailyCashPrintPage />
             ) : selectedMenu.id === "factory-settlement-daily-cash" ? (
-              <DailyCashPage onSelectMenu={setSelectedMenu} />
+              <DailyCashPage onSelectMenu={handleSelectMenu} />
             ) : selectedMenu.id === "factory-inbound" ? (
-              <InboundStatusPage onSelectMenu={setSelectedMenu} />
+              <InboundStatusPage onSelectMenu={handleSelectMenu} />
             ) : selectedMenu.id === "factory-outbound" ? (
-              <OutboundStatusPage onSelectMenu={setSelectedMenu} />
+              <OutboundStatusPage onSelectMenu={handleSelectMenu} />
             ) : selectedMenu.id === "factory-work-register" ? (
               <WorkRegisterPage
-                onSelectMenu={setSelectedMenu}
+                onSelectMenu={handleSelectMenu}
                 initialWorkName={selectedData?.workName ?? selectedData?.nextWorkName}
               />
             ) : selectedMenu.id === "factory-work-print" ? (
