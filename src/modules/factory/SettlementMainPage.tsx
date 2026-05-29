@@ -1,14 +1,20 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import type { MenuItem } from "../../data/menuData";
 import { supabase } from "../../lib/supabase";
 
-export default function SettlementMainPage() {
+export default function SettlementMainPage({
+  onSelectMenu,
+}: {
+  onSelectMenu: (menu: MenuItem) => void;
+}) {
   const [dailyRows, setDailyRows] = useState<any[]>([]);
   const [searchText, setSearchText] = useState("");
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [balanceRows, setBalanceRows] = useState<any[]>([]);
   const [paymentRows, setPaymentRows] = useState<any[]>([]);
+  const [showReceivables, setShowReceivables] = useState(false);
 
   useEffect(() => {
   void fetchSettlementMain(selectedMonth);
@@ -165,16 +171,27 @@ const totalBalance = accountSummary.reduce(
   0
   );
 
+const isReceivableRow = (row: any) => {
+  const amount = Number(row.payment_amount || 0);
+
+  if (amount <= 0) {
+    return false;
+  }
+
+  return (
+    !row.payment_date
+  );
+};
+
 const receivableAmount = paymentRows
-  .filter(
-    (row) =>
-      row.payment_status === "청구"
-  )
+  .filter(isReceivableRow)
   .reduce(
     (sum, row) =>
       sum + Number(row.payment_amount || 0),
     0
   );
+
+const receivableRows = paymentRows.filter(isReceivableRow);
 
 const receivableSummary = [
   "국민은행",
@@ -183,11 +200,7 @@ const receivableSummary = [
 ].map((accountName) => {
 
   const amount = paymentRows
-    .filter(
-      (row) =>
-        row.payment_status === "청구" &&
-        row.payment_method === accountName
-    )
+    .filter((row) => isReceivableRow(row) && row.payment_method === accountName)
     .reduce(
       (sum, row) =>
         sum + Number(row.payment_amount || 0),
@@ -266,10 +279,100 @@ async function fetchSettlementMain(month: number) {
          value={receivableAmount}
          color="text-orange-600"
         details={receivableSummary}
+        onClick={() => setShowReceivables((value) => !value)}
        />
        <SummaryCard title="오늘 입금" value={todayIncome} color="text-green-600" />
        <SummaryCard title="오늘 출금" value={todayExpense} color="text-red-600" />
       </div>
+      {showReceivables && (
+        <section className="rounded-2xl border border-orange-200 bg-white p-5 shadow-sm">
+          <div className="mb-4 flex items-center justify-between">
+            <div>
+              <h4 className="text-lg font-bold text-slate-900">미수금 차량 목록</h4>
+              <p className="text-sm text-slate-500">
+                청구 상태이거나 입금일이 없는 정산 내역입니다.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowReceivables(false)}
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+            >
+              닫기
+            </button>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr className="bg-orange-50 text-left text-slate-700">
+                  <th className="border border-orange-100 px-3 py-2">작명</th>
+                  <th className="border border-orange-100 px-3 py-2">구분</th>
+                  <th className="border border-orange-100 px-3 py-2">상세</th>
+                  <th className="border border-orange-100 px-3 py-2">계정</th>
+                  <th className="border border-orange-100 px-3 py-2">청구일</th>
+                  <th className="border border-orange-100 px-3 py-2">입금일</th>
+                  <th className="border border-orange-100 px-3 py-2 text-right">금액</th>
+                  <th className="border border-orange-100 px-3 py-2 text-center">관리</th>
+                </tr>
+              </thead>
+              <tbody>
+                {receivableRows.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={8}
+                      className="border border-orange-100 px-3 py-8 text-center text-slate-500"
+                    >
+                      미수금 내역이 없습니다.
+                    </td>
+                  </tr>
+                ) : (
+                  receivableRows.map((row, index) => (
+                    <tr key={`${row.work_name}-${index}`} className="hover:bg-orange-50">
+                      <td className="border border-orange-100 px-3 py-2 font-semibold">
+                        {row.work_name}
+                      </td>
+                      <td className="border border-orange-100 px-3 py-2">
+                        {row.payment_type}
+                      </td>
+                      <td className="border border-orange-100 px-3 py-2">
+                        {row.payment_detail}
+                      </td>
+                      <td className="border border-orange-100 px-3 py-2">
+                        {row.payment_method}
+                      </td>
+                      <td className="border border-orange-100 px-3 py-2">
+                        {row.claim_date ?? ""}
+                      </td>
+                      <td className="border border-orange-100 px-3 py-2">
+                        {row.payment_date ?? ""}
+                      </td>
+                      <td className="border border-orange-100 px-3 py-2 text-right font-semibold text-orange-700">
+                        ₩ {Number(row.payment_amount || 0).toLocaleString()}
+                      </td>
+                      <td className="border border-orange-100 px-3 py-2 text-center">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            onSelectMenu({
+                              id: "factory-settlement-repair-register",
+                              title: "정산등록",
+                              data: { workName: row.work_name },
+                            })
+                          }
+                          className="rounded bg-blue-600 px-3 py-1 text-xs font-semibold text-white hover:bg-blue-700"
+                        >
+                          정산수정
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
         <div className="grid grid-cols-1 gap-4 md:grid-cols-6">
   {accountSummary.map((account) => (
     <div
@@ -326,6 +429,7 @@ function SummaryCard({
   value,
   color,
   details,
+  onClick,
 }: {
   title: string;
   value: number;
@@ -335,9 +439,23 @@ function SummaryCard({
     name: string;
     amount: number;
   }[];
+  onClick?: () => void;
 }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+    <div
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onClick={onClick}
+      onKeyDown={(event) => {
+        if (onClick && (event.key === "Enter" || event.key === " ")) {
+          onClick();
+        }
+      }}
+      className={[
+        "rounded-2xl border border-slate-200 bg-white p-5 shadow-sm",
+        onClick ? "cursor-pointer transition hover:border-orange-300 hover:bg-orange-50" : "",
+      ].join(" ")}
+    >
 
       <p className="text-sm font-semibold text-slate-600">
         {title}
