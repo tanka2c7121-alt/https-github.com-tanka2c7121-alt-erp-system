@@ -66,7 +66,7 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
             ) : selectedMenu.id === "factory" ? (
               <FactoryDashboardPage onSelectMenu={setSelectedMenu} />
             ) : selectedMenu.id === "factory-settlement" ? (
-              <SettlementMainPage />
+              <SettlementMainPage onSelectMenu={setSelectedMenu} />
             ) : selectedMenu.id === "factory-settlement-repair-register" ? (
               <SettlementRegisterPage initialWorkName={selectedData?.workName} />
             ) : selectedMenu.id === "factory-settlement-repair" ? (
