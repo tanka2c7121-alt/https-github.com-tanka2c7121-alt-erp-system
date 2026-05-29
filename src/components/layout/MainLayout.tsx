@@ -66,12 +66,18 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
       <Topbar user={user} onLogout={onLogout} />
 
       <div className="flex flex-1 overflow-hidden">
-        <div className="hidden w-64 shrink-0 bg-slate-900 md:block">
-          <Sidebar
-            selectedMenuId={selectedMenu.id}
-            onSelectMenu={setSelectedMenu}
-            isAdmin={isAdmin}
-          />
+        <div className="group/sidebar fixed bottom-10 left-0 top-16 z-30 hidden w-72 md:block">
+          <div className="absolute inset-y-0 left-0 w-4 bg-slate-900/90 transition-colors group-hover/sidebar:bg-slate-900" />
+          <div className="absolute left-0 top-1/2 -translate-y-1/2 rounded-r-lg bg-slate-900 px-1 py-8 text-[10px] font-semibold text-slate-300 shadow-md">
+            MENU
+          </div>
+          <div className="h-full w-64 -translate-x-64 overflow-hidden bg-slate-900 shadow-2xl transition-transform duration-200 ease-out group-hover/sidebar:translate-x-0">
+            <Sidebar
+              selectedMenuId={selectedMenu.id}
+              onSelectMenu={setSelectedMenu}
+              isAdmin={isAdmin}
+            />
+          </div>
         </div>
 
         <main className="flex-1 overflow-y-auto p-3 md:p-6">
