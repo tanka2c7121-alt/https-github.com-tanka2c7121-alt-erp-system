@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import type { MenuItem } from "../../data/menuData";
 import { supabase } from "../../lib/supabase";
 
 type LoginUser = {
@@ -15,6 +16,7 @@ type LoginUser = {
 type AttendanceRequestPageProps = {
   user: LoginUser;
   isAdmin: boolean;
+  onSelectMenu: (menu: MenuItem) => void;
 };
 
 type AttendanceRequest = {
@@ -65,6 +67,11 @@ const inputClass =
   "mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:outline-none";
 const labelClass = "text-sm font-semibold text-slate-800";
 const requestTypes = ["연차", "오전반차", "오후반차", "조퇴", "외근", "지각", "병가", "기타"];
+const defaultTimeByRequestType: Record<string, { startTime: string; endTime: string }> = {
+  연차: { startTime: "08:30", endTime: "18:00" },
+  오전반차: { startTime: "08:30", endTime: "12:00" },
+  오후반차: { startTime: "12:00", endTime: "18:00" },
+};
 const pendingStatuses = [
   "부서장 승인대기",
   "관리부 확인대기",
@@ -72,6 +79,13 @@ const pendingStatuses = [
 ];
 
 const todayText = () => new Date().toISOString().slice(0, 10);
+
+const addDaysText = (days: number) => {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+
+  return date.toISOString().slice(0, 10);
+};
 
 const formatRequesterName = (user: LoginUser) => {
   const department = user.department?.trim();
@@ -85,6 +99,7 @@ const getApprovalRole = (user: LoginUser) =>
 export default function AttendanceRequestPage({
   user,
   isAdmin,
+  onSelectMenu,
 }: AttendanceRequestPageProps) {
   const [rows, setRows] = useState<AttendanceRequest[]>([]);
   const [searchText, setSearchText] = useState("");
@@ -94,8 +109,8 @@ export default function AttendanceRequestPage({
     requestType: "연차",
     startDate: todayText(),
     endDate: todayText(),
-    startTime: "",
-    endTime: "",
+    startTime: defaultTimeByRequestType["연차"].startTime,
+    endTime: defaultTimeByRequestType["연차"].endTime,
     reason: "",
     memo: "",
   });
@@ -181,8 +196,8 @@ export default function AttendanceRequestPage({
       requestType: "연차",
       startDate: todayText(),
       endDate: todayText(),
-      startTime: "",
-      endTime: "",
+      startTime: defaultTimeByRequestType["연차"].startTime,
+      endTime: defaultTimeByRequestType["연차"].endTime,
       reason: "",
       memo: "",
     });
@@ -358,14 +373,29 @@ export default function AttendanceRequestPage({
       </div>
 
       <section className="rounded-xl border border-slate-200 bg-white p-4">
-        <h4 className="mb-4 font-bold text-slate-900">신청 작성</h4>
+        <div className="mb-4 flex flex-col gap-1">
+          <h4 className="font-bold text-slate-900">신청 작성</h4>
+          <p className="text-sm font-semibold text-orange-600">
+            근태신청서는 원칙적으로 최소 7일 전에 작성해야 하며, 7일 이내 신청은 긴급/예외 신청으로 표시됩니다.
+          </p>
+        </div>
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
           <Field label="근태종류">
             <select
               className={inputClass}
               value={form.requestType}
-              onChange={(event) => handleChange("requestType", event.target.value)}
+              onChange={(event) => {
+                const requestType = event.target.value;
+                const defaultTime = defaultTimeByRequestType[requestType];
+
+                handleChange("requestType", requestType);
+
+                if (defaultTime) {
+                  handleChange("startTime", defaultTime.startTime);
+                  handleChange("endTime", defaultTime.endTime);
+                }
+              }}
             >
               {requestTypes.map((type) => (
                 <option key={type}>{type}</option>
@@ -486,6 +516,13 @@ export default function AttendanceRequestPage({
             onApprove={approveRequest}
             onReject={rejectRequest}
             canApprove={canApproveRequest}
+            onPrint={(row) =>
+              onSelectMenu({
+                id: "documents-attendance-request-print",
+                title: "근태신청서 출력",
+                data: { attendanceRequest: row },
+              })
+            }
           />
         </div>
 
@@ -495,6 +532,13 @@ export default function AttendanceRequestPage({
           onApprove={approveRequest}
           onReject={rejectRequest}
           canApprove={canApproveRequest}
+          onPrint={(row) =>
+            onSelectMenu({
+              id: "documents-attendance-request-print",
+              title: "근태신청서 출력",
+              data: { attendanceRequest: row },
+            })
+          }
         />
       </section>
     </div>
@@ -552,6 +596,18 @@ function StatusBadge({ status }: { status: AttendanceRequest["status"] }) {
   );
 }
 
+function UrgentBadge({ startDate }: { startDate: string }) {
+  if (startDate >= addDaysText(7)) {
+    return null;
+  }
+
+  return (
+    <span className="rounded-full bg-red-100 px-2 py-1 text-xs font-bold text-red-700">
+      긴급/예외
+    </span>
+  );
+}
+
 function formatPeriod(row: AttendanceRequest) {
   const dateText =
     row.end_date && row.end_date !== row.start_date
@@ -571,12 +627,14 @@ function AttendanceTable({
   onApprove,
   onReject,
   canApprove,
+  onPrint,
 }: {
   rows: AttendanceRequest[];
   isAdmin: boolean;
   onApprove: (row: AttendanceRequest) => void;
   onReject: (row: AttendanceRequest) => void;
   canApprove: (row: AttendanceRequest) => boolean;
+  onPrint: (row: AttendanceRequest) => void;
 }) {
   const showManageColumn = isAdmin || rows.some(canApprove);
 
@@ -591,6 +649,7 @@ function AttendanceTable({
           <th className="border border-slate-200 px-3 py-2">사유</th>
           <th className="border border-slate-200 px-3 py-2">승인자</th>
           <th className="border border-slate-200 px-3 py-2">현재단계</th>
+          <th className="border border-slate-200 px-3 py-2 text-center">출력</th>
           {showManageColumn && (
             <th className="border border-slate-200 px-3 py-2 text-center">관리</th>
           )}
@@ -601,7 +660,7 @@ function AttendanceTable({
         {rows.length === 0 ? (
           <tr>
             <td
-              colSpan={showManageColumn ? 8 : 7}
+              colSpan={showManageColumn ? 9 : 8}
               className="border border-slate-200 px-3 py-8 text-center text-slate-500"
             >
               등록된 근태신청서가 없습니다.
@@ -617,7 +676,10 @@ function AttendanceTable({
                 {row.requested_name ?? row.requested_by}
               </td>
               <td className="border border-slate-200 px-3 py-2 font-semibold">
-                {row.request_type}
+                <div className="flex flex-wrap items-center gap-2">
+                  <span>{row.request_type}</span>
+                  <UrgentBadge startDate={row.start_date} />
+                </div>
               </td>
               <td className="border border-slate-200 px-3 py-2">
                 {formatPeriod(row)}
@@ -638,6 +700,15 @@ function AttendanceTable({
               </td>
               <td className="border border-slate-200 px-3 py-2 text-xs text-slate-600">
                 <ApprovalTrail row={row} />
+              </td>
+              <td className="border border-slate-200 px-3 py-2 text-center">
+                <button
+                  type="button"
+                  onClick={() => onPrint(row)}
+                  className="rounded border border-blue-300 px-3 py-1 text-xs font-semibold text-blue-600 hover:bg-blue-50"
+                >
+                  출력
+                </button>
               </td>
               {showManageColumn && (
                 <td className="border border-slate-200 px-3 py-2 text-center">
@@ -708,12 +779,14 @@ function MobileAttendanceCards({
   onApprove,
   onReject,
   canApprove,
+  onPrint,
 }: {
   rows: AttendanceRequest[];
   isAdmin: boolean;
   onApprove: (row: AttendanceRequest) => void;
   onReject: (row: AttendanceRequest) => void;
   canApprove: (row: AttendanceRequest) => boolean;
+  onPrint: (row: AttendanceRequest) => void;
 }) {
   return (
     <div className="space-y-3 md:hidden">
@@ -727,6 +800,9 @@ function MobileAttendanceCards({
             <div className="mb-3 flex items-start justify-between gap-3">
               <div>
                 <StatusBadge status={row.status} />
+                <span className="ml-2">
+                  <UrgentBadge startDate={row.start_date} />
+                </span>
                 <div className="mt-2 text-lg font-bold">{row.request_type}</div>
                 <div className="text-sm text-slate-500">
                   {row.requested_name ?? row.requested_by}
@@ -746,6 +822,14 @@ function MobileAttendanceCards({
                 </div>
               )}
             </div>
+
+            <button
+              type="button"
+              onClick={() => onPrint(row)}
+              className="mt-3 w-full rounded-lg border border-blue-300 py-2 text-sm font-semibold text-blue-600"
+            >
+              출력
+            </button>
 
             {canApprove(row) && (
               <div className="mt-3 flex gap-2">
