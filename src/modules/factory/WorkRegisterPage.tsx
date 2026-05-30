@@ -16,6 +16,73 @@ const inputClass =
 const textAreaClass =
   "min-h-[120px] w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100";
 const labelClass = "text-sm font-semibold text-slate-800";
+const workPhotoBucket = "work-photos";
+
+type WorkPhoto = {
+  name: string;
+  path: string;
+  url: string;
+};
+
+const compressImage = (file: File) =>
+  new Promise<File>((resolve, reject) => {
+    if (!file.type.startsWith("image/")) {
+      resolve(file);
+      return;
+    }
+
+    const image = new Image();
+    const objectUrl = URL.createObjectURL(file);
+
+    image.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+
+      const maxSize = 1600;
+      const scale = Math.min(1, maxSize / Math.max(image.width, image.height));
+      const width = Math.round(image.width * scale);
+      const height = Math.round(image.height * scale);
+      const canvas = document.createElement("canvas");
+      const context = canvas.getContext("2d");
+
+      if (!context) {
+        resolve(file);
+        return;
+      }
+
+      canvas.width = width;
+      canvas.height = height;
+      context.drawImage(image, 0, 0, width, height);
+
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) {
+            resolve(file);
+            return;
+          }
+
+          const compressedFile = new File(
+            [blob],
+            file.name.replace(/\.[^.]+$/, ".jpg"),
+            {
+              type: "image/jpeg",
+              lastModified: Date.now(),
+            }
+          );
+
+          resolve(compressedFile);
+        },
+        "image/jpeg",
+        0.78
+      );
+    };
+
+    image.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error("사진을 압축할 수 없습니다."));
+    };
+
+    image.src = objectUrl;
+  });
 
 const carModels: Record<string, string[]> = {
   현대: ["그랜저", "쏘나타", "아반떼", "투싼", "싼타페", "팰리세이드", "스타리아", "코나","베뉴","아이오닉5","아이오닉6","넥쏘","포터"],
@@ -157,6 +224,8 @@ export default function WorkRegisterPage({
   const [message, setMessage] = useState("");
   const [isEditMode, setIsEditMode] = useState(false);
   const [releaseDate, setReleaseDate] = useState("");
+  const [workPhotos, setWorkPhotos] = useState<WorkPhoto[]>([]);
+  const [photoUploading, setPhotoUploading] = useState(false);
 
   const colorOptions: Record<string, string[]> = {
   "그랜저": ["A2B", "WC9", "T2G","TB7","V7S"],
@@ -230,6 +299,120 @@ useEffect(() => {
   void setInitialNextWorkName();
 }, [initialWorkName, workName]);
 
+useEffect(() => {
+  if (!workName) {
+    setWorkPhotos([]);
+    return;
+  }
+
+  void loadWorkPhotos(workName);
+}, [workName]);
+
+function getWorkPhotoFolder(targetWorkName = workName) {
+  return targetWorkName.trim().replace(/[^0-9A-Za-z가-힣_-]/g, "_");
+}
+
+async function loadWorkPhotos(targetWorkName = workName) {
+  const folder = getWorkPhotoFolder(targetWorkName);
+
+  if (!folder) {
+    setWorkPhotos([]);
+    return;
+  }
+
+  const { data, error } = await supabase.storage
+    .from(workPhotoBucket)
+    .list(folder, {
+      limit: 100,
+      sortBy: { column: "created_at", order: "desc" },
+    });
+
+  if (error) {
+    console.error("작업사진 조회 오류:", error);
+    setWorkPhotos([]);
+    return;
+  }
+
+  const photos = (data ?? [])
+    .filter((item) => item.name && !item.name.endsWith("/"))
+    .map((item) => {
+      const path = `${folder}/${item.name}`;
+      const publicUrl = supabase.storage
+        .from(workPhotoBucket)
+        .getPublicUrl(path).data.publicUrl;
+
+      return {
+        name: item.name,
+        path,
+        url: publicUrl,
+      };
+    });
+
+  setWorkPhotos(photos);
+}
+
+async function handlePhotoCapture(event: ChangeEvent<HTMLInputElement>) {
+  const file = event.target.files?.[0];
+  event.target.value = "";
+
+  if (!file) {
+    return;
+  }
+
+  if (!workName) {
+    alert("사진을 저장하려면 작명이 먼저 필요합니다.");
+    return;
+  }
+
+  setPhotoUploading(true);
+
+  try {
+    const folder = getWorkPhotoFolder();
+    const extension = file.name.split(".").pop() || "jpg";
+    const filePath = `${folder}/${Date.now()}-${Math.random()
+      .toString(36)
+      .slice(2, 8)}.${extension}`;
+
+    const { error } = await supabase.storage
+      .from(workPhotoBucket)
+      .upload(filePath, file, {
+        cacheControl: "3600",
+        contentType: file.type || "image/jpeg",
+        upsert: false,
+      });
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    await loadWorkPhotos();
+  } catch (error) {
+    alert(
+      "사진 저장 실패: " +
+        (error instanceof Error ? error.message : "업로드 오류")
+    );
+  } finally {
+    setPhotoUploading(false);
+  }
+}
+
+async function handleDeletePhoto(photo: WorkPhoto) {
+  if (!confirm("이 사진을 삭제할까요?")) {
+    return;
+  }
+
+  const { error } = await supabase.storage
+    .from(workPhotoBucket)
+    .remove([photo.path]);
+
+  if (error) {
+    alert("사진 삭제 실패: " + error.message);
+    return;
+  }
+
+  setWorkPhotos((prev) => prev.filter((item) => item.path !== photo.path));
+}
+
  function handleReset() {
   setPhoneNumber("");
   setMileage("");
@@ -270,6 +453,7 @@ useEffect(() => {
   setDeductibleAmount("");
 
   setMessage("");
+  setWorkPhotos([]);
 
   setWorkRows(
     Array.from({ length: 19 }, () => ({
@@ -637,6 +821,59 @@ function handleClearWorkRow(index: number) {
     불러오기
   </button>
 </div>
+
+      <section className="rounded-xl border border-slate-200 bg-white p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <label className={labelClass}>작업사진</label>
+            <p className="mt-1 text-xs text-slate-500">
+              모바일에서 사진찍기를 누르면 카메라가 열리고 현재 작명 폴더에 저장됩니다.
+            </p>
+          </div>
+
+          <label className="inline-flex cursor-pointer items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
+            {photoUploading ? "저장 중..." : "사진찍기"}
+            <input
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              disabled={photoUploading}
+              onChange={handlePhotoCapture}
+            />
+          </label>
+        </div>
+
+        {workPhotos.length > 0 ? (
+          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
+            {workPhotos.map((photo) => (
+              <div
+                key={photo.path}
+                className="overflow-hidden rounded-lg border border-slate-200 bg-slate-50"
+              >
+                <a href={photo.url} target="_blank" rel="noreferrer">
+                  <img
+                    src={photo.url}
+                    alt="작업사진"
+                    className="h-28 w-full object-cover"
+                  />
+                </a>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void handleDeletePhoto(photo);
+                  }}
+                  className="w-full border-t border-slate-200 bg-white px-2 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50"
+                >
+                  삭제
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="mt-3 text-xs text-slate-500">등록된 사진이 없습니다.</p>
+        )}
+      </section>
 
       
       <section className="grid grid-cols-2 gap-3 xl:grid-cols-8 xl:gap-4">
