@@ -367,17 +367,18 @@ async function handlePhotoCapture(event: ChangeEvent<HTMLInputElement>) {
   setPhotoUploading(true);
 
   try {
+    const uploadFile = await compressImage(file);
     const folder = getWorkPhotoFolder();
-    const extension = file.name.split(".").pop() || "jpg";
+    const extension = uploadFile.name.split(".").pop() || "jpg";
     const filePath = `${folder}/${Date.now()}-${Math.random()
       .toString(36)
       .slice(2, 8)}.${extension}`;
 
     const { error } = await supabase.storage
       .from(workPhotoBucket)
-      .upload(filePath, file, {
+      .upload(filePath, uploadFile, {
         cacheControl: "3600",
-        contentType: file.type || "image/jpeg",
+        contentType: uploadFile.type || "image/jpeg",
         upsert: false,
       });
 
