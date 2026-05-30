@@ -617,8 +617,8 @@ function handleClearWorkRow(index: number) {
           입고 차량의 작업지시서를 등록하는 화면입니다.
         </p>
       </div>
-      <div className="mb-4 flex items-end gap-3">
-  <div className="w-[260px]">
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end">
+  <div className="w-full sm:w-[260px]">
     <Field
       label="작명"
       placeholder="2026-05-001"
@@ -639,7 +639,7 @@ function handleClearWorkRow(index: number) {
 </div>
 
       
-      <section className="grid grid-cols-1 gap-4 xl:grid-cols-8">
+      <section className="grid grid-cols-2 gap-3 xl:grid-cols-8 xl:gap-4">
       
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <label className={labelClass}>제조사</label>
@@ -741,7 +741,7 @@ function handleClearWorkRow(index: number) {
       </section>
 
       {/* 2번째 줄 */}
-      <section className="grid grid-cols-1 gap-4 xl:grid-cols-8">
+      <section className="grid grid-cols-2 gap-3 xl:grid-cols-8 xl:gap-4">
         <Field
           label="입고일"
           type="date"
@@ -865,7 +865,7 @@ function handleClearWorkRow(index: number) {
       </section>
 
       {/* 3번째 줄 */}
-      <section className="grid grid-cols-1 gap-4 xl:grid-cols-8">
+      <section className="grid grid-cols-2 gap-3 xl:grid-cols-8 xl:gap-4">
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <label className={labelClass}>구분</label>
           <select
