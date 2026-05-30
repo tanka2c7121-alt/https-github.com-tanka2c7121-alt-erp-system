@@ -10,12 +10,14 @@ type AppUser = {
   user_name: string | null;
   department: string | null;
   phone_number: string | null;
+  approval_role: string | null;
   role: string | null;
   is_active: boolean | null;
   created_at: string;
 };
 
 const departments = ["관리부", "도장부", "판금부", "정비부"];
+const approvalRoles = ["직원", "부서장", "관리부", "관리자"];
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function EmployeeManagePage() {
@@ -26,6 +28,7 @@ export default function EmployeeManagePage() {
   const [department, setDepartment] = useState("관리부");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [role, setRole] = useState("STAFF");
+  const [approvalRole, setApprovalRole] = useState("직원");
   const [editingUserId, setEditingUserId] = useState<number | null>(null);
 
   async function fetchUsers() {
@@ -54,6 +57,7 @@ export default function EmployeeManagePage() {
     setDepartment("관리부");
     setPhoneNumber("");
     setRole("STAFF");
+    setApprovalRole("직원");
     setEditingUserId(null);
   }
 
@@ -75,6 +79,7 @@ export default function EmployeeManagePage() {
       department,
       phone_number: phoneNumber,
       role,
+      approval_role: approvalRole,
     };
 
     const result = editingUserId
@@ -148,7 +153,7 @@ export default function EmployeeManagePage() {
           {editingUserId ? "직원 수정" : "직원 등록"}
         </h4>
 
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-7">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-8">
           <input
             className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
             placeholder="이메일 아이디"
@@ -198,6 +203,18 @@ export default function EmployeeManagePage() {
             <option value="ADMIN">ADMIN</option>
           </select>
 
+          <select
+            className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            value={approvalRole}
+            onChange={(event) => setApprovalRole(event.target.value)}
+          >
+            {approvalRoles.map((item) => (
+              <option key={item} value={item}>
+                {item}
+              </option>
+            ))}
+          </select>
+
           <button
             type="button"
             onClick={handleSaveUser}
@@ -220,6 +237,7 @@ export default function EmployeeManagePage() {
                 <th className="px-3 py-2">부서</th>
                 <th className="px-3 py-2">전화번호</th>
                 <th className="px-3 py-2">권한</th>
+                <th className="px-3 py-2">승인권한</th>
                 <th className="px-3 py-2">상태</th>
                 <th className="px-3 py-2">관리</th>
               </tr>
@@ -233,6 +251,7 @@ export default function EmployeeManagePage() {
                   <td className="px-3 py-2">{user.department}</td>
                   <td className="px-3 py-2">{user.phone_number}</td>
                   <td className="px-3 py-2">{user.role}</td>
+                  <td className="px-3 py-2">{user.approval_role ?? "직원"}</td>
                   <td className="px-3 py-2">
                     {user.is_active ? "사용중" : "승인대기"}
                   </td>
@@ -248,6 +267,7 @@ export default function EmployeeManagePage() {
                           setDepartment(user.department ?? "관리부");
                           setPhoneNumber(user.phone_number ?? "");
                           setRole(user.role ?? "STAFF");
+                          setApprovalRole(user.approval_role ?? "직원");
                         }}
                         className="rounded-lg bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-600"
                       >
@@ -280,7 +300,7 @@ export default function EmployeeManagePage() {
 
               {users.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-3 py-8 text-center text-slate-500">
+                  <td colSpan={8} className="px-3 py-8 text-center text-slate-500">
                     등록된 직원이 없습니다.
                   </td>
                 </tr>

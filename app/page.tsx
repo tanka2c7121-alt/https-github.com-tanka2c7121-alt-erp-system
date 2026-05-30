@@ -10,6 +10,8 @@ type LoginUser = {
   id: string | number;
   user_id: string;
   user_name: string;
+  department?: string | null;
+  approval_role?: string | null;
   role: "ADMIN" | "STAFF";
   is_active: boolean;
   password?: string;

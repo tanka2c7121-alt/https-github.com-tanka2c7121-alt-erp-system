@@ -6,6 +6,13 @@ import { supabase } from "../../lib/supabase";
 
 type HomeDashboardPageProps = {
   isAdmin: boolean;
+  user?: {
+    user_id: string;
+    user_name: string;
+    department?: string | null;
+    approval_role?: string | null;
+    role: "ADMIN" | "STAFF";
+  };
   userName?: string;
   onSelectMenu: (menu: MenuItem) => void;
 };
@@ -37,24 +44,62 @@ type PendingExpenseRequest = {
   requested_by: string;
 };
 
+type PendingAttendanceRequest = {
+  id: number;
+  request_type: string;
+  start_date: string;
+  end_date: string | null;
+  requested_name: string | null;
+  requested_by: string;
+  reason: string;
+};
+
 const todayText = () => new Date().toISOString().slice(0, 10);
 
 export default function HomeDashboardPage({
   isAdmin,
+  user,
   userName,
   onSelectMenu,
 }: HomeDashboardPageProps) {
+  const approvalRole = user?.approval_role ?? (isAdmin ? "관리자" : "직원");
+  const canApproveAttendance =
+    isAdmin || ["부서장", "관리부", "관리자"].includes(approvalRole);
   const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
   const [pendingUsers, setPendingUsers] = useState<PendingUser[]>([]);
   const [pendingExpenseRequests, setPendingExpenseRequests] = useState<
     PendingExpenseRequest[]
+  >([]);
+  const [pendingAttendanceRequests, setPendingAttendanceRequests] = useState<
+    PendingAttendanceRequest[]
   >([]);
   const [loading, setLoading] = useState(true);
 
   const loadDashboard = useCallback(async () => {
     setLoading(true);
 
-    const [ordersResult, userResult, expenseResult] = await Promise.all([
+    const attendanceStatus =
+      approvalRole === "부서장"
+        ? "부서장 승인대기"
+        : approvalRole === "관리부"
+          ? "관리부 확인대기"
+          : "관리자 승인대기";
+
+    let attendanceQuery = supabase
+      .from("attendance_requests")
+      .select("id, request_type, start_date, end_date, requested_name, requested_by, reason")
+      .eq("status", attendanceStatus)
+      .order("id", { ascending: false });
+
+    if (approvalRole === "부서장") {
+      attendanceQuery = attendanceQuery.eq(
+        "requested_department",
+        user?.department ?? ""
+      );
+    }
+
+    const [ordersResult, userResult, expenseResult, attendanceResult] =
+      await Promise.all([
       supabase
         .from("work_orders")
         .select("id, work_name, car_number, car_model, inbound_date, outbound_date, release_date")
@@ -73,6 +118,9 @@ export default function HomeDashboardPage({
             .eq("status", "승인대기")
             .order("id", { ascending: false })
         : Promise.resolve({ data: [], error: null }),
+      canApproveAttendance
+        ? attendanceQuery
+        : Promise.resolve({ data: [], error: null }),
     ]);
 
     setLoading(false);
@@ -89,7 +137,12 @@ export default function HomeDashboardPage({
         ? []
         : ((expenseResult.data ?? []) as PendingExpenseRequest[])
     );
-  }, [isAdmin]);
+    setPendingAttendanceRequests(
+      attendanceResult.error
+        ? []
+        : ((attendanceResult.data ?? []) as PendingAttendanceRequest[])
+    );
+  }, [approvalRole, canApproveAttendance, isAdmin, user?.department]);
 
   useEffect(() => {
     void loadDashboard();
@@ -158,10 +211,14 @@ export default function HomeDashboardPage({
         <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
           <QuickActions isAdmin={isAdmin} onSelectMenu={onSelectMenu} />
 
-          {isAdmin && (
+          {(isAdmin || canApproveAttendance) && (
             <AdminApprovalPanel
+              showEmployeeApprovals={isAdmin}
+              showExpenseApprovals={isAdmin}
+              showAttendanceApprovals={canApproveAttendance}
               pendingUsers={pendingUsers.slice(0, 6)}
               pendingExpenses={pendingExpenseRequests.slice(0, 6)}
+              pendingAttendances={pendingAttendanceRequests.slice(0, 6)}
               onOpenManage={() =>
                 onSelectMenu({
                   id: "employee-manage",
@@ -172,6 +229,12 @@ export default function HomeDashboardPage({
                 onSelectMenu({
                   id: "documents-expense-request",
                   title: "지출결의서",
+                })
+              }
+              onOpenAttendanceRequests={() =>
+                onSelectMenu({
+                  id: "documents-attendance-request",
+                  title: "근태신청서",
                 })
               }
             />
@@ -310,22 +373,33 @@ function RecentInboundList({
 }
 
 function AdminApprovalPanel({
+  showEmployeeApprovals,
+  showExpenseApprovals,
+  showAttendanceApprovals,
   pendingUsers,
   pendingExpenses,
+  pendingAttendances,
   onOpenManage,
   onOpenExpenseRequests,
+  onOpenAttendanceRequests,
 }: {
+  showEmployeeApprovals: boolean;
+  showExpenseApprovals: boolean;
+  showAttendanceApprovals: boolean;
   pendingUsers: PendingUser[];
   pendingExpenses: PendingExpenseRequest[];
+  pendingAttendances: PendingAttendanceRequest[];
   onOpenManage: () => void;
   onOpenExpenseRequests: () => void;
+  onOpenAttendanceRequests: () => void;
 }) {
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-4">
       <div className="space-y-4">
+        {showEmployeeApprovals && (
         <div>
           <div className="mb-3 flex items-center justify-between">
-            <h4 className="font-bold text-slate-900">승인대기 직원</h4>
+            <h4 className="font-bold text-slate-900">직원 승인대기</h4>
             <button
               type="button"
               onClick={onOpenManage}
@@ -362,7 +436,9 @@ function AdminApprovalPanel({
             )}
           </div>
         </div>
+        )}
 
+        {showExpenseApprovals && (
         <div className="border-t border-slate-200 pt-4">
           <div className="mb-3 flex items-center justify-between">
             <h4 className="font-bold text-slate-900">지출결의서 승인대기</h4>
@@ -404,6 +480,55 @@ function AdminApprovalPanel({
             )}
           </div>
         </div>
+        )}
+
+        {showAttendanceApprovals && (
+        <div className="border-t border-slate-200 pt-4">
+          <div className="mb-3 flex items-center justify-between">
+            <h4 className="font-bold text-slate-900">근태신청서 승인대기</h4>
+            <button
+              type="button"
+              onClick={onOpenAttendanceRequests}
+              className="rounded border border-blue-300 px-3 py-1 text-xs font-semibold text-blue-600 hover:bg-blue-50"
+            >
+              근태신청서
+            </button>
+          </div>
+
+          <div className="space-y-2">
+            {pendingAttendances.length === 0 ? (
+              <div className="rounded-lg bg-slate-50 p-5 text-center text-sm text-slate-500">
+                승인대기 근태신청서가 없습니다.
+              </div>
+            ) : (
+              pendingAttendances.map((row) => (
+                <button
+                  key={row.id}
+                  type="button"
+                  onClick={onOpenAttendanceRequests}
+                  className="flex w-full items-center justify-between rounded-lg border border-slate-100 p-3 text-left hover:bg-blue-50"
+                >
+                  <div className="min-w-0">
+                    <div className="truncate font-semibold">
+                      {row.request_type} - {row.reason}
+                    </div>
+                    <div className="text-xs text-slate-500">
+                      {row.start_date}
+                      {row.end_date && row.end_date !== row.start_date
+                        ? ` ~ ${row.end_date}`
+                        : ""}{" "}
+                      / {row.requested_name ?? row.requested_by}
+                    </div>
+                  </div>
+                  <span className="shrink-0 rounded-full bg-orange-100 px-2 py-1 text-xs font-bold text-orange-700">
+                    승인대기
+                  </span>
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+        )}
       </div>
     </section>
   );

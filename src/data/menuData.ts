@@ -74,6 +74,7 @@ export const menuData: MenuItem[] = [
     title: "문서관리",
     children: [
       { id: "documents-expense-request", title: "지출결의서" },
+      { id: "documents-attendance-request", title: "근태신청서" },
     ],
   },
   {

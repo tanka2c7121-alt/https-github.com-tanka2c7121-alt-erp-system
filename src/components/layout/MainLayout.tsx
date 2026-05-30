@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Sidebar from "../sidebar/Sidebar";
 import Topbar from "../topbar/Topbar";
 import Statusbar from "../statusbar/Statusbar";
 import { menuData, type MenuItem } from "../../data/menuData";
+import { supabase } from "../../lib/supabase";
 
 import WorkRegisterPage from "../../modules/factory/WorkRegisterPage";
 import WorkPrintPage from "../../modules/factory/WorkPrintPage";
@@ -21,11 +22,15 @@ import EmployeeManagePage from "../../modules/admin/EmployeeManagePage";
 import EmployeeStatusPage from "../../modules/employee/EmployeeStatusPage";
 import HomeDashboardPage from "../../modules/home/HomeDashboardPage";
 import ExpenseRequestPage from "../../modules/documents/ExpenseRequestPage";
+import ExpenseRequestPrintPage from "../../modules/documents/ExpenseRequestPrintPage";
+import AttendanceRequestPage from "../../modules/documents/AttendanceRequestPage";
 
 type LoginUser = {
   id: string | number;
   user_id: string;
   user_name: string;
+  department?: string | null;
+  approval_role?: string | null;
   role: "ADMIN" | "STAFF";
   is_active: boolean;
 };
@@ -38,15 +43,22 @@ type MainLayoutProps = {
 export default function MainLayout({ user, onLogout }: MainLayoutProps) {
   const isAdmin = user?.role === "ADMIN";
   const userRole = isAdmin ? "ADMIN" : "STAFF";
+  const approvalRole =
+    user?.approval_role ?? (isAdmin ? "관리자" : "직원");
 
   const [selectedMenu, setSelectedMenu] = useState<MenuItem>({
     id: "dashboard",
     title: "대시보드",
   });
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [notificationCounts, setNotificationCounts] = useState({
+    employees: 0,
+    expenses: 0,
+    attendances: 0,
+  });
 
   const selectedData = selectedMenu.data as
-    | { workName?: string; nextWorkName?: string }
+    | { workName?: string; nextWorkName?: string; expenseRequest?: any }
     | undefined;
   const mobileMenus = flattenMenus(menuData, userRole);
   const displayedMobileMenus = mobileMenus.some(
@@ -68,9 +80,126 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
     setIsSidebarOpen(false);
   };
 
+  const loadNotificationCounts = useCallback(async () => {
+    const canSeeApprovalNotice =
+      isAdmin || ["부서장", "관리부", "관리자"].includes(approvalRole);
+
+    if (!canSeeApprovalNotice) {
+      setNotificationCounts({
+        employees: 0,
+        expenses: 0,
+        attendances: 0,
+      });
+      return;
+    }
+
+    const attendanceStatus =
+      approvalRole === "부서장"
+        ? "부서장 승인대기"
+        : approvalRole === "관리부"
+          ? "관리부 확인대기"
+          : "관리자 승인대기";
+
+    let attendanceQuery = supabase
+      .from("attendance_requests")
+      .select("id", { count: "exact", head: true })
+      .eq("status", attendanceStatus);
+
+    if (approvalRole === "부서장") {
+      attendanceQuery = attendanceQuery.eq(
+        "requested_department",
+        user.department ?? ""
+      );
+    }
+
+    const [employeesResult, expensesResult, attendancesResult] =
+      await Promise.all([
+        isAdmin
+          ? supabase
+              .from("app_users")
+              .select("id", { count: "exact", head: true })
+              .eq("is_active", false)
+          : Promise.resolve({ count: 0, error: null }),
+        isAdmin
+          ? supabase
+              .from("expense_requests")
+              .select("id", { count: "exact", head: true })
+              .eq("status", "승인대기")
+          : Promise.resolve({ count: 0, error: null }),
+        attendanceQuery,
+      ]);
+
+    setNotificationCounts({
+      employees: employeesResult.error ? 0 : employeesResult.count ?? 0,
+      expenses: expensesResult.error ? 0 : expensesResult.count ?? 0,
+      attendances: attendancesResult.error ? 0 : attendancesResult.count ?? 0,
+    });
+  }, [approvalRole, isAdmin, user.department]);
+
+  useEffect(() => {
+    void loadNotificationCounts();
+
+    const handleFocus = () => {
+      void loadNotificationCounts();
+    };
+    const intervalId = window.setInterval(() => {
+      void loadNotificationCounts();
+    }, 60000);
+
+    window.addEventListener("focus", handleFocus);
+
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+      window.clearInterval(intervalId);
+    };
+  }, [loadNotificationCounts]);
+
+  const notifications = [
+    ...(isAdmin
+      ? [
+          {
+            id: "employees",
+            title: "직원 승인대기",
+            count: notificationCounts.employees,
+            menu: {
+              id: "employee-manage",
+              title: "직원관리",
+            },
+          },
+          {
+            id: "expenses",
+            title: "지출결의서 승인대기",
+            count: notificationCounts.expenses,
+            menu: {
+              id: "documents-expense-request",
+              title: "지출결의서",
+            },
+          },
+        ]
+      : []),
+    ...(["부서장", "관리부", "관리자"].includes(approvalRole) || isAdmin
+      ? [
+          {
+            id: "attendances",
+            title: "근태신청서 승인대기",
+            count: notificationCounts.attendances,
+            menu: {
+              id: "documents-attendance-request",
+              title: "근태신청서",
+            },
+          },
+        ]
+      : []),
+  ];
+
   return (
     <div className="flex h-screen flex-col bg-slate-100">
-      <Topbar user={user} onLogout={onLogout} />
+      <Topbar
+        user={user}
+        onLogout={onLogout}
+        notifications={notifications}
+        onSelectMenu={handleSelectMenu}
+      />
 
       <div className="flex flex-1 overflow-hidden">
         <div
@@ -125,6 +254,7 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
             {selectedMenu.id === "dashboard" ? (
               <HomeDashboardPage
                 isAdmin={isAdmin}
+                user={user}
                 userName={user?.user_name}
                 onSelectMenu={handleSelectMenu}
               />
@@ -188,7 +318,18 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
               />
             ) : selectedMenu.id === "documents" ||
             selectedMenu.id === "documents-expense-request" ? (
-              <ExpenseRequestPage user={user} isAdmin={isAdmin} />
+              <ExpenseRequestPage
+                user={user}
+                isAdmin={isAdmin}
+                onSelectMenu={handleSelectMenu}
+              />
+            ) : selectedMenu.id === "documents-expense-request-print" ? (
+              <ExpenseRequestPrintPage
+                expenseRequest={selectedData?.expenseRequest}
+                onSelectMenu={handleSelectMenu}
+              />
+            ) : selectedMenu.id === "documents-attendance-request" ? (
+              <AttendanceRequestPage user={user} isAdmin={isAdmin} />
             ) : (
               <>
                 <div className="text-sm text-slate-500">작업 화면 영역</div>

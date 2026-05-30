@@ -1,18 +1,21 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import type { MenuItem } from "../../data/menuData";
 import { supabase } from "../../lib/supabase";
 
 type LoginUser = {
   id: string | number;
   user_id: string;
   user_name: string;
+  department?: string | null;
   role: "ADMIN" | "STAFF";
 };
 
 type ExpenseRequestPageProps = {
   user: LoginUser;
   isAdmin: boolean;
+  onSelectMenu: (menu: MenuItem) => void;
 };
 
 type ExpenseRequest = {
@@ -56,6 +59,12 @@ const receiptBucket = "expense-receipts";
 
 const todayText = () => new Date().toISOString().slice(0, 10);
 
+const formatRequesterName = (user: LoginUser) => {
+  const department = user.department?.trim();
+
+  return department ? `${department} / ${user.user_name}` : user.user_name;
+};
+
 const categoryOptions: Record<string, string[]> = {
   고정비: [
     "임대료",
@@ -89,6 +98,7 @@ const categoryOptions: Record<string, string[]> = {
 export default function ExpenseRequestPage({
   user,
   isAdmin,
+  onSelectMenu,
 }: ExpenseRequestPageProps) {
   const [rows, setRows] = useState<ExpenseRequest[]>([]);
   const [searchText, setSearchText] = useState("");
@@ -212,11 +222,6 @@ export default function ExpenseRequestPage({
       return;
     }
 
-    if (!receiptFile) {
-      alert("영수증 사진을 첨부하세요.");
-      return;
-    }
-
     setSaving(true);
 
     const { data, error } = await supabase
@@ -234,7 +239,7 @@ export default function ExpenseRequestPage({
         memo: form.memo,
         status: "승인대기",
         requested_by: user.user_id,
-        requested_name: user.user_name,
+        requested_name: formatRequesterName(user),
       })
       .select("id")
       .single();
@@ -245,23 +250,25 @@ export default function ExpenseRequestPage({
       return;
     }
 
-    try {
-      const receiptUrl = await uploadReceipt(data.id);
-      const { error: updateError } = await supabase
-        .from("expense_requests")
-        .update({ receipt_url: receiptUrl })
-        .eq("id", data.id);
+    if (receiptFile) {
+      try {
+        const receiptUrl = await uploadReceipt(data.id);
+        const { error: updateError } = await supabase
+          .from("expense_requests")
+          .update({ receipt_url: receiptUrl })
+          .eq("id", data.id);
 
-      if (updateError) {
-        throw new Error(updateError.message);
+        if (updateError) {
+          throw new Error(updateError.message);
+        }
+      } catch (uploadError) {
+        setSaving(false);
+        alert(
+          "영수증 저장 실패: " +
+            (uploadError instanceof Error ? uploadError.message : "업로드 오류")
+        );
+        return;
       }
-    } catch (uploadError) {
-      setSaving(false);
-      alert(
-        "영수증 저장 실패: " +
-          (uploadError instanceof Error ? uploadError.message : "업로드 오류")
-      );
-      return;
     }
 
     setSaving(false);
@@ -543,6 +550,13 @@ export default function ExpenseRequestPage({
             isAdmin={isAdmin}
             onApprove={approveRequest}
             onReject={rejectRequest}
+            onPrint={(row) =>
+              onSelectMenu({
+                id: "documents-expense-request-print",
+                title: "지출결의서 출력",
+                data: { expenseRequest: row },
+              })
+            }
           />
         </div>
 
@@ -551,6 +565,13 @@ export default function ExpenseRequestPage({
           isAdmin={isAdmin}
           onApprove={approveRequest}
           onReject={rejectRequest}
+          onPrint={(row) =>
+            onSelectMenu({
+              id: "documents-expense-request-print",
+              title: "지출결의서 출력",
+              data: { expenseRequest: row },
+            })
+          }
         />
       </section>
     </div>
@@ -613,11 +634,13 @@ function ExpenseTable({
   isAdmin,
   onApprove,
   onReject,
+  onPrint,
 }: {
   rows: ExpenseRequest[];
   isAdmin: boolean;
   onApprove: (row: ExpenseRequest) => void;
   onReject: (row: ExpenseRequest) => void;
+  onPrint: (row: ExpenseRequest) => void;
 }) {
   return (
     <table className="w-full border-collapse text-sm">
@@ -631,6 +654,7 @@ function ExpenseTable({
           <th className="border border-slate-200 px-3 py-2">사용처/내용</th>
           <th className="border border-slate-200 px-3 py-2 text-right">금액</th>
           <th className="border border-slate-200 px-3 py-2 text-center">영수증</th>
+          <th className="border border-slate-200 px-3 py-2 text-center">출력</th>
           {isAdmin && (
             <th className="border border-slate-200 px-3 py-2 text-center">관리</th>
           )}
@@ -641,7 +665,7 @@ function ExpenseTable({
         {rows.length === 0 ? (
           <tr>
             <td
-              colSpan={isAdmin ? 9 : 8}
+              colSpan={isAdmin ? 10 : 9}
               className="border border-slate-200 px-3 py-8 text-center text-slate-500"
             >
               등록된 지출결의서가 없습니다.
@@ -671,14 +695,27 @@ function ExpenseTable({
                 ₩ {Number(row.amount || 0).toLocaleString()}
               </td>
               <td className="border border-slate-200 px-3 py-2 text-center">
-                <a
-                  href={row.receipt_url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="rounded border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+            {row.receipt_url ? (
+              <a
+                href={row.receipt_url}
+                target="_blank"
+                rel="noreferrer"
+                className="rounded border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                보기
+              </a>
+            ) : (
+              <span className="text-xs text-slate-400">없음</span>
+            )}
+              </td>
+              <td className="border border-slate-200 px-3 py-2 text-center">
+                <button
+                  type="button"
+                  onClick={() => onPrint(row)}
+                  className="rounded border border-blue-300 px-3 py-1 text-xs font-semibold text-blue-600 hover:bg-blue-50"
                 >
-                  보기
-                </a>
+                  출력
+                </button>
               </td>
               {isAdmin && (
                 <td className="border border-slate-200 px-3 py-2 text-center">
@@ -719,11 +756,13 @@ function MobileExpenseCards({
   isAdmin,
   onApprove,
   onReject,
+  onPrint,
 }: {
   rows: ExpenseRequest[];
   isAdmin: boolean;
   onApprove: (row: ExpenseRequest) => void;
   onReject: (row: ExpenseRequest) => void;
+  onPrint: (row: ExpenseRequest) => void;
 }) {
   return (
     <div className="space-y-3 md:hidden">
@@ -744,14 +783,20 @@ function MobileExpenseCards({
                   {row.request_date} / {row.requested_name ?? row.requested_by}
                 </div>
               </div>
-              <a
-                href={row.receipt_url}
-                target="_blank"
-                rel="noreferrer"
-                className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700"
-              >
-                영수증
-              </a>
+              {row.receipt_url ? (
+                <a
+                  href={row.receipt_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700"
+                >
+                  영수증
+                </a>
+              ) : (
+                <span className="rounded-lg bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-400">
+                  영수증 없음
+                </span>
+              )}
             </div>
 
             <div className="rounded-lg bg-slate-50 p-3 text-sm">
@@ -761,6 +806,14 @@ function MobileExpenseCards({
                 {row.account} / {row.expense_type} / {row.category}
               </div>
             </div>
+
+            <button
+              type="button"
+              onClick={() => onPrint(row)}
+              className="mt-3 w-full rounded-lg border border-blue-300 py-2 text-sm font-semibold text-blue-600"
+            >
+              출력
+            </button>
 
             {isAdmin && row.status === "승인대기" && (
               <div className="mt-3 flex gap-2">
