@@ -75,21 +75,23 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
         <div
           className={[
             "group/sidebar relative hidden h-full shrink-0 overflow-hidden bg-slate-900 transition-[width] duration-200 ease-out md:block",
-            isSidebarOpen ? "w-64" : "w-4 hover:w-64",
+            isSidebarOpen ? "w-64" : "w-8 hover:w-64",
           ].join(" ")}
         >
           <button
             type="button"
             aria-label="메뉴 열기"
             onClick={() => setIsSidebarOpen((prev) => !prev)}
-            className="absolute inset-y-0 left-0 z-20 w-4 bg-slate-900/90 transition-colors group-hover/sidebar:bg-slate-900"
+            className="absolute inset-y-0 left-0 z-20 w-8 bg-slate-900/90 transition-colors group-hover/sidebar:bg-slate-900"
           />
           <button
             type="button"
             onClick={() => setIsSidebarOpen((prev) => !prev)}
-            className="absolute left-0 top-1/2 z-30 -translate-y-1/2 rounded-r-lg bg-slate-900 px-1 py-8 text-[10px] font-semibold text-slate-300 shadow-md"
+            className="absolute inset-y-0 left-0 z-30 w-8 bg-slate-900 text-slate-200 shadow-md"
           >
-            MENU
+            <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-xs font-bold tracking-widest [writing-mode:vertical-rl]">
+              MENU
+            </span>
           </button>
           <div className="h-full w-64 bg-slate-900 shadow-2xl">
             <Sidebar
