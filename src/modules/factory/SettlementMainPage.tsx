@@ -9,15 +9,20 @@ export default function SettlementMainPage({
 }: {
   onSelectMenu: (menu: MenuItem) => void;
 }) {
+  const currentDate = new Date();
+  const currentYear = String(currentDate.getFullYear());
+  const currentMonth = String(currentDate.getMonth() + 1).padStart(2, "0");
+
   const [dailyRows, setDailyRows] = useState<any[]>([]);
   const [searchText, setSearchText] = useState("");
-  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
+  const [selectedYear, setSelectedYear] = useState(currentYear);
+  const [selectedMonth, setSelectedMonth] = useState(currentMonth);
   const [balanceRows, setBalanceRows] = useState<any[]>([]);
   const [paymentRows, setPaymentRows] = useState<any[]>([]);
   const [showReceivables, setShowReceivables] = useState(false);
 
   useEffect(() => {
-  void fetchSettlementMain(selectedMonth);
+  void fetchSettlementMain(selectedYear, selectedMonth);
   void fetchBalanceRows();
   void fetchReceivableRows();
 }, []);
@@ -98,8 +103,6 @@ const todayIncome = filteredRows
 const todayExpense = filteredRows
   .filter((row) => row.date === today)
   .reduce((sum, row) => sum + Number(row.expense || 0), 0);
-
-const selectedYear = new Date().getFullYear();
 
 const accountNames = [
   "국민은행",
@@ -213,25 +216,54 @@ const receivableSummary = [
   };
 });  
 
-async function fetchSettlementMain(month: number) {
-  const year = new Date().getFullYear();
+const yearOptions = useMemo(() => {
+  return Array.from(
+    new Set(
+      [
+        currentYear,
+        ...balanceRows
+          .map((row) => String(row.date ?? "").slice(0, 4))
+          .filter(Boolean),
+        ...dailyRows
+          .map((row) => String(row.date ?? "").slice(0, 4))
+          .filter(Boolean),
+      ]
+    )
+  ).sort((a, b) => b.localeCompare(a));
+}, [balanceRows, currentYear, dailyRows]);
 
-  const startDate = `${year}-${String(month).padStart(2, "0")}-01`;
-  const endDate = new Date(year, month, 0).toISOString().slice(0, 10);
-
-  const { data, error } = await supabase
+async function fetchSettlementMain(year: string, month: string) {
+  let query = supabase
     .from("daily_cash")
     .select("*")
-    .gte("date", startDate)
-    .lte("date", endDate)
     .order("date", { ascending: false });
+
+  if (year && month) {
+    const yearNumber = Number(year);
+    const monthNumber = Number(month);
+    const startDate = `${year}-${month}-01`;
+    const lastDay = new Date(yearNumber, monthNumber, 0).getDate();
+    const endDate = `${year}-${month}-${String(lastDay).padStart(2, "0")}`;
+
+    query = query.gte("date", startDate).lte("date", endDate);
+  } else if (year) {
+    query = query.gte("date", `${year}-01-01`).lte("date", `${year}-12-31`);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     alert("정산관리 조회 실패: " + error.message);
     return;
   }
 
-  setDailyRows(data ?? []);
+  const rows = data ?? [];
+
+  setDailyRows(
+    !year && month
+      ? rows.filter((row) => String(row.date ?? "").slice(5, 7) === month)
+      : rows
+  );
 }
 
   return (
@@ -244,29 +276,51 @@ async function fetchSettlementMain(month: number) {
         </p>
       </div>
 
-      {/* 월 선택 */}
+      {/* 기간 선택 */}
 <div className="rounded-2xl border border-slate-200 bg-white p-5">
 
   <div className="flex flex-wrap items-center gap-2">
+    <div className="text-sm font-semibold text-slate-700">
+      조회기간
+    </div>
 
-    {[1,2,3,4,5,6,7,8,9,10,11,12].map((month) => (
-      <button
-        key={month}
-        type="button"
-        onClick={() => {
-          setSelectedMonth(month);
-          void fetchSettlementMain(month);
-        }}
-        className={
-          selectedMonth === month
-            ? "rounded-xl bg-blue-600 px-5 py-2 text-sm font-bold text-white shadow-sm"
-            : "rounded-xl bg-slate-100 px-5 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200"
-        }
-      >
-        {month}월
-      </button>
-    ))}
+    <select
+      className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900"
+      value={selectedYear}
+      onChange={(event) => {
+        const nextYear = event.target.value;
+        setSelectedYear(nextYear);
+        void fetchSettlementMain(nextYear, selectedMonth);
+      }}
+    >
+      <option value="">전체 연도</option>
+      {yearOptions.map((year) => (
+        <option key={year} value={year}>
+          {year}년
+        </option>
+      ))}
+    </select>
 
+    <select
+      className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900"
+      value={selectedMonth}
+      onChange={(event) => {
+        const nextMonth = event.target.value;
+        setSelectedMonth(nextMonth);
+        void fetchSettlementMain(selectedYear, nextMonth);
+      }}
+    >
+      <option value="">전체 월</option>
+      {Array.from({ length: 12 }, (_, index) => {
+        const month = String(index + 1).padStart(2, "0");
+
+        return (
+          <option key={month} value={month}>
+            {index + 1}월
+          </option>
+        );
+      })}
+    </select>
   </div>
 
 </div>
