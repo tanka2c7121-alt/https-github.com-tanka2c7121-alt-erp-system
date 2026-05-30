@@ -20,6 +20,7 @@ import SettlementMainPage from "../../modules/factory/SettlementMainPage";
 import EmployeeManagePage from "../../modules/admin/EmployeeManagePage";
 import EmployeeStatusPage from "../../modules/employee/EmployeeStatusPage";
 import HomeDashboardPage from "../../modules/home/HomeDashboardPage";
+import ExpenseRequestPage from "../../modules/documents/ExpenseRequestPage";
 
 type LoginUser = {
   id: string | number;
@@ -185,6 +186,9 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
               <WorkPrintPage
                 workName={selectedData?.workName ?? selectedData?.nextWorkName}
               />
+            ) : selectedMenu.id === "documents" ||
+            selectedMenu.id === "documents-expense-request" ? (
+              <ExpenseRequestPage user={user} isAdmin={isAdmin} />
             ) : (
               <>
                 <div className="text-sm text-slate-500">작업 화면 영역</div>

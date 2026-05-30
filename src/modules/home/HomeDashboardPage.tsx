@@ -27,6 +27,16 @@ type PendingUser = {
   department: string | null;
 };
 
+type PendingExpenseRequest = {
+  id: number;
+  request_date: string;
+  vendor: string | null;
+  content: string;
+  amount: number;
+  requested_name: string | null;
+  requested_by: string;
+};
+
 const todayText = () => new Date().toISOString().slice(0, 10);
 
 export default function HomeDashboardPage({
@@ -36,12 +46,15 @@ export default function HomeDashboardPage({
 }: HomeDashboardPageProps) {
   const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
   const [pendingUsers, setPendingUsers] = useState<PendingUser[]>([]);
+  const [pendingExpenseRequests, setPendingExpenseRequests] = useState<
+    PendingExpenseRequest[]
+  >([]);
   const [loading, setLoading] = useState(true);
 
   const loadDashboard = useCallback(async () => {
     setLoading(true);
 
-    const [ordersResult, userResult] = await Promise.all([
+    const [ordersResult, userResult, expenseResult] = await Promise.all([
       supabase
         .from("work_orders")
         .select("id, work_name, car_number, car_model, inbound_date, outbound_date, release_date")
@@ -51,6 +64,13 @@ export default function HomeDashboardPage({
             .from("app_users")
             .select("id, user_id, user_name, department")
             .eq("is_active", false)
+            .order("id", { ascending: false })
+        : Promise.resolve({ data: [], error: null }),
+      isAdmin
+        ? supabase
+            .from("expense_requests")
+            .select("id, request_date, vendor, content, amount, requested_name, requested_by")
+            .eq("status", "승인대기")
             .order("id", { ascending: false })
         : Promise.resolve({ data: [], error: null }),
     ]);
@@ -64,6 +84,11 @@ export default function HomeDashboardPage({
 
     setWorkOrders((ordersResult.data ?? []) as WorkOrder[]);
     setPendingUsers((userResult.data ?? []) as PendingUser[]);
+    setPendingExpenseRequests(
+      expenseResult.error
+        ? []
+        : ((expenseResult.data ?? []) as PendingExpenseRequest[])
+    );
   }, [isAdmin]);
 
   useEffect(() => {
@@ -134,12 +159,19 @@ export default function HomeDashboardPage({
           <QuickActions isAdmin={isAdmin} onSelectMenu={onSelectMenu} />
 
           {isAdmin && (
-            <PendingUserList
-              rows={pendingUsers.slice(0, 8)}
+            <AdminApprovalPanel
+              pendingUsers={pendingUsers.slice(0, 6)}
+              pendingExpenses={pendingExpenseRequests.slice(0, 6)}
               onOpenManage={() =>
                 onSelectMenu({
                   id: "employee-manage",
                   title: "직원관리",
+                })
+              }
+              onOpenExpenseRequests={() =>
+                onSelectMenu({
+                  id: "documents-expense-request",
+                  title: "지출결의서",
                 })
               }
             />
@@ -277,49 +309,101 @@ function RecentInboundList({
   );
 }
 
-function PendingUserList({
-  rows,
+function AdminApprovalPanel({
+  pendingUsers,
+  pendingExpenses,
   onOpenManage,
+  onOpenExpenseRequests,
 }: {
-  rows: PendingUser[];
+  pendingUsers: PendingUser[];
+  pendingExpenses: PendingExpenseRequest[];
   onOpenManage: () => void;
+  onOpenExpenseRequests: () => void;
 }) {
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-4">
-      <div className="mb-3 flex items-center justify-between">
-        <h4 className="font-bold text-slate-900">승인대기 직원</h4>
-        <button
-          type="button"
-          onClick={onOpenManage}
-          className="rounded border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-        >
-          직원관리
-        </button>
-      </div>
-
-      <div className="space-y-2">
-        {rows.length === 0 ? (
-          <div className="rounded-lg bg-slate-50 p-6 text-center text-sm text-slate-500">
-            승인대기 직원이 없습니다.
-          </div>
-        ) : (
-          rows.map((row) => (
-            <div
-              key={row.id}
-              className="flex items-center justify-between rounded-lg border border-slate-100 p-3"
+      <div className="space-y-4">
+        <div>
+          <div className="mb-3 flex items-center justify-between">
+            <h4 className="font-bold text-slate-900">승인대기 직원</h4>
+            <button
+              type="button"
+              onClick={onOpenManage}
+              className="rounded border border-blue-300 px-3 py-1 text-xs font-semibold text-blue-600 hover:bg-blue-50"
             >
-              <div>
-                <div className="font-semibold">{row.user_name ?? row.user_id}</div>
-                <div className="text-xs text-slate-500">
-                  {row.department ?? "-"} / {row.user_id}
-                </div>
+              직원관리
+            </button>
+          </div>
+
+          <div className="space-y-2">
+            {pendingUsers.length === 0 ? (
+              <div className="rounded-lg bg-slate-50 p-5 text-center text-sm text-slate-500">
+                승인대기 직원이 없습니다.
               </div>
-              <span className="rounded-full bg-orange-100 px-2 py-1 text-xs font-bold text-orange-700">
-                승인대기
-              </span>
-            </div>
-          ))
-        )}
+            ) : (
+              pendingUsers.map((row) => (
+                <div
+                  key={row.id}
+                  className="flex items-center justify-between rounded-lg border border-slate-100 p-3"
+                >
+                  <div>
+                    <div className="font-semibold">
+                      {row.user_name ?? row.user_id}
+                    </div>
+                    <div className="text-xs text-slate-500">
+                      {row.department ?? "-"} / {row.user_id}
+                    </div>
+                  </div>
+                  <span className="rounded-full bg-orange-100 px-2 py-1 text-xs font-bold text-orange-700">
+                    승인대기
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        <div className="border-t border-slate-200 pt-4">
+          <div className="mb-3 flex items-center justify-between">
+            <h4 className="font-bold text-slate-900">지출결의서 승인대기</h4>
+            <button
+              type="button"
+              onClick={onOpenExpenseRequests}
+              className="rounded border border-blue-300 px-3 py-1 text-xs font-semibold text-blue-600 hover:bg-blue-50"
+            >
+              지출결의서
+            </button>
+          </div>
+
+          <div className="space-y-2">
+            {pendingExpenses.length === 0 ? (
+              <div className="rounded-lg bg-slate-50 p-5 text-center text-sm text-slate-500">
+                승인대기 지출결의서가 없습니다.
+              </div>
+            ) : (
+              pendingExpenses.map((row) => (
+                <button
+                  key={row.id}
+                  type="button"
+                  onClick={onOpenExpenseRequests}
+                  className="flex w-full items-center justify-between rounded-lg border border-slate-100 p-3 text-left hover:bg-blue-50"
+                >
+                  <div className="min-w-0">
+                    <div className="truncate font-semibold">
+                      {row.vendor ? `${row.vendor} - ${row.content}` : row.content}
+                    </div>
+                    <div className="text-xs text-slate-500">
+                      {row.request_date} / {row.requested_name ?? row.requested_by}
+                    </div>
+                  </div>
+                  <span className="shrink-0 font-bold text-orange-700">
+                    ₩ {Number(row.amount || 0).toLocaleString()}
+                  </span>
+                </button>
+              ))
+            )}
+          </div>
+        </div>
       </div>
     </section>
   );

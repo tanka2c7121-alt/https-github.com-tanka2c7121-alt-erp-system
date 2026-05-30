@@ -70,6 +70,13 @@ export const menuData: MenuItem[] = [
     ],
   },
   {
+    id: "documents",
+    title: "문서관리",
+    children: [
+      { id: "documents-expense-request", title: "지출결의서" },
+    ],
+  },
+  {
     id: "settings",
     title: "설정관리",
     children: [
