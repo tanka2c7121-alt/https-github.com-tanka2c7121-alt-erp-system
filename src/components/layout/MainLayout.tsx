@@ -24,6 +24,7 @@ import HomeDashboardPage from "../../modules/home/HomeDashboardPage";
 import ExpenseRequestPage from "../../modules/documents/ExpenseRequestPage";
 import ExpenseRequestPrintPage from "../../modules/documents/ExpenseRequestPrintPage";
 import AttendanceRequestPage from "../../modules/documents/AttendanceRequestPage";
+import AttendanceRequestPrintPage from "../../modules/documents/AttendanceRequestPrintPage";
 
 type LoginUser = {
   id: string | number;
@@ -58,7 +59,12 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
   });
 
   const selectedData = selectedMenu.data as
-    | { workName?: string; nextWorkName?: string; expenseRequest?: any }
+    | {
+        workName?: string;
+        nextWorkName?: string;
+        expenseRequest?: any;
+        attendanceRequest?: any;
+      }
     | undefined;
   const mobileMenus = flattenMenus(menuData, userRole);
   const displayedMobileMenus = mobileMenus.some(
@@ -329,7 +335,16 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
                 onSelectMenu={handleSelectMenu}
               />
             ) : selectedMenu.id === "documents-attendance-request" ? (
-              <AttendanceRequestPage user={user} isAdmin={isAdmin} />
+              <AttendanceRequestPage
+                user={user}
+                isAdmin={isAdmin}
+                onSelectMenu={handleSelectMenu}
+              />
+            ) : selectedMenu.id === "documents-attendance-request-print" ? (
+              <AttendanceRequestPrintPage
+                attendanceRequest={selectedData?.attendanceRequest}
+                onSelectMenu={handleSelectMenu}
+              />
             ) : (
               <>
                 <div className="text-sm text-slate-500">작업 화면 영역</div>
