@@ -24,6 +24,12 @@ type WorkPhoto = {
   url: string;
 };
 
+type PendingWorkPhoto = {
+  id: string;
+  file: File;
+  previewUrl: string;
+};
+
 type TextDetectorResult = {
   rawValue?: string;
 };
@@ -299,6 +305,7 @@ export default function WorkRegisterPage({
   const [isEditMode, setIsEditMode] = useState(false);
   const [releaseDate, setReleaseDate] = useState("");
   const [workPhotos, setWorkPhotos] = useState<WorkPhoto[]>([]);
+  const [pendingWorkPhotos, setPendingWorkPhotos] = useState<PendingWorkPhoto[]>([]);
   const [photoUploading, setPhotoUploading] = useState(false);
   const [photoOcrReading, setPhotoOcrReading] = useState(false);
   const [photoOcrMessage, setPhotoOcrMessage] = useState("");
@@ -509,24 +516,26 @@ async function loadWorkPhotos(targetWorkName = workName) {
 }
 
 async function handlePhotoCapture(event: ChangeEvent<HTMLInputElement>) {
-  const file = event.target.files?.[0];
+  const files = Array.from(event.target.files ?? []);
   event.target.value = "";
 
-  if (!file) {
+  if (files.length === 0) {
     return;
   }
 
-  if (!workName) {
-    alert("사진을 저장하려면 작명이 먼저 필요합니다.");
-    return;
-  }
-
-  setPhotoUploading(true);
   setPhotoOcrReading(true);
   setPhotoOcrMessage("");
 
   try {
-    try {
+    const nextPhotos = files.map((file) => ({
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      file,
+      previewUrl: URL.createObjectURL(file),
+    }));
+
+    setPendingWorkPhotos((prev) => [...prev, ...nextPhotos]);
+
+    for (const file of files) {
       const photoText = await readPhotoText(file);
       const ocrResult = parsePhotoText(photoText);
       const appliedItems: string[] = [];
@@ -562,39 +571,69 @@ async function handlePhotoCapture(event: ChangeEvent<HTMLInputElement>) {
           "이 브라우저는 사진 글자인식을 지원하지 않거나 글자를 찾지 못했습니다."
         );
       }
-    } catch {
-      setPhotoOcrMessage("글자인식은 실패했지만 사진 저장은 계속 진행합니다.");
     }
-
-    const uploadFile = await compressImage(file);
-    const folder = getWorkPhotoFolder();
-    const extension = uploadFile.name.split(".").pop() || "jpg";
-    const filePath = `${folder}/${Date.now()}-${Math.random()
-      .toString(36)
-      .slice(2, 8)}.${extension}`;
-
-    const { error } = await supabase.storage
-      .from(workPhotoBucket)
-      .upload(filePath, uploadFile, {
-        cacheControl: "3600",
-        contentType: uploadFile.type || "image/jpeg",
-        upsert: false,
-      });
-
-    if (error) {
-      throw new Error(error.message);
-    }
-
-    await loadWorkPhotos();
   } catch (error) {
-    alert(
-      "사진 저장 실패: " +
-        (error instanceof Error ? error.message : "업로드 오류")
-    );
+    setPhotoOcrMessage("사진은 저장 대기 중입니다. 글자인식은 일부 실패할 수 있습니다.");
   } finally {
-    setPhotoUploading(false);
     setPhotoOcrReading(false);
   }
+}
+
+async function uploadPendingWorkPhotos(targetWorkName = workName) {
+  if (pendingWorkPhotos.length === 0) {
+    return 0;
+  }
+
+  const folder = getWorkPhotoFolder(targetWorkName);
+
+  if (!folder) {
+    throw new Error("작명이 없어 사진을 저장할 수 없습니다.");
+  }
+
+  setPhotoUploading(true);
+
+  try {
+    for (const photo of pendingWorkPhotos) {
+      const uploadFile = await compressImage(photo.file);
+      const extension = uploadFile.name.split(".").pop() || "jpg";
+      const filePath = `${folder}/${Date.now()}-${Math.random()
+        .toString(36)
+        .slice(2, 8)}.${extension}`;
+
+      const { error } = await supabase.storage
+        .from(workPhotoBucket)
+        .upload(filePath, uploadFile, {
+          cacheControl: "3600",
+          contentType: uploadFile.type || "image/jpeg",
+          upsert: false,
+        });
+
+      if (error) {
+        throw new Error(error.message);
+      }
+    }
+
+    const uploadedCount = pendingWorkPhotos.length;
+    pendingWorkPhotos.forEach((photo) => URL.revokeObjectURL(photo.previewUrl));
+    setPendingWorkPhotos([]);
+    await loadWorkPhotos(targetWorkName);
+
+    return uploadedCount;
+  } finally {
+    setPhotoUploading(false);
+  }
+}
+
+function handleDeletePendingPhoto(photoId: string) {
+  setPendingWorkPhotos((prev) => {
+    const target = prev.find((photo) => photo.id === photoId);
+
+    if (target) {
+      URL.revokeObjectURL(target.previewUrl);
+    }
+
+    return prev.filter((photo) => photo.id !== photoId);
+  });
 }
 
 async function handleDeletePhoto(photo: WorkPhoto) {
@@ -655,6 +694,8 @@ async function handleDeletePhoto(photo: WorkPhoto) {
 
   setMessage("");
   setWorkPhotos([]);
+  pendingWorkPhotos.forEach((photo) => URL.revokeObjectURL(photo.previewUrl));
+  setPendingWorkPhotos([]);
 
   setWorkRows(
     Array.from({ length: 19 }, () => ({
@@ -826,11 +867,6 @@ async function handleSave() {
       return false;
     }
 
-    if (!carNumber) {
-      alert("차량번호를 입력하세요.");
-      return false;
-    }
-
     const orderPayload = {
       work_name: workName,
       car_maker: carMaker,
@@ -932,7 +968,15 @@ console.log("detailRows", detailRows);
       }
     }
 
-    alert(isEditMode ? "수정되었습니다." : "저장되었습니다.");
+    const uploadedPhotoCount = await uploadPendingWorkPhotos(targetWorkName);
+
+    alert(
+      `${isEditMode ? "수정되었습니다." : "저장되었습니다."}${
+        uploadedPhotoCount > 0
+          ? ` 사진 ${uploadedPhotoCount}장도 저장되었습니다.`
+          : ""
+      }`
+    );
 
 
 
@@ -1079,16 +1123,17 @@ function handleClearWorkRow(index: number) {
           <div>
             <label className={labelClass}>작업사진</label>
             <p className="mt-1 text-xs text-slate-500">
-              사진 저장 후 차량번호, 주행거리, 차대번호, 칼라코드 후보를 자동 입력합니다.
+              사진을 여러 장 찍어 모아둔 뒤 저장을 누르면 작명 폴더에 한 번에 저장됩니다.
             </p>
           </div>
 
           <label className="inline-flex cursor-pointer items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
-            {photoUploading || photoOcrReading ? "처리 중..." : "사진찍기"}
+            {photoUploading || photoOcrReading ? "처리 중..." : "사진추가"}
             <input
               type="file"
               accept="image/*"
               capture="environment"
+              multiple
               className="hidden"
               disabled={photoUploading || photoOcrReading}
               onChange={handlePhotoCapture}
@@ -1100,6 +1145,38 @@ function handleClearWorkRow(index: number) {
           <p className="mt-3 rounded-lg bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700">
             {photoOcrMessage}
           </p>
+        )}
+
+        {pendingWorkPhotos.length > 0 && (
+          <div className="mt-4">
+            <div className="mb-2 flex items-center justify-between">
+              <p className="text-xs font-semibold text-slate-700">
+                저장 대기 사진 {pendingWorkPhotos.length}장
+              </p>
+              <p className="text-xs text-slate-500">아래 저장 버튼을 누르면 업로드됩니다.</p>
+            </div>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
+              {pendingWorkPhotos.map((photo) => (
+                <div
+                  key={photo.id}
+                  className="overflow-hidden rounded-lg border border-blue-200 bg-blue-50"
+                >
+                  <img
+                    src={photo.previewUrl}
+                    alt="저장 대기 사진"
+                    className="h-28 w-full object-cover"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleDeletePendingPhoto(photo.id)}
+                    className="w-full border-t border-blue-100 bg-white px-2 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50"
+                  >
+                    빼기
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
         )}
 
         {workPhotos.length > 0 ? (
@@ -1128,9 +1205,9 @@ function handleClearWorkRow(index: number) {
               </div>
             ))}
           </div>
-        ) : (
+        ) : pendingWorkPhotos.length === 0 ? (
           <p className="mt-3 text-xs text-slate-500">등록된 사진이 없습니다.</p>
-        )}
+        ) : null}
       </section>
 
       
