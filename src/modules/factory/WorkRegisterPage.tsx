@@ -375,7 +375,6 @@ useEffect(() => {
       .order("color_code", { ascending: true });
 
     if (error) {
-      console.error("차량목록 조회 오류:", error);
       return;
     }
 
