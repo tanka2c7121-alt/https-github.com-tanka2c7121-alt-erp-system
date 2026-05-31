@@ -1370,6 +1370,13 @@ function handleClearWorkRow(index: number) {
                     className="h-28 w-full object-cover"
                   />
                 </a>
+                <a
+                  href={photo.url}
+                  download={photo.name}
+                  className="block w-full border-t border-slate-200 bg-white px-2 py-1.5 text-center text-xs font-semibold text-blue-600 hover:bg-blue-50"
+                >
+                  다운로드
+                </a>
                 <button
                   type="button"
                   onClick={() => {
