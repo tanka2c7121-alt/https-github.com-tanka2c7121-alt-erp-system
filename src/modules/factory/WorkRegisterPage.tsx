@@ -1143,6 +1143,9 @@ function handleClearWorkRow(index: number) {
             <p className="mt-1 text-xs text-slate-500">
               사진은 10장씩 나눠서 추가하고, 저장을 누르면 작명 폴더에 한 번에 저장됩니다.
             </p>
+            <p className="mt-1 text-xs font-semibold text-blue-700">
+              사진을 찍은 뒤 휴대폰 화면에서 완료 또는 확인을 눌러야 대기 사진에 들어옵니다.
+            </p>
           </div>
 
           <label className="inline-flex cursor-pointer items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
