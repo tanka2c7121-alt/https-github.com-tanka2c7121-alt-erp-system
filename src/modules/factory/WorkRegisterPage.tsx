@@ -3,7 +3,7 @@
 
 import { supabase } from "../../lib/supabase";
 import type { MenuItem } from "../../data/menuData";
-import { useEffect, useState, type ChangeEvent } from "react";
+import { useEffect, useRef, useState, type ChangeEvent } from "react";
 
 
 const getInputStateClass = (value: string) =>
@@ -320,9 +320,13 @@ export default function WorkRegisterPage({
   const [photoUploading, setPhotoUploading] = useState(false);
   const [photoOcrReading, setPhotoOcrReading] = useState(false);
   const [photoOcrMessage, setPhotoOcrMessage] = useState("");
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const [cameraStarting, setCameraStarting] = useState(false);
   const [vehicleCatalog, setVehicleCatalog] = useState<VehicleCatalogRow[]>([]);
   const [businessCatalog, setBusinessCatalog] = useState<BusinessCatalogRow[]>([]);
   const pendingPhotoGroups = chunkArray(pendingWorkPhotos, photoBatchSize);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const cameraStreamRef = useRef<MediaStream | null>(null);
 
   const colorOptions: Record<string, string[]> = {
   "그랜저": ["A2B", "WC9", "T2G","TB7","V7S"],
@@ -484,6 +488,12 @@ useEffect(() => {
   void loadWorkPhotos(workName);
 }, [workName]);
 
+useEffect(() => {
+  return () => {
+    cameraStreamRef.current?.getTracks().forEach((track) => track.stop());
+  };
+}, []);
+
 function getWorkPhotoFolder(targetWorkName = workName) {
   return targetWorkName.trim().replace(/[^0-9A-Za-z가-힣_-]/g, "_");
 }
@@ -527,25 +537,12 @@ async function loadWorkPhotos(targetWorkName = workName) {
   setWorkPhotos(photos);
 }
 
-async function handlePhotoCapture(event: ChangeEvent<HTMLInputElement>) {
-  const files = Array.from(event.target.files ?? []);
-  event.target.value = "";
-
-  if (files.length === 0) {
-    return;
-  }
-
-  if (files.length > photoBatchSize) {
-    alert(`사진은 한 번에 ${photoBatchSize}장씩 나눠서 추가하세요.`);
-  }
-
-  const selectedFiles = files.slice(0, photoBatchSize);
-
+async function addPendingPhotoFiles(files: File[]) {
   setPhotoOcrReading(true);
   setPhotoOcrMessage("");
 
   try {
-    const nextPhotos = selectedFiles.map((file) => ({
+    const nextPhotos = files.map((file) => ({
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       file,
       previewUrl: URL.createObjectURL(file),
@@ -553,7 +550,7 @@ async function handlePhotoCapture(event: ChangeEvent<HTMLInputElement>) {
 
     setPendingWorkPhotos((prev) => [...prev, ...nextPhotos]);
 
-    for (const file of selectedFiles) {
+    for (const file of files) {
       const photoText = await readPhotoText(file);
       const ocrResult = parsePhotoText(photoText);
       const appliedItems: string[] = [];
@@ -593,6 +590,104 @@ async function handlePhotoCapture(event: ChangeEvent<HTMLInputElement>) {
   } finally {
     setPhotoOcrReading(false);
   }
+}
+
+async function handlePhotoCapture(event: ChangeEvent<HTMLInputElement>) {
+  const files = Array.from(event.target.files ?? []);
+  event.target.value = "";
+
+  if (files.length === 0) {
+    return;
+  }
+
+  if (files.length > photoBatchSize) {
+    alert(`사진은 한 번에 ${photoBatchSize}장씩 나눠서 추가하세요.`);
+  }
+
+  await addPendingPhotoFiles(files.slice(0, photoBatchSize));
+}
+
+async function openCamera() {
+  if (!navigator.mediaDevices?.getUserMedia) {
+    alert("이 브라우저에서는 카메라를 직접 열 수 없습니다.");
+    return;
+  }
+
+  setCameraStarting(true);
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: { ideal: "environment" },
+        width: { ideal: 1920 },
+        height: { ideal: 1080 },
+      },
+      audio: false,
+    });
+
+    cameraStreamRef.current = stream;
+    setCameraOpen(true);
+
+    setTimeout(() => {
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        void videoRef.current.play();
+      }
+    }, 0);
+  } catch {
+    alert("카메라 권한을 허용해야 촬영할 수 있습니다.");
+  } finally {
+    setCameraStarting(false);
+  }
+}
+
+function closeCamera() {
+  cameraStreamRef.current?.getTracks().forEach((track) => track.stop());
+  cameraStreamRef.current = null;
+
+  if (videoRef.current) {
+    videoRef.current.srcObject = null;
+  }
+
+  setCameraOpen(false);
+}
+
+async function captureCameraPhoto() {
+  const video = videoRef.current;
+
+  if (!video || video.videoWidth === 0 || video.videoHeight === 0) {
+    alert("카메라 화면을 불러오는 중입니다. 잠시 후 다시 촬영하세요.");
+    return;
+  }
+
+  const canvas = document.createElement("canvas");
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+
+  const context = canvas.getContext("2d");
+
+  if (!context) {
+    alert("사진을 만들 수 없습니다.");
+    return;
+  }
+
+  context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+  const blob = await new Promise<Blob | null>((resolve) =>
+    canvas.toBlob(resolve, "image/jpeg", 0.92)
+  );
+
+  if (!blob) {
+    alert("사진 촬영에 실패했습니다.");
+    return;
+  }
+
+  const file = new File([blob], `camera-${Date.now()}.jpg`, {
+    type: "image/jpeg",
+    lastModified: Date.now(),
+  });
+
+  await addPendingPhotoFiles([file]);
 }
 
 async function uploadPendingWorkPhotos(targetWorkName = workName) {
@@ -1142,23 +1237,64 @@ function handleClearWorkRow(index: number) {
               사진은 10장씩 나눠서 추가하고, 저장을 누르면 작명 폴더에 한 번에 저장됩니다.
             </p>
             <p className="mt-1 text-xs font-semibold text-blue-700">
-              사진을 찍은 뒤 휴대폰 화면에서 완료 또는 확인을 눌러야 대기 사진에 들어옵니다.
+              카메라 열기 후 촬영을 누를 때마다 대기 사진에 바로 추가됩니다.
             </p>
           </div>
 
-          <label className="inline-flex cursor-pointer items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
-            {photoUploading || photoOcrReading ? "처리 중..." : "사진추가"}
-            <input
-              type="file"
-              accept="image/*"
-              capture="environment"
-              multiple
-              className="hidden"
-              disabled={photoUploading || photoOcrReading}
-              onChange={handlePhotoCapture}
-            />
-          </label>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                void openCamera();
+              }}
+              disabled={cameraStarting || photoUploading || photoOcrReading}
+              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:bg-slate-400"
+            >
+              {cameraStarting ? "카메라 여는 중..." : "카메라 열기"}
+            </button>
+            <label className="inline-flex cursor-pointer items-center justify-center rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+              사진선택
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                disabled={photoUploading || photoOcrReading}
+                onChange={handlePhotoCapture}
+              />
+            </label>
+          </div>
         </div>
+
+        {cameraOpen && (
+          <div className="mt-4 overflow-hidden rounded-xl border border-slate-200 bg-slate-950">
+            <video
+              ref={videoRef}
+              playsInline
+              muted
+              className="max-h-[65vh] w-full bg-black object-contain"
+            />
+            <div className="flex flex-col gap-2 bg-white p-3 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  void captureCameraPhoto();
+                }}
+                disabled={photoOcrReading}
+                className="rounded-lg bg-blue-600 px-5 py-3 text-sm font-semibold text-white hover:bg-blue-700 disabled:bg-slate-400"
+              >
+                촬영
+              </button>
+              <button
+                type="button"
+                onClick={closeCamera}
+                className="rounded-lg border border-slate-300 px-5 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                닫기
+              </button>
+            </div>
+          </div>
+        )}
 
         {photoOcrMessage && (
           <p className="mt-3 rounded-lg bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700">
