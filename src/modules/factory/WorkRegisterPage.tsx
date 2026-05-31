@@ -609,11 +609,7 @@ async function handlePhotoCapture(event: ChangeEvent<HTMLInputElement>) {
     return;
   }
 
-  if (files.length > photoBatchSize) {
-    alert(`사진은 한 번에 ${photoBatchSize}장씩 나눠서 추가하세요.`);
-  }
-
-  await addPendingPhotoFiles(files.slice(0, photoBatchSize));
+  await addPendingPhotoFiles(files);
 }
 
 async function openCamera() {
@@ -1236,7 +1232,7 @@ function handleClearWorkRow(index: number) {
           <div>
             <label className={labelClass}>작업사진</label>
             <p className="mt-1 text-xs text-slate-500">
-              사진은 10장씩 나눠서 추가하고, 저장을 누르면 작명 폴더에 한 번에 저장됩니다.
+              사진은 제한 없이 추가할 수 있고, 저장을 누르면 작명 폴더에 한 번에 저장됩니다.
             </p>
             <p className="mt-1 text-xs font-semibold text-blue-700">
               카메라 열기 후 촬영을 누를 때마다 대기 사진에 바로 추가됩니다.
@@ -1311,7 +1307,7 @@ function handleClearWorkRow(index: number) {
                 저장 대기 사진 {pendingWorkPhotos.length}장
               </p>
               <p className="text-xs text-slate-500">
-                {pendingPhotoGroups.length}묶음, 아래 저장 버튼을 누르면 업로드됩니다.
+                화면에는 10장씩 묶어 표시되며, 아래 저장 버튼을 누르면 업로드됩니다.
               </p>
             </div>
 
