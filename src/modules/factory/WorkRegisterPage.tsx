@@ -585,13 +585,11 @@ async function handlePhotoCapture(event: ChangeEvent<HTMLInputElement>) {
             : "사진에서 글자는 읽었지만 자동 입력할 항목을 찾지 못했습니다."
         );
       } else {
-        setPhotoOcrMessage(
-          "이 브라우저는 사진 글자인식을 지원하지 않거나 글자를 찾지 못했습니다."
-        );
+        setPhotoOcrMessage("사진이 저장 대기 목록에 추가되었습니다.");
       }
     }
   } catch (error) {
-    setPhotoOcrMessage("사진은 저장 대기 중입니다. 글자인식은 일부 실패할 수 있습니다.");
+    setPhotoOcrMessage("사진이 저장 대기 목록에 추가되었습니다.");
   } finally {
     setPhotoOcrReading(false);
   }
