@@ -55,6 +55,10 @@ type PendingAttendanceRequest = {
 };
 
 const todayText = () => new Date().toISOString().slice(0, 10);
+const currentWorkMonth = () => {
+  const today = todayText();
+  return today.slice(0, 7);
+};
 
 export default function HomeDashboardPage({
   isAdmin,
@@ -148,9 +152,23 @@ export default function HomeDashboardPage({
     void loadDashboard();
   }, [loadDashboard]);
 
+  useEffect(() => {
+    const refresh = () => {
+      void loadDashboard();
+    };
+
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+
+    return () => {
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [loadDashboard]);
+
   const dashboard = useMemo(() => {
     const today = todayText();
-    const thisMonth = today.slice(0, 7);
+    const thisMonth = currentWorkMonth();
     const activeOrders = workOrders.filter((item) => !item.release_date);
     const todayInbound = workOrders.filter((item) => item.inbound_date === today);
     const thisMonthInbound = workOrders.filter((item) =>
