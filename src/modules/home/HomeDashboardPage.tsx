@@ -153,6 +153,9 @@ export default function HomeDashboardPage({
     const thisMonth = today.slice(0, 7);
     const activeOrders = workOrders.filter((item) => !item.release_date);
     const todayInbound = workOrders.filter((item) => item.inbound_date === today);
+    const thisMonthInbound = workOrders.filter((item) =>
+      item.work_name?.startsWith(thisMonth)
+    );
     const todayOutbound = workOrders.filter((item) => item.release_date === today);
     const thisMonthOutbound = workOrders.filter((item) =>
       item.release_date?.startsWith(thisMonth)
@@ -161,6 +164,7 @@ export default function HomeDashboardPage({
     return {
       activeOrders,
       todayInbound,
+      thisMonthInbound,
       todayOutbound,
       thisMonthOutbound,
       recentInbound: [...activeOrders]
@@ -196,9 +200,10 @@ export default function HomeDashboardPage({
         </button>
       </div>
 
-      <section className="grid grid-cols-1 gap-3 md:grid-cols-4">
+      <section className="grid grid-cols-1 gap-3 md:grid-cols-5">
         <SummaryCard title="현재 입고" value={dashboard.activeOrders.length} tone="blue" />
         <SummaryCard title="오늘 입고" value={dashboard.todayInbound.length} tone="green" />
+        <SummaryCard title="해당월 입고" value={dashboard.thisMonthInbound.length} tone="orange" />
         <SummaryCard title="오늘 출고" value={dashboard.todayOutbound.length} tone="indigo" />
         <SummaryCard title="이번 달 출고" value={dashboard.thisMonthOutbound.length} tone="slate" />
       </section>
@@ -256,12 +261,13 @@ function SummaryCard({
 }: {
   title: string;
   value: number | string;
-  tone: "blue" | "green" | "indigo" | "slate";
+  tone: "blue" | "green" | "indigo" | "orange" | "slate";
 }) {
   const toneClass = {
     blue: "border-blue-100 bg-blue-50 text-blue-700",
     green: "border-green-100 bg-green-50 text-green-700",
     indigo: "border-indigo-100 bg-indigo-50 text-indigo-700",
+    orange: "border-orange-100 bg-orange-50 text-orange-700",
     slate: "border-slate-200 bg-slate-50 text-slate-700",
   }[tone];
 
