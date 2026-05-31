@@ -17,6 +17,7 @@ const textAreaClass =
   "min-h-[120px] w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100";
 const labelClass = "text-sm font-semibold text-slate-800";
 const workPhotoBucket = "work-photos";
+const photoBatchSize = 10;
 
 type WorkPhoto = {
   name: string;
@@ -57,6 +58,16 @@ type BusinessCatalogRow = {
   phone_number: string | null;
   group_name: string | null;
 };
+
+function chunkArray<T>(items: T[], size: number) {
+  const chunks: T[][] = [];
+
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size));
+  }
+
+  return chunks;
+}
 
 const readPhotoText = async (file: File) => {
   const textDetector = (
@@ -311,6 +322,7 @@ export default function WorkRegisterPage({
   const [photoOcrMessage, setPhotoOcrMessage] = useState("");
   const [vehicleCatalog, setVehicleCatalog] = useState<VehicleCatalogRow[]>([]);
   const [businessCatalog, setBusinessCatalog] = useState<BusinessCatalogRow[]>([]);
+  const pendingPhotoGroups = chunkArray(pendingWorkPhotos, photoBatchSize);
 
   const colorOptions: Record<string, string[]> = {
   "그랜저": ["A2B", "WC9", "T2G","TB7","V7S"],
@@ -523,11 +535,17 @@ async function handlePhotoCapture(event: ChangeEvent<HTMLInputElement>) {
     return;
   }
 
+  if (files.length > photoBatchSize) {
+    alert(`사진은 한 번에 ${photoBatchSize}장씩 나눠서 추가하세요.`);
+  }
+
+  const selectedFiles = files.slice(0, photoBatchSize);
+
   setPhotoOcrReading(true);
   setPhotoOcrMessage("");
 
   try {
-    const nextPhotos = files.map((file) => ({
+    const nextPhotos = selectedFiles.map((file) => ({
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       file,
       previewUrl: URL.createObjectURL(file),
@@ -535,7 +553,7 @@ async function handlePhotoCapture(event: ChangeEvent<HTMLInputElement>) {
 
     setPendingWorkPhotos((prev) => [...prev, ...nextPhotos]);
 
-    for (const file of files) {
+    for (const file of selectedFiles) {
       const photoText = await readPhotoText(file);
       const ocrResult = parsePhotoText(photoText);
       const appliedItems: string[] = [];
@@ -1123,7 +1141,7 @@ function handleClearWorkRow(index: number) {
           <div>
             <label className={labelClass}>작업사진</label>
             <p className="mt-1 text-xs text-slate-500">
-              사진을 여러 장 찍어 모아둔 뒤 저장을 누르면 작명 폴더에 한 번에 저장됩니다.
+              사진은 10장씩 나눠서 추가하고, 저장을 누르면 작명 폴더에 한 번에 저장됩니다.
             </p>
           </div>
 
@@ -1153,26 +1171,46 @@ function handleClearWorkRow(index: number) {
               <p className="text-xs font-semibold text-slate-700">
                 저장 대기 사진 {pendingWorkPhotos.length}장
               </p>
-              <p className="text-xs text-slate-500">아래 저장 버튼을 누르면 업로드됩니다.</p>
+              <p className="text-xs text-slate-500">
+                {pendingPhotoGroups.length}묶음, 아래 저장 버튼을 누르면 업로드됩니다.
+              </p>
             </div>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
-              {pendingWorkPhotos.map((photo) => (
+
+            <div className="space-y-4">
+              {pendingPhotoGroups.map((group, groupIndex) => (
                 <div
-                  key={photo.id}
-                  className="overflow-hidden rounded-lg border border-blue-200 bg-blue-50"
+                  key={`photo-group-${groupIndex}`}
+                  className="rounded-xl border border-blue-100 bg-blue-50 p-3"
                 >
-                  <img
-                    src={photo.previewUrl}
-                    alt="저장 대기 사진"
-                    className="h-28 w-full object-cover"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => handleDeletePendingPhoto(photo.id)}
-                    className="w-full border-t border-blue-100 bg-white px-2 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50"
-                  >
-                    빼기
-                  </button>
+                  <div className="mb-2 flex items-center justify-between">
+                    <p className="text-xs font-bold text-blue-800">
+                      {groupIndex + 1}번째 묶음
+                    </p>
+                    <p className="text-xs font-semibold text-blue-700">
+                      {group.length}/{photoBatchSize}장
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-5 lg:grid-cols-10">
+                    {group.map((photo) => (
+                      <div
+                        key={photo.id}
+                        className="overflow-hidden rounded-lg border border-blue-200 bg-white"
+                      >
+                        <img
+                          src={photo.previewUrl}
+                          alt="저장 대기 사진"
+                          className="h-24 w-full object-cover"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleDeletePendingPhoto(photo.id)}
+                          className="w-full border-t border-blue-100 bg-white px-2 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50"
+                        >
+                          빼기
+                        </button>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               ))}
             </div>
