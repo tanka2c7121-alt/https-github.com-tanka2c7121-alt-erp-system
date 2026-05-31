@@ -24,6 +24,67 @@ type WorkPhoto = {
   url: string;
 };
 
+type TextDetectorResult = {
+  rawValue?: string;
+};
+
+type TextDetectorConstructor = new () => {
+  detect: (source: ImageBitmap) => Promise<TextDetectorResult[]>;
+};
+
+type PhotoOcrResult = {
+  carNumber?: string;
+  mileage?: string;
+  vin?: string;
+  colorCode?: string;
+};
+
+const readPhotoText = async (file: File) => {
+  const textDetector = (
+    window as Window & { TextDetector?: TextDetectorConstructor }
+  ).TextDetector;
+
+  if (!textDetector) {
+    return "";
+  }
+
+  const imageBitmap = await createImageBitmap(file);
+
+  try {
+    const detector = new textDetector();
+    const results = await detector.detect(imageBitmap);
+
+    return results
+      .map((result) => result.rawValue ?? "")
+      .filter(Boolean)
+      .join(" ");
+  } finally {
+    imageBitmap.close();
+  }
+};
+
+const parsePhotoText = (text: string): PhotoOcrResult => {
+  const compactText = text.replace(/\s+/g, "").toUpperCase();
+  const carNumberMatch = compactText.match(/\d{2,3}[가-힣]\d{4}/);
+  const vinMatch = compactText.match(/[A-HJ-NPR-Z0-9]{17}/);
+  const mileageCandidates = [...compactText.matchAll(/\d{4,7}(?=KM|킬로|K|$)/g)]
+    .map((match) => Number(match[0]))
+    .filter((value) => value >= 1000 && value <= 999999);
+  const colorCodeMatch =
+    compactText.match(/(?:COLOR|COLOUR|PAINT|칼라|컬러|색상)[A-Z0-9:-]*([A-Z0-9]{2,4})/) ??
+    compactText.match(/\b[A-Z0-9]{2,4}\b/);
+
+  return {
+    carNumber: carNumberMatch?.[0],
+    mileage:
+      mileageCandidates.length > 0
+        ? `${Math.max(...mileageCandidates).toLocaleString()} Km`
+        : undefined,
+    vin: vinMatch?.[0],
+    colorCode: colorCodeMatch?.[1] ?? colorCodeMatch?.[0],
+  };
+};
+
 const compressImage = (file: File) =>
   new Promise<File>((resolve, reject) => {
     if (!file.type.startsWith("image/")) {
@@ -226,6 +287,8 @@ export default function WorkRegisterPage({
   const [releaseDate, setReleaseDate] = useState("");
   const [workPhotos, setWorkPhotos] = useState<WorkPhoto[]>([]);
   const [photoUploading, setPhotoUploading] = useState(false);
+  const [photoOcrReading, setPhotoOcrReading] = useState(false);
+  const [photoOcrMessage, setPhotoOcrMessage] = useState("");
 
   const colorOptions: Record<string, string[]> = {
   "그랜저": ["A2B", "WC9", "T2G","TB7","V7S"],
@@ -365,8 +428,50 @@ async function handlePhotoCapture(event: ChangeEvent<HTMLInputElement>) {
   }
 
   setPhotoUploading(true);
+  setPhotoOcrReading(true);
+  setPhotoOcrMessage("");
 
   try {
+    try {
+      const photoText = await readPhotoText(file);
+      const ocrResult = parsePhotoText(photoText);
+      const appliedItems: string[] = [];
+
+      if (!carNumber && ocrResult.carNumber) {
+        setCarNumber(ocrResult.carNumber);
+        appliedItems.push("차량번호");
+      }
+
+      if (!mileage && ocrResult.mileage) {
+        setMileage(ocrResult.mileage);
+        appliedItems.push("주행거리");
+      }
+
+      if (!vin && ocrResult.vin) {
+        setVin(ocrResult.vin);
+        appliedItems.push("차대번호");
+      }
+
+      if (!colorCode && ocrResult.colorCode) {
+        setColorCode(ocrResult.colorCode);
+        appliedItems.push("칼라코드");
+      }
+
+      if (photoText) {
+        setPhotoOcrMessage(
+          appliedItems.length > 0
+            ? `${appliedItems.join(", ")} 후보를 자동 입력했습니다.`
+            : "사진에서 글자는 읽었지만 자동 입력할 항목을 찾지 못했습니다."
+        );
+      } else {
+        setPhotoOcrMessage(
+          "이 브라우저는 사진 글자인식을 지원하지 않거나 글자를 찾지 못했습니다."
+        );
+      }
+    } catch {
+      setPhotoOcrMessage("글자인식은 실패했지만 사진 저장은 계속 진행합니다.");
+    }
+
     const uploadFile = await compressImage(file);
     const folder = getWorkPhotoFolder();
     const extension = uploadFile.name.split(".").pop() || "jpg";
@@ -394,6 +499,7 @@ async function handlePhotoCapture(event: ChangeEvent<HTMLInputElement>) {
     );
   } finally {
     setPhotoUploading(false);
+    setPhotoOcrReading(false);
   }
 }
 
@@ -828,22 +934,28 @@ function handleClearWorkRow(index: number) {
           <div>
             <label className={labelClass}>작업사진</label>
             <p className="mt-1 text-xs text-slate-500">
-              모바일에서 사진찍기를 누르면 카메라가 열리고 현재 작명 폴더에 저장됩니다.
+              사진 저장 후 차량번호, 주행거리, 차대번호, 칼라코드 후보를 자동 입력합니다.
             </p>
           </div>
 
           <label className="inline-flex cursor-pointer items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
-            {photoUploading ? "저장 중..." : "사진찍기"}
+            {photoUploading || photoOcrReading ? "처리 중..." : "사진찍기"}
             <input
               type="file"
               accept="image/*"
               capture="environment"
               className="hidden"
-              disabled={photoUploading}
+              disabled={photoUploading || photoOcrReading}
               onChange={handlePhotoCapture}
             />
           </label>
         </div>
+
+        {photoOcrMessage && (
+          <p className="mt-3 rounded-lg bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700">
+            {photoOcrMessage}
+          </p>
+        )}
 
         {workPhotos.length > 0 ? (
           <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
