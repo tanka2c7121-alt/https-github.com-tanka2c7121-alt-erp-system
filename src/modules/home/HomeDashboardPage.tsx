@@ -214,7 +214,7 @@ export default function HomeDashboardPage({
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-          <QuickActions isAdmin={isAdmin} onSelectMenu={onSelectMenu} />
+          <QuickActions onSelectMenu={onSelectMenu} />
 
           {(isAdmin || canApproveAttendance) && (
             <AdminApprovalPanel
@@ -280,23 +280,15 @@ function SummaryCard({
 }
 
 function QuickActions({
-  isAdmin,
   onSelectMenu,
 }: {
-  isAdmin: boolean;
   onSelectMenu: (menu: MenuItem) => void;
 }) {
   const actions: Array<{ id: string; title: string; description: string }> = [
     { id: "factory-work-register", title: "작업등록", description: "신규 입고 차량 등록" },
-    { id: "factory-inbound", title: "입고현황", description: "진행중 차량 확인" },
-    { id: "factory-outbound", title: "출고현황", description: "출고 완료 차량 확인" },
-    { id: "factory-work-print", title: "작업출력", description: "작업지시서 출력" },
-    { id: "employee", title: "직원현황", description: "직원 및 부서 현황" },
+    { id: "factory-settlement-repair", title: "차량정산", description: "차량별 정산 확인" },
+    { id: "factory-settlement-daily-cash", title: "일일입출금", description: "일일 입출금 확인" },
   ];
-
-  if (isAdmin) {
-    actions.push({ id: "employee-manage", title: "직원관리", description: "직원 승인 및 계정 관리" });
-  }
 
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-4">
