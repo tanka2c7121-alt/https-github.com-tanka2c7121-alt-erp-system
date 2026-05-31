@@ -55,9 +55,18 @@ type PendingAttendanceRequest = {
 };
 
 const todayText = () => new Date().toISOString().slice(0, 10);
-const currentWorkMonth = () => {
+const currentWorkMonth = (orders: WorkOrder[]) => {
   const today = todayText();
-  return today.slice(0, 7);
+  const calendarMonth = today.slice(0, 7);
+  const workMonths = orders
+    .map((item) => item.work_name?.slice(0, 7) ?? "")
+    .filter((month) => /^\d{4}-\d{2}$/.test(month));
+
+  if (workMonths.includes(calendarMonth)) {
+    return calendarMonth;
+  }
+
+  return [...workMonths].sort().pop() ?? calendarMonth;
 };
 
 export default function HomeDashboardPage({
@@ -168,7 +177,7 @@ export default function HomeDashboardPage({
 
   const dashboard = useMemo(() => {
     const today = todayText();
-    const thisMonth = currentWorkMonth();
+    const thisMonth = currentWorkMonth(workOrders);
     const activeOrders = workOrders.filter((item) => !item.release_date);
     const todayInbound = workOrders.filter((item) => item.inbound_date === today);
     const thisMonthInbound = workOrders.filter((item) =>

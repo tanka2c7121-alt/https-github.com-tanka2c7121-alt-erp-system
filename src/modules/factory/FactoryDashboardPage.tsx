@@ -22,6 +22,18 @@ type WorkOrder = {
 };
 
 const todayText = () => new Date().toISOString().slice(0, 10);
+const currentWorkMonth = (orders: WorkOrder[]) => {
+  const calendarMonth = todayText().slice(0, 7);
+  const workMonths = orders
+    .map((item) => item.work_name?.slice(0, 7) ?? "")
+    .filter((month) => /^\d{4}-\d{2}$/.test(month));
+
+  if (workMonths.includes(calendarMonth)) {
+    return calendarMonth;
+  }
+
+  return [...workMonths].sort().pop() ?? calendarMonth;
+};
 
 const daysBetween = (startDate: string, endDate: string) => {
   const start = new Date(startDate);
@@ -82,7 +94,7 @@ export default function FactoryDashboardPage({
 
   const dashboard = useMemo(() => {
     const today = todayText();
-    const thisMonth = today.slice(0, 7);
+    const thisMonth = currentWorkMonth(workOrders);
 
     const activeOrders = workOrders.filter((item) => !item.release_date);
     const todayInbound = workOrders.filter((item) => item.inbound_date === today);
