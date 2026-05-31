@@ -280,8 +280,8 @@ export default function WorkRegisterPage({
   const [rentalPhoneNumber, setRentalPhoneNumber] = useState("");
   const [inboundDate, setInboundDate] = useState("");
   const [outboundDate, setOutboundDate] = useState("");
-  const [towYn, setTowYn] = useState("");
-  const [deliveryYn, setDeliveryYn] = useState("");
+  const [towYn, setTowYn] = useState("N");
+  const [deliveryYn, setDeliveryYn] = useState("N");
   const [partnerCompany, setPartnerCompany] = useState("");
   
   const [receiptNumber, setReceiptNumber] = useState(""); 
@@ -293,8 +293,8 @@ export default function WorkRegisterPage({
   const [ownManagerName, setOwnManagerName] = useState("");
   const [otherManagerName, setOtherManagerName] = useState("");
 
-  const [vatYn, setVatYn] = useState("");
-  const [deductibleAmount, setDeductibleAmount] = useState("");
+  const [vatYn, setVatYn] = useState("N");
+  const [deductibleAmount, setDeductibleAmount] = useState("해당없음");
   const [message, setMessage] = useState("");
   const [isEditMode, setIsEditMode] = useState(false);
   const [releaseDate, setReleaseDate] = useState("");
@@ -636,8 +636,8 @@ async function handleDeletePhoto(photo: WorkPhoto) {
   setOutboundDate("");
   setReleaseDate("");
 
-  setTowYn("");
-  setDeliveryYn("");
+  setTowYn("N");
+  setDeliveryYn("N");
   setPartnerCompany("");
 
   setReceiptNumber("");
@@ -650,8 +650,8 @@ async function handleDeletePhoto(photo: WorkPhoto) {
   setOwnManagerName("");
   setOtherManagerName("");
 
-  setVatYn("");
-  setDeductibleAmount("");
+  setVatYn("N");
+  setDeductibleAmount("해당없음");
 
   setMessage("");
   setWorkPhotos([]);
