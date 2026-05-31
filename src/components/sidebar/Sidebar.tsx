@@ -7,12 +7,14 @@ type SidebarProps = {
   selectedMenuId: string;
   onSelectMenu: (menu: MenuItem) => void;
   isAdmin: boolean;
+  userDepartment?: string | null;
 };
 
 export default function Sidebar({
   selectedMenuId,
   onSelectMenu,
   isAdmin,
+  userDepartment,
 }: SidebarProps) {
   const [openMenus, setOpenMenus] = useState<Record<string, boolean>>({
     employee: true,
@@ -32,6 +34,14 @@ export default function Sidebar({
       const userRole = isAdmin ? "ADMIN" : "STAFF";
 
       if (item.roles && !item.roles.includes(userRole)) {
+        return null;
+      }
+
+      if (
+        item.departments &&
+        !isAdmin &&
+        !item.departments.includes(userDepartment ?? "")
+      ) {
         return null;
       }
 

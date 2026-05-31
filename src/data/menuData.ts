@@ -2,6 +2,7 @@ export type MenuItem = {
   id: string;
   title: string;
   roles?: Array<"ADMIN" | "STAFF">;
+  departments?: string[];
 
   data?: {
     workName?: string;
@@ -88,8 +89,9 @@ export const menuData: MenuItem[] = [
       },
       {
         id: "vehicle-catalog",
-        title: "차량목록관리",
-        roles: ["ADMIN"],
+        title: "기초자료관리",
+        roles: ["ADMIN", "STAFF"],
+        departments: ["관리부"],
       },
     ],
   },

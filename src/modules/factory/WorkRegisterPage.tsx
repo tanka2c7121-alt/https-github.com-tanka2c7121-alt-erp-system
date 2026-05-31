@@ -45,6 +45,13 @@ type VehicleCatalogRow = {
   color_code: string | null;
 };
 
+type BusinessCatalogRow = {
+  item_type: string;
+  name: string;
+  phone_number: string | null;
+  group_name: string | null;
+};
+
 const readPhotoText = async (file: File) => {
   const textDetector = (
     window as Window & { TextDetector?: TextDetectorConstructor }
@@ -296,6 +303,7 @@ export default function WorkRegisterPage({
   const [photoOcrReading, setPhotoOcrReading] = useState(false);
   const [photoOcrMessage, setPhotoOcrMessage] = useState("");
   const [vehicleCatalog, setVehicleCatalog] = useState<VehicleCatalogRow[]>([]);
+  const [businessCatalog, setBusinessCatalog] = useState<BusinessCatalogRow[]>([]);
 
   const colorOptions: Record<string, string[]> = {
   "그랜저": ["A2B", "WC9", "T2G","TB7","V7S"],
@@ -382,6 +390,25 @@ useEffect(() => {
   }
 
   void loadVehicleCatalog();
+}, []);
+
+useEffect(() => {
+  async function loadBusinessCatalog() {
+    const { data, error } = await supabase
+      .from("business_catalog")
+      .select("item_type, name, phone_number, group_name")
+      .eq("is_active", true)
+      .order("item_type", { ascending: true })
+      .order("name", { ascending: true });
+
+    if (error) {
+      return;
+    }
+
+    setBusinessCatalog((data ?? []) as BusinessCatalogRow[]);
+  }
+
+  void loadBusinessCatalog();
 }, []);
 
 useEffect(() => {
@@ -929,6 +956,57 @@ console.log("detailRows", detailRows);
   에이스렌터카: "",
 };
 
+const catalogRentalCompanies = businessCatalog
+  .filter((item) => item.item_type === "rental")
+  .reduce<Record<string, string>>((result, item) => {
+    result[item.name] = item.phone_number ?? "";
+    return result;
+  }, {});
+
+const activeRentalCompanies =
+  Object.keys(catalogRentalCompanies).length > 0
+    ? catalogRentalCompanies
+    : rentalCompanies;
+
+const activePartnerCompanies =
+  businessCatalog.filter((item) => item.item_type === "partner").length > 0
+    ? businessCatalog
+        .filter((item) => item.item_type === "partner")
+        .map((item) => item.name)
+    : [
+        "자력",
+        "블루모터스",
+        "KB캐피탈",
+        "상동점",
+        "상동점소개",
+        "오릭스캐피탈",
+        "BNK캐피탈",
+        "오픈링크",
+        "오부장",
+        "경인렌터카",
+      ];
+
+const catalogCompanyOptions = businessCatalog
+  .filter((item) => item.item_type === "insurer")
+  .reduce<Record<string, string[]>>((result, item) => {
+    const group = item.group_name || "보험";
+
+    if (!result[group]) {
+      result[group] = [];
+    }
+
+    if (!result[group].includes(item.name)) {
+      result[group].push(item.name);
+    }
+
+    return result;
+  }, {});
+
+const activeCompanyOptions =
+  Object.keys(catalogCompanyOptions).length > 0
+    ? catalogCompanyOptions
+    : companyOptions;
+
   const [workRows, setWorkRows] = useState(     
   Array.from({ length: 19 }, () => ({
     side: "",
@@ -1190,12 +1268,12 @@ function handleClearWorkRow(index: number) {
   if (value === "타렌트사용") {
     setRentalPhoneNumber("");
   } else {
-    setRentalPhoneNumber(rentalCompanies[value] ?? "");
+    setRentalPhoneNumber(activeRentalCompanies[value] ?? "");
   }
 }}
 >
     <option value="">선택</option>
-    {Object.keys(rentalCompanies)
+    {Object.keys(activeRentalCompanies)
       .filter((name) => name !== "")
       .map((name) => (
         <option key={name} value={name}>
@@ -1265,16 +1343,11 @@ function handleClearWorkRow(index: number) {
   onChange={(e) => setPartnerCompany(e.target.value)}
 >
   <option value="">거래처 선택</option>
-  <option value="자력">자력</option>
-  <option value="블루모터스">블루모터스</option>
-  <option value="KB캐피탈">KB캐피탈</option>
-  <option value="상동점">상동점</option>
-  <option value="상동점소개">상동점소개</option>
-  <option value="오릭스캐피탈">오릭스캐피탈</option>
-  <option value="BNK캐피탈">BNK캐피탈</option>
-  <option value="오픈링크">오픈링크</option>
-  <option value="오부장">오부장</option>
-  <option value="오부장">경인렌터카</option>
+  {activePartnerCompanies.map((name) => (
+    <option key={name} value={name}>
+      {name}
+    </option>
+  ))}
 </select>
 </div>
       </section>
@@ -1311,7 +1384,7 @@ function handleClearWorkRow(index: number) {
           {category ? "보험사 선택" : "구분 먼저 선택"}
          </option>
 
-         {(companyOptions[category] ?? []).map((item) => (
+         {(activeCompanyOptions[category] ?? []).map((item) => (
          <option key={item} value={item}>
            {item}
          </option>
@@ -1328,7 +1401,7 @@ function handleClearWorkRow(index: number) {
     >
       <option value="">상대보험사 선택</option>
 
-      {(companyOptions["보험"] ?? []).map((item) => (
+      {(activeCompanyOptions["보험"] ?? []).map((item) => (
   <option key={item} value={item}>
     {item}
   </option>

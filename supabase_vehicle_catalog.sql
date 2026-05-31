@@ -96,3 +96,83 @@ values
   ('제네시스', 'GV80', 'NRB'),
   ('제네시스', 'GV80', 'NCM')
 on conflict do nothing;
+
+create table if not exists business_catalog (
+  id bigserial primary key,
+  item_type text not null check (item_type in ('rental', 'partner', 'insurer')),
+  name text not null,
+  phone_number text,
+  group_name text,
+  is_active boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create unique index if not exists business_catalog_unique
+on business_catalog (
+  item_type,
+  lower(trim(name)),
+  lower(trim(coalesce(group_name, '')))
+);
+
+create or replace function set_business_catalog_updated_at()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$;
+
+drop trigger if exists business_catalog_set_updated_at on business_catalog;
+
+create trigger business_catalog_set_updated_at
+before update on business_catalog
+for each row
+execute function set_business_catalog_updated_at();
+
+insert into business_catalog (item_type, name, phone_number, group_name)
+values
+  ('rental', 'N', null, null),
+  ('rental', '타렌트사용', null, null),
+  ('rental', '스타렌터카', '010-9335-1694', null),
+  ('rental', 'SK렌터카', null, null),
+  ('rental', '경인렌터카', null, null),
+  ('rental', '중호렌터카', '010-5824-1257', null),
+  ('rental', '라움렌터카', null, null),
+  ('rental', '에이스렌터카', null, null),
+  ('partner', '자력', null, null),
+  ('partner', '블루모터스', null, null),
+  ('partner', 'KB캐피탈', null, null),
+  ('partner', '상동점', null, null),
+  ('partner', '상동점소개', null, null),
+  ('partner', '오릭스캐피탈', null, null),
+  ('partner', 'BNK캐피탈', null, null),
+  ('partner', '오픈링크', null, null),
+  ('partner', '오부장', null, null),
+  ('partner', '경인렌터카', null, null),
+  ('insurer', '현대해상', null, '보험'),
+  ('insurer', '삼성화재', null, '보험'),
+  ('insurer', 'DB손해보험', null, '보험'),
+  ('insurer', 'KB손해보험', null, '보험'),
+  ('insurer', '메리츠화재', null, '보험'),
+  ('insurer', '흥국화재', null, '보험'),
+  ('insurer', '롯데손해보험', null, '보험'),
+  ('insurer', '하나손해보험', null, '보험'),
+  ('insurer', '한화손해보험', null, '보험'),
+  ('insurer', '캐롯손해보험', null, '보험'),
+  ('insurer', '화물공제', null, '보험'),
+  ('insurer', '렌터카공제', null, '보험'),
+  ('insurer', '택시공제', null, '보험'),
+  ('insurer', '개인택시공제', null, '보험'),
+  ('insurer', '전세버스공제', null, '보험'),
+  ('insurer', '버스공제', null, '보험'),
+  ('insurer', '배달서비스공제', null, '보험'),
+  ('insurer', 'KB캐피탈', null, '캐피탈'),
+  ('insurer', 'BNK캐피탈', null, '캐피탈'),
+  ('insurer', '오릭스캐피탈', null, '캐피탈'),
+  ('insurer', '오픈링크', null, '캐피탈'),
+  ('insurer', '해당없음', null, '일반'),
+  ('insurer', '바디케어', null, '일반')
+on conflict do nothing;

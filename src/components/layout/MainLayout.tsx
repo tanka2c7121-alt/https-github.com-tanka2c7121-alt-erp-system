@@ -67,7 +67,7 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
         attendanceRequest?: any;
       }
     | undefined;
-  const mobileMenus = flattenMenus(menuData, userRole);
+  const mobileMenus = flattenMenus(menuData, userRole, user.department);
   const displayedMobileMenus = mobileMenus.some(
     (menu) => menu.id === selectedMenu.id
   )
@@ -235,6 +235,7 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
               selectedMenuId={selectedMenu.id}
               onSelectMenu={handleSelectMenu}
               isAdmin={isAdmin}
+              userDepartment={user.department}
             />
           </div>
         </div>
@@ -296,12 +297,14 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
               </div>
             ) : selectedMenu.id === "employee-manage" ? (
               <EmployeeManagePage />
-            ) : selectedMenu.id === "vehicle-catalog" && !isAdmin ? (
+            ) : selectedMenu.id === "vehicle-catalog" &&
+            !isAdmin &&
+            user.department !== "관리부" ? (
               <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-red-700">
-                차량목록관리 페이지는 관리자만 접근할 수 있습니다.
+                기초자료관리 페이지는 관리자와 관리부 직원만 접근할 수 있습니다.
               </div>
             ) : selectedMenu.id === "vehicle-catalog" ? (
-              <VehicleCatalogPage />
+              <VehicleCatalogPage user={user} />
             ) : selectedMenu.id === "factory" ? (
               <FactoryDashboardPage onSelectMenu={handleSelectMenu} />
             ) : selectedMenu.id === "factory-settlement" ? (
@@ -373,7 +376,11 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
   );
 }
 
-function flattenMenus(items: MenuItem[], role: "ADMIN" | "STAFF"): MenuItem[] {
+function flattenMenus(
+  items: MenuItem[],
+  role: "ADMIN" | "STAFF",
+  department?: string | null
+): MenuItem[] {
   const result: MenuItem[] = [];
 
   items.forEach((item) => {
@@ -381,10 +388,14 @@ function flattenMenus(items: MenuItem[], role: "ADMIN" | "STAFF"): MenuItem[] {
       return;
     }
 
+    if (item.departments && role !== "ADMIN" && !item.departments.includes(department ?? "")) {
+      return;
+    }
+
     result.push(item);
 
     if (item.children?.length) {
-      result.push(...flattenMenus(item.children, role));
+      result.push(...flattenMenus(item.children, role, department));
     }
   });
 
