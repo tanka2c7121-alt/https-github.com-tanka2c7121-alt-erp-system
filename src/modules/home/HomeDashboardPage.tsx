@@ -203,8 +203,8 @@ export default function HomeDashboardPage({
       <section className="grid grid-cols-1 gap-3 md:grid-cols-5">
         <SummaryCard title="현재 입고" value={dashboard.activeOrders.length} tone="blue" />
         <SummaryCard title="오늘 입고" value={dashboard.todayInbound.length} tone="green" />
-        <SummaryCard title="해당월 입고" value={dashboard.thisMonthInbound.length} tone="orange" />
         <SummaryCard title="오늘 출고" value={dashboard.todayOutbound.length} tone="indigo" />
+        <SummaryCard title="해당월 입고" value={dashboard.thisMonthInbound.length} tone="orange" />
         <SummaryCard title="이번 달 출고" value={dashboard.thisMonthOutbound.length} tone="slate" />
       </section>
 
