@@ -1083,8 +1083,20 @@ async function handleSave() {
     };
 console.log("orderPayload", orderPayload);
 
+    const { data: existingOrders, error: existingOrderError } = await supabase
+      .from("work_orders")
+      .select("id")
+      .eq("work_name", targetWorkName)
+      .limit(1);
 
-    const { error: orderError } = isEditMode
+    if (existingOrderError) {
+      alert("작명 중복 확인 실패: " + existingOrderError.message);
+      return false;
+    }
+
+    const shouldUpdate = isEditMode || (existingOrders ?? []).length > 0;
+
+    const { error: orderError } = shouldUpdate
       ? await supabase
           .from("work_orders")
           .update(orderPayload)
@@ -1095,7 +1107,7 @@ console.log("orderPayload", orderPayload);
 
     if (orderError) {
       alert(
-        isEditMode
+        shouldUpdate
           ? "작업등록 수정 실패: " + orderError.message
           : "작업등록 저장 실패: " + orderError.message
       );
@@ -1106,7 +1118,7 @@ console.log("orderError", orderError);
 
 
 
-    if (isEditMode) {
+    if (shouldUpdate) {
       const { error: deleteDetailError } = await supabase
         .from("work_details")
         .delete()
@@ -1142,9 +1154,10 @@ console.log("detailRows", detailRows);
     }
 
     const uploadedPhotoCount = await uploadPendingWorkPhotos(targetWorkName);
+    setIsEditMode(true);
 
     alert(
-      `${isEditMode ? "수정되었습니다." : "저장되었습니다."}${
+      `${shouldUpdate ? "수정되었습니다." : "저장되었습니다."}${
         uploadedPhotoCount > 0
           ? ` 사진 ${uploadedPhotoCount}장도 저장되었습니다.`
           : ""
