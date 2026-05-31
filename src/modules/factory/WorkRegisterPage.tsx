@@ -494,6 +494,15 @@ useEffect(() => {
   };
 }, []);
 
+useEffect(() => {
+  if (!cameraOpen || !videoRef.current || !cameraStreamRef.current) {
+    return;
+  }
+
+  videoRef.current.srcObject = cameraStreamRef.current;
+  void videoRef.current.play();
+}, [cameraOpen]);
+
 function getWorkPhotoFolder(targetWorkName = workName) {
   return targetWorkName.trim().replace(/[^0-9A-Za-z가-힣_-]/g, "_");
 }
@@ -627,13 +636,6 @@ async function openCamera() {
 
     cameraStreamRef.current = stream;
     setCameraOpen(true);
-
-    setTimeout(() => {
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        void videoRef.current.play();
-      }
-    }, 0);
   } catch {
     alert("카메라 권한을 허용해야 촬영할 수 있습니다.");
   } finally {
