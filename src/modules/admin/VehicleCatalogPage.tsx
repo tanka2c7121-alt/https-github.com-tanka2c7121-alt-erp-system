@@ -412,12 +412,16 @@ function CatalogManager() {
               value={businessName}
               onChange={(event) => setBusinessName(event.target.value)}
             />
-            <input
-              className={inputClass}
-              placeholder="전화번호"
-              value={phoneNumber}
-              onChange={(event) => setPhoneNumber(event.target.value)}
-            />
+            {activeTab === "rental" ? (
+              <input
+                className={inputClass}
+                placeholder="전화번호"
+                value={phoneNumber}
+                onChange={(event) => setPhoneNumber(event.target.value)}
+              />
+            ) : (
+              <div />
+            )}
             {activeTab === "insurer" ? (
               <select
                 className={inputClass}
@@ -467,6 +471,7 @@ function CatalogManager() {
         <BusinessTable
           rows={visibleBusinessRows}
           showGroup={activeTab === "insurer"}
+          showPhone={activeTab === "rental"}
           onToggle={toggleBusinessActive}
           onDelete={deleteBusiness}
         />
@@ -541,11 +546,13 @@ function VehicleTable({
 function BusinessTable({
   rows,
   showGroup,
+  showPhone,
   onToggle,
   onDelete,
 }: {
   rows: BusinessCatalogRow[];
   showGroup: boolean;
+  showPhone: boolean;
   onToggle: (row: BusinessCatalogRow) => Promise<void>;
   onDelete: (row: BusinessCatalogRow) => Promise<void>;
 }) {
@@ -556,7 +563,9 @@ function BusinessTable({
           <thead className="bg-slate-100">
             <tr>
               <th className="border-b border-slate-200 px-3 py-2 text-left text-sm font-semibold">이름</th>
-              <th className="border-b border-slate-200 px-3 py-2 text-left text-sm font-semibold">전화번호</th>
+              {showPhone && (
+                <th className="border-b border-slate-200 px-3 py-2 text-left text-sm font-semibold">전화번호</th>
+              )}
               {showGroup && (
                 <th className="border-b border-slate-200 px-3 py-2 text-left text-sm font-semibold">구분</th>
               )}
@@ -568,7 +577,9 @@ function BusinessTable({
             {rows.map((row) => (
               <tr key={row.id} className="hover:bg-slate-50">
                 <td className="border-b border-slate-100 px-3 py-2 text-sm font-semibold">{row.name}</td>
-                <td className="border-b border-slate-100 px-3 py-2 text-sm">{row.phone_number || "-"}</td>
+                {showPhone && (
+                  <td className="border-b border-slate-100 px-3 py-2 text-sm">{row.phone_number || "-"}</td>
+                )}
                 {showGroup && (
                   <td className="border-b border-slate-100 px-3 py-2 text-sm">{row.group_name || "-"}</td>
                 )}
