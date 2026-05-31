@@ -21,11 +21,6 @@ type WorkOrder = {
   release_date: string;
 };
 
-type Settlement = {
-  work_name: string;
-  progress_status: string;
-};
-
 const todayText = () => new Date().toISOString().slice(0, 10);
 
 const daysBetween = (startDate: string, endDate: string) => {
@@ -46,22 +41,17 @@ export default function FactoryDashboardPage({
   onSelectMenu,
 }: FactoryDashboardPageProps) {
   const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
-  const [settlements, setSettlements] = useState<Settlement[]>([]);
   const [loading, setLoading] = useState(true);
 
   const loadDashboard = useCallback(async () => {
     setLoading(true);
 
-    const [{ data: orders, error: ordersError }, { data: settlementRows }] =
-      await Promise.all([
-        supabase
-          .from("work_orders")
-          .select(
-            "id, work_name, car_number, car_model, category, insurance_company, manager_name, inbound_date, outbound_date, release_date"
-          )
-          .order("id", { ascending: false }),
-        supabase.from("repair_settlements").select("work_name, progress_status"),
-      ]);
+    const { data: orders, error: ordersError } = await supabase
+      .from("work_orders")
+      .select(
+        "id, work_name, car_number, car_model, category, insurance_company, manager_name, inbound_date, outbound_date, release_date"
+      )
+      .order("id", { ascending: false });
 
     setLoading(false);
 
@@ -84,13 +74,6 @@ export default function FactoryDashboardPage({
         release_date: item.release_date ?? "",
       }))
     );
-
-    setSettlements(
-      (settlementRows ?? []).map((item) => ({
-        work_name: item.work_name ?? "",
-        progress_status: item.progress_status ?? "",
-      }))
-    );
   }, []);
 
   useEffect(() => {
@@ -100,14 +83,12 @@ export default function FactoryDashboardPage({
   const dashboard = useMemo(() => {
     const today = todayText();
     const thisMonth = today.slice(0, 7);
-    const settledNames = new Set(
-      settlements
-        .filter((item) => item.progress_status === "완결")
-        .map((item) => item.work_name)
-    );
 
     const activeOrders = workOrders.filter((item) => !item.release_date);
     const todayInbound = workOrders.filter((item) => item.inbound_date === today);
+    const thisMonthInbound = workOrders.filter((item) =>
+      item.work_name?.startsWith(thisMonth)
+    );
     const todayOutbound = workOrders.filter((item) => item.release_date === today);
     const thisMonthOutbound = workOrders.filter((item) =>
       item.release_date?.startsWith(thisMonth)
@@ -118,24 +99,24 @@ export default function FactoryDashboardPage({
     const dueTodayOrders = activeOrders.filter(
       (item) => item.outbound_date === today
     );
-    const unsettledOrders = workOrders.filter(
-      (item) => item.release_date && !settledNames.has(item.work_name)
-    );
 
     return {
       today,
       activeOrders,
       todayInbound,
+      thisMonthInbound,
       todayOutbound,
       thisMonthOutbound,
       delayedOrders,
       dueTodayOrders,
-      unsettledOrders,
       recentInbound: [...activeOrders]
         .sort((a, b) => String(b.inbound_date).localeCompare(String(a.inbound_date)))
         .slice(0, 8),
+      thisMonthInboundRows: [...thisMonthInbound]
+        .sort((a, b) => String(b.inbound_date).localeCompare(String(a.inbound_date)))
+        .slice(0, 8),
     };
-  }, [settlements, workOrders]);
+  }, [workOrders]);
 
   const openWork = (workName: string) => {
     onSelectMenu({
@@ -190,7 +171,7 @@ export default function FactoryDashboardPage({
         <SummaryCard title="오늘 출고" value={dashboard.todayOutbound.length} tone="green" />
         <SummaryCard title="출고 지연" value={dashboard.delayedOrders.length} tone="red" />
         <SummaryCard title="이번 달 출고" value={dashboard.thisMonthOutbound.length} tone="indigo" />
-        <SummaryCard title="미정산" value={dashboard.unsettledOrders.length} tone="orange" />
+        <SummaryCard title="해당월 입고" value={dashboard.thisMonthInbound.length} tone="orange" />
       </section>
 
       {loading ? (
@@ -234,10 +215,14 @@ export default function FactoryDashboardPage({
           />
 
           <DashboardTable
-            title="미정산 출고 차량"
-            rows={dashboard.unsettledOrders.slice(0, 8)}
-            emptyText="미정산 출고 차량이 없습니다."
-            badgeText="미정산"
+            title="해당월 입고 차량"
+            rows={dashboard.thisMonthInboundRows}
+            emptyText="해당월 입고 차량이 없습니다."
+            badgeText={(row) =>
+              row.work_name
+                ? `${Number(row.work_name.slice(5, 7))}월 작명`
+                : "입고"
+            }
             badgeClass="bg-orange-100 text-orange-700"
             onOpen={openWork}
           />
