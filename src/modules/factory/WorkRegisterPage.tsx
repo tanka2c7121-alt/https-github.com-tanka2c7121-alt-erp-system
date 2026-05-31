@@ -39,6 +39,12 @@ type PhotoOcrResult = {
   colorCode?: string;
 };
 
+type VehicleCatalogRow = {
+  maker: string;
+  model: string;
+  color_code: string | null;
+};
+
 const readPhotoText = async (file: File) => {
   const textDetector = (
     window as Window & { TextDetector?: TextDetectorConstructor }
@@ -289,6 +295,7 @@ export default function WorkRegisterPage({
   const [photoUploading, setPhotoUploading] = useState(false);
   const [photoOcrReading, setPhotoOcrReading] = useState(false);
   const [photoOcrMessage, setPhotoOcrMessage] = useState("");
+  const [vehicleCatalog, setVehicleCatalog] = useState<VehicleCatalogRow[]>([]);
 
   const colorOptions: Record<string, string[]> = {
   "그랜저": ["A2B", "WC9", "T2G","TB7","V7S"],
@@ -317,6 +324,67 @@ export default function WorkRegisterPage({
   "K7":["STM"],
   "포터":["KG","ZV","OA"]
 };
+
+const catalogCarModels = vehicleCatalog.reduce<Record<string, string[]>>(
+  (result, item) => {
+    if (!result[item.maker]) {
+      result[item.maker] = [];
+    }
+
+    if (!result[item.maker].includes(item.model)) {
+      result[item.maker].push(item.model);
+    }
+
+    return result;
+  },
+  {}
+);
+
+const catalogColorOptions = vehicleCatalog.reduce<Record<string, string[]>>(
+  (result, item) => {
+    if (!item.color_code) {
+      return result;
+    }
+
+    if (!result[item.model]) {
+      result[item.model] = [];
+    }
+
+    if (!result[item.model].includes(item.color_code)) {
+      result[item.model].push(item.color_code);
+    }
+
+    return result;
+  },
+  {}
+);
+
+const activeCarModels =
+  Object.keys(catalogCarModels).length > 0 ? catalogCarModels : carModels;
+const activeColorOptions =
+  Object.keys(catalogColorOptions).length > 0 ? catalogColorOptions : colorOptions;
+
+useEffect(() => {
+  async function loadVehicleCatalog() {
+    const { data, error } = await supabase
+      .from("vehicle_catalog")
+      .select("maker, model, color_code")
+      .eq("is_active", true)
+      .order("maker", { ascending: true })
+      .order("model", { ascending: true })
+      .order("color_code", { ascending: true });
+
+    if (error) {
+      console.error("차량목록 조회 오류:", error);
+      return;
+    }
+
+    setVehicleCatalog((data ?? []) as VehicleCatalogRow[]);
+  }
+
+  void loadVehicleCatalog();
+}, []);
+
 useEffect(() => {
 
   if (!initialWorkName) {
@@ -1002,13 +1070,11 @@ function handleClearWorkRow(index: number) {
             }}
           >
             <option value="">제조사 선택</option>
-            <option value="현대">현대</option>
-            <option value="기아">기아</option>
-            <option value="제네시스">제네시스</option>
-            <option value="쉐보레">쉐보레</option>
-            <option value="르노">르노</option>
-            <option value="BMW">BMW</option>
-            <option value="Benz">Benz</option>
+            {Object.keys(activeCarModels).map((maker) => (
+              <option key={maker} value={maker}>
+                {maker}
+              </option>
+            ))}
           </select>
         </div>
 
@@ -1023,7 +1089,7 @@ function handleClearWorkRow(index: number) {
             <option value="">
               {carMaker ? "차량 선택" : "제조사 먼저 선택"}
             </option>
-            {(carModels[carMaker] ?? []).map((model) => (
+            {(activeCarModels[carMaker] ?? []).map((model) => (
               <option key={model} value={model}>
                 {model}
               </option>
@@ -1086,7 +1152,7 @@ function handleClearWorkRow(index: number) {
   label="칼라코드"
   value={colorCode}
   onChange={(e) => setColorCode(e.target.value)}
-  options={colorOptions[carModel] || []}
+  options={activeColorOptions[carModel] || []}
 />
       </section>
 

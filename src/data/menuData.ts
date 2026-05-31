@@ -86,6 +86,11 @@ export const menuData: MenuItem[] = [
         title: "직원관리",
         roles: ["ADMIN"],
       },
+      {
+        id: "vehicle-catalog",
+        title: "차량목록관리",
+        roles: ["ADMIN"],
+      },
     ],
   },
 ];

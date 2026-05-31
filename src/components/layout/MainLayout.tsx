@@ -19,6 +19,7 @@ import DailyCashPrintPage from "../../modules/factory/DailyCashPrintPage";
 import DailyCashRegisterPage from "../../modules/factory/DailyCashRegisterPage";
 import SettlementMainPage from "../../modules/factory/SettlementMainPage";
 import EmployeeManagePage from "../../modules/admin/EmployeeManagePage";
+import VehicleCatalogPage from "../../modules/admin/VehicleCatalogPage";
 import EmployeeStatusPage from "../../modules/employee/EmployeeStatusPage";
 import HomeDashboardPage from "../../modules/home/HomeDashboardPage";
 import ExpenseRequestPage from "../../modules/documents/ExpenseRequestPage";
@@ -295,6 +296,12 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
               </div>
             ) : selectedMenu.id === "employee-manage" ? (
               <EmployeeManagePage />
+            ) : selectedMenu.id === "vehicle-catalog" && !isAdmin ? (
+              <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-red-700">
+                차량목록관리 페이지는 관리자만 접근할 수 있습니다.
+              </div>
+            ) : selectedMenu.id === "vehicle-catalog" ? (
+              <VehicleCatalogPage />
             ) : selectedMenu.id === "factory" ? (
               <FactoryDashboardPage onSelectMenu={handleSelectMenu} />
             ) : selectedMenu.id === "factory-settlement" ? (
