@@ -316,6 +316,7 @@ export default function WorkRegisterPage({
   const [isEditMode, setIsEditMode] = useState(false);
   const [releaseDate, setReleaseDate] = useState("");
   const [workPhotos, setWorkPhotos] = useState<WorkPhoto[]>([]);
+  const [selectedPhotoPaths, setSelectedPhotoPaths] = useState<string[]>([]);
   const [pendingWorkPhotos, setPendingWorkPhotos] = useState<PendingWorkPhoto[]>([]);
   const [photoUploading, setPhotoUploading] = useState(false);
   const [photoOcrReading, setPhotoOcrReading] = useState(false);
@@ -325,6 +326,9 @@ export default function WorkRegisterPage({
   const [vehicleCatalog, setVehicleCatalog] = useState<VehicleCatalogRow[]>([]);
   const [businessCatalog, setBusinessCatalog] = useState<BusinessCatalogRow[]>([]);
   const pendingPhotoGroups = chunkArray(pendingWorkPhotos, photoBatchSize);
+  const selectedWorkPhotos = workPhotos.filter((photo) =>
+    selectedPhotoPaths.includes(photo.path)
+  );
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const cameraStreamRef = useRef<MediaStream | null>(null);
 
@@ -544,6 +548,7 @@ async function loadWorkPhotos(targetWorkName = workName) {
     });
 
   setWorkPhotos(photos);
+  setSelectedPhotoPaths([]);
 }
 
 async function addPendingPhotoFiles(files: File[]) {
@@ -760,6 +765,64 @@ async function handleDeletePhoto(photo: WorkPhoto) {
   }
 
   setWorkPhotos((prev) => prev.filter((item) => item.path !== photo.path));
+  setSelectedPhotoPaths((prev) => prev.filter((path) => path !== photo.path));
+}
+
+function togglePhotoSelection(photo: WorkPhoto) {
+  setSelectedPhotoPaths((prev) =>
+    prev.includes(photo.path)
+      ? prev.filter((path) => path !== photo.path)
+      : [...prev, photo.path]
+  );
+}
+
+function selectAllPhotos() {
+  setSelectedPhotoPaths(workPhotos.map((photo) => photo.path));
+}
+
+function clearPhotoSelection() {
+  setSelectedPhotoPaths([]);
+}
+
+function downloadSelectedPhotos() {
+  if (selectedWorkPhotos.length === 0) {
+    alert("다운로드할 사진을 선택하세요.");
+    return;
+  }
+
+  selectedWorkPhotos.forEach((photo, index) => {
+    setTimeout(() => {
+      const link = document.createElement("a");
+      link.href = photo.url;
+      link.download = photo.name;
+      link.target = "_blank";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    }, index * 200);
+  });
+}
+
+async function deleteSelectedPhotos() {
+  if (selectedWorkPhotos.length === 0) {
+    alert("삭제할 사진을 선택하세요.");
+    return;
+  }
+
+  if (!confirm(`선택한 사진 ${selectedWorkPhotos.length}장을 삭제할까요?`)) {
+    return;
+  }
+
+  const paths = selectedWorkPhotos.map((photo) => photo.path);
+  const { error } = await supabase.storage.from(workPhotoBucket).remove(paths);
+
+  if (error) {
+    alert("사진 삭제 실패: " + error.message);
+    return;
+  }
+
+  setWorkPhotos((prev) => prev.filter((photo) => !paths.includes(photo.path)));
+  setSelectedPhotoPaths([]);
 }
 
  function handleReset() {
@@ -803,6 +866,7 @@ async function handleDeletePhoto(photo: WorkPhoto) {
 
   setMessage("");
   setWorkPhotos([]);
+  setSelectedPhotoPaths([]);
   pendingWorkPhotos.forEach((photo) => URL.revokeObjectURL(photo.previewUrl));
   setPendingWorkPhotos([]);
 
@@ -1353,37 +1417,68 @@ function handleClearWorkRow(index: number) {
         )}
 
         {workPhotos.length > 0 ? (
-          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
-            {workPhotos.map((photo) => (
-              <div
-                key={photo.path}
-                className="overflow-hidden rounded-lg border border-slate-200 bg-slate-50"
-              >
-                <a href={photo.url} target="_blank" rel="noreferrer">
-                  <img
-                    src={photo.url}
-                    alt="작업사진"
-                    className="h-28 w-full object-cover"
-                  />
-                </a>
-                <a
-                  href={photo.url}
-                  download={photo.name}
-                  className="block w-full border-t border-slate-200 bg-white px-2 py-1.5 text-center text-xs font-semibold text-blue-600 hover:bg-blue-50"
+          <div className="mt-4">
+            <div className="mb-3 flex flex-col gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-xs font-semibold text-slate-700">
+                저장된 사진 {workPhotos.length}장 / 선택 {selectedWorkPhotos.length}장
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={selectAllPhotos}
+                  className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
                 >
-                  다운로드
-                </a>
+                  전체선택
+                </button>
+                <button
+                  type="button"
+                  onClick={clearPhotoSelection}
+                  className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  선택해제
+                </button>
+                <button
+                  type="button"
+                  onClick={downloadSelectedPhotos}
+                  className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700"
+                >
+                  선택 다운로드
+                </button>
                 <button
                   type="button"
                   onClick={() => {
-                    void handleDeletePhoto(photo);
+                    void deleteSelectedPhotos();
                   }}
-                  className="w-full border-t border-slate-200 bg-white px-2 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50"
+                  className="rounded-lg border border-red-300 bg-white px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50"
                 >
-                  삭제
+                  선택 삭제
                 </button>
               </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
+            {workPhotos.map((photo) => (
+              <button
+                type="button"
+                key={photo.path}
+                onClick={() => togglePhotoSelection(photo)}
+                className={`relative overflow-hidden rounded-lg border bg-slate-50 text-left ${
+                  selectedPhotoPaths.includes(photo.path)
+                    ? "border-blue-500 ring-2 ring-blue-200"
+                    : "border-slate-200"
+                }`}
+              >
+                <span className="absolute left-2 top-2 z-10 rounded-full bg-white/95 px-2 py-1 text-xs font-bold text-slate-800 shadow">
+                  {selectedPhotoPaths.includes(photo.path) ? "선택됨" : "선택"}
+                </span>
+                <img
+                  src={photo.url}
+                  alt="작업사진"
+                  className="h-28 w-full object-cover"
+                />
+              </button>
             ))}
+            </div>
           </div>
         ) : pendingWorkPhotos.length === 0 ? (
           <p className="mt-3 text-xs text-slate-500">등록된 사진이 없습니다.</p>
