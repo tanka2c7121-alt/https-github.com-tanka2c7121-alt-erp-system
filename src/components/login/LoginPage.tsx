@@ -5,13 +5,16 @@ import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
 type LoginUser = {
-  id: string;
+  id: string | number;
+  auth_uid?: string | null;
   user_id: string;
   user_name: string;
   department?: string | null;
   approval_role?: string | null;
   role: "ADMIN" | "STAFF";
   is_active: boolean;
+  password?: string;
+  phone_number?: string | null;
 };
 
 type Props = {
@@ -32,6 +35,34 @@ const formatPhoneNumber = (value: string) => {
 
   return `${numbers.slice(0, 3)}-${numbers.slice(3, 7)}-${numbers.slice(7)}`;
 };
+
+async function loadUserProfile(authUserId: string, email: string) {
+  const { data, error } = await supabase
+    .from("app_users")
+    .select("*")
+    .or(`auth_uid.eq.${authUserId},user_id.eq.${email}`)
+    .maybeSingle();
+
+  if (error || !data) {
+    return { data: null, error };
+  }
+
+  if (!data.auth_uid) {
+    await supabase
+      .from("app_users")
+      .update({ auth_uid: authUserId })
+      .eq("id", data.id)
+      .is("auth_uid", null);
+  }
+
+  return {
+    data: {
+      ...data,
+      auth_uid: data.auth_uid ?? authUserId,
+    } as LoginUser,
+    error: null,
+  };
+}
 
 export default function LoginPage({ onLogin }: Props) {
   const [mode, setMode] = useState<"login" | "signup">("login");
@@ -57,47 +88,95 @@ export default function LoginPage({ onLogin }: Props) {
   }, []);
 
   async function handleLogin() {
-    if (!userId || !password) {
+    const normalizedUserId = userId.trim().toLowerCase();
+
+    if (!normalizedUserId || !password) {
       alert("아이디와 비밀번호를 입력하세요.");
       return;
     }
 
     setLoading(true);
 
-    const { data, error } = await supabase
-      .from("app_users")
-      .select("*")
-      .eq("user_id", userId)
-      .eq("password", password)
-      .eq("is_active", true)
-      .single();
+    let profile: LoginUser | null = null;
+    const { data: authData, error: authError } =
+      await supabase.auth.signInWithPassword({
+        email: normalizedUserId,
+        password,
+      });
+
+    if (authData.user) {
+      const { data } = await loadUserProfile(authData.user.id, normalizedUserId);
+      profile = data;
+    }
+
+    if (!profile && authError) {
+      const { data: legacyUser } = await supabase
+        .from("app_users")
+        .select("*")
+        .eq("user_id", normalizedUserId)
+        .eq("password", password)
+        .eq("is_active", true)
+        .maybeSingle();
+
+      if (legacyUser) {
+        const { data: signupData, error: signupError } =
+          await supabase.auth.signUp({
+            email: normalizedUserId,
+            password,
+          });
+
+        if (
+          signupError &&
+          !signupError.message.toLowerCase().includes("registered")
+        ) {
+          setLoading(false);
+          alert("Supabase 로그인 계정 생성 실패: " + signupError.message);
+          return;
+        }
+
+        if (signupData.user) {
+          await supabase
+            .from("app_users")
+            .update({ auth_uid: signupData.user.id })
+            .eq("id", legacyUser.id);
+
+          profile = {
+            ...legacyUser,
+            auth_uid: signupData.user.id,
+          } as LoginUser;
+        } else {
+          profile = legacyUser as LoginUser;
+        }
+      }
+    }
 
     setLoading(false);
 
-    if (error || !data) {
+    if (!profile || !profile.is_active) {
       alert("로그인에 실패했습니다. 승인 여부와 비밀번호를 확인하세요.");
       return;
     }
 
     if (rememberId) {
-      localStorage.setItem(rememberedUserIdKey, userId);
+      localStorage.setItem(rememberedUserIdKey, normalizedUserId);
     } else {
       localStorage.removeItem(rememberedUserIdKey);
     }
 
-    onLogin(data);
+    onLogin(profile);
   }
 
   async function handleSignup() {
+    const normalizedSignupUserId = signupUserId.trim().toLowerCase();
     const phoneNumber = phoneDigits(signupPhone);
     const initialPassword = phoneNumber.slice(-4);
 
-    if (!signupUserId || !signupName || !signupDepartment || !phoneNumber) {
+    if (!normalizedSignupUserId || !signupName || !signupDepartment || !phoneNumber) {
       alert("아이디, 이름, 부서, 전화번호를 모두 입력하세요.");
       return;
     }
 
-    if (!emailPattern.test(signupUserId)) {
+    if (!emailPattern.test(normalizedSignupUserId)) {
       alert("아이디는 이메일 형식으로 입력하세요.");
       return;
     }
@@ -112,7 +191,7 @@ export default function LoginPage({ onLogin }: Props) {
     const { data: existingUser } = await supabase
       .from("app_users")
       .select("id")
-      .eq("user_id", signupUserId)
+      .eq("user_id", normalizedSignupUserId)
       .maybeSingle();
 
     if (existingUser) {
@@ -121,13 +200,33 @@ export default function LoginPage({ onLogin }: Props) {
       return;
     }
 
+    const { data: signupData, error: signupError } = await supabase.auth.signUp({
+      email: normalizedSignupUserId,
+      password: initialPassword,
+      options: {
+        data: {
+          user_name: signupName,
+          department: signupDepartment,
+          phone_number: signupPhone,
+        },
+      },
+    });
+
+    if (signupError) {
+      setLoading(false);
+      alert("Supabase 계정 생성 실패: " + signupError.message);
+      return;
+    }
+
     const { error } = await supabase.from("app_users").insert({
-      user_id: signupUserId,
+      auth_uid: signupData.user?.id ?? null,
+      user_id: normalizedSignupUserId,
       password: initialPassword,
       user_name: signupName,
       department: signupDepartment,
       phone_number: signupPhone,
       role: "STAFF",
+      approval_role: "직원",
       is_active: false,
     });
 
@@ -138,7 +237,9 @@ export default function LoginPage({ onLogin }: Props) {
       return;
     }
 
-    alert("회원가입 신청이 완료되었습니다. 관리자 승인 후 전화번호 뒤 4자리로 로그인하세요.");
+    alert(
+      "회원가입 신청이 완료되었습니다. 관리자 승인 후 전화번호 뒤 4자리로 로그인하세요."
+    );
     setSignupUserId("");
     setSignupName("");
     setSignupDepartment("관리부");
@@ -149,11 +250,11 @@ export default function LoginPage({ onLogin }: Props) {
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-100">
       <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-xl">
-        <h1 className="mb-2 text-3xl font-bold text-slate-900">
-          ERP 로그인
-        </h1>
+        <h1 className="mb-2 text-3xl font-bold text-slate-900">ERP 로그인</h1>
 
-        <p className="mb-6 text-sm text-slate-500">신흥현대서비스</p>
+        <p className="mb-6 text-sm text-slate-500">
+          자동차공업사 업무 시스템
+        </p>
 
         {mode === "login" ? (
           <div className="space-y-4">
@@ -229,13 +330,16 @@ export default function LoginPage({ onLogin }: Props) {
 
             <input
               value={signupPhone}
-              onChange={(event) => setSignupPhone(formatPhoneNumber(event.target.value))}
+              onChange={(event) =>
+                setSignupPhone(formatPhoneNumber(event.target.value))
+              }
               placeholder="전화번호"
               className="w-full rounded-xl border border-slate-300 px-4 py-3"
             />
 
             <div className="rounded-xl bg-slate-50 p-3 text-xs text-slate-500">
-              신청 후 관리자가 승인해야 로그인할 수 있습니다. 승인 후 초기 비밀번호는 전화번호 뒤 4자리입니다.
+              신청 후 관리자가 승인해야 로그인할 수 있습니다. 승인 후 초기
+              비밀번호는 전화번호 뒤 4자리입니다.
             </div>
 
             <button

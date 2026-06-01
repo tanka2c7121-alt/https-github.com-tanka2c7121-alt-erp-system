@@ -532,20 +532,31 @@ async function loadWorkPhotos(targetWorkName = workName) {
     return;
   }
 
-  const photos = (data ?? [])
+  const photoPaths = (data ?? [])
     .filter((item) => item.name && !item.name.endsWith("/"))
-    .map((item) => {
-      const path = `${folder}/${item.name}`;
-      const publicUrl = supabase.storage
-        .from(workPhotoBucket)
-        .getPublicUrl(path).data.publicUrl;
+    .map((item) => `${folder}/${item.name}`);
 
-      return {
-        name: item.name,
-        path,
-        url: publicUrl,
-      };
-    });
+  if (photoPaths.length === 0) {
+    setWorkPhotos([]);
+    setSelectedPhotoPaths([]);
+    return;
+  }
+
+  const { data: signedUrls, error: signedUrlError } = await supabase.storage
+    .from(workPhotoBucket)
+    .createSignedUrls(photoPaths, 60 * 60);
+
+  if (signedUrlError) {
+    console.error("작업사진 주소 생성 오류:", signedUrlError);
+    setWorkPhotos([]);
+    return;
+  }
+
+  const photos = photoPaths.map((path, index) => ({
+    name: path.split("/").pop() ?? `photo-${index + 1}.jpg`,
+    path,
+    url: signedUrls?.[index]?.signedUrl ?? "",
+  }));
 
   setWorkPhotos(photos);
   setSelectedPhotoPaths([]);

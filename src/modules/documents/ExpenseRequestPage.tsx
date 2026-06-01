@@ -60,6 +60,8 @@ const receiptBucket = "expense-receipts";
 
 const todayText = localDateText;
 
+const isFullUrl = (value: string) => /^https?:\/\//.test(value);
+
 const formatRequesterName = (user: LoginUser) => {
   const department = user.department?.trim();
 
@@ -129,7 +131,26 @@ export default function ExpenseRequestPage({
       return;
     }
 
-    setRows((data ?? []) as ExpenseRequest[]);
+    const nextRows = ((data ?? []) as ExpenseRequest[]).map((row) => ({ ...row }));
+    const receiptPaths = nextRows
+      .map((row) => row.receipt_url)
+      .filter((url) => url && !isFullUrl(url));
+
+    if (receiptPaths.length > 0) {
+      const { data: signedUrls } = await supabase.storage
+        .from(receiptBucket)
+        .createSignedUrls(receiptPaths, 60 * 60);
+
+      receiptPaths.forEach((path, index) => {
+        const target = nextRows.find((row) => row.receipt_url === path);
+
+        if (target && signedUrls?.[index]?.signedUrl) {
+          target.receipt_url = signedUrls[index].signedUrl;
+        }
+      });
+    }
+
+    setRows(nextRows);
   }, []);
 
   useEffect(() => {
@@ -206,8 +227,7 @@ export default function ExpenseRequestPage({
       throw new Error(error.message);
     }
 
-    return supabase.storage.from(receiptBucket).getPublicUrl(filePath).data
-      .publicUrl;
+    return filePath;
   };
 
   const handleSubmit = async () => {

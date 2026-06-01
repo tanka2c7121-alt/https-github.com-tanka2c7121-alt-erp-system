@@ -8,6 +8,7 @@ import { supabase } from "../src/lib/supabase";
 
 type LoginUser = {
   id: string | number;
+  auth_uid?: string | null;
   user_id: string;
   user_name: string;
   department?: string | null;
@@ -22,6 +23,11 @@ const phoneDigits = (value?: string | null) => (value ?? "").replace(/\D/g, "");
 
 export default function Home() {
   const [user, setUser] = useState<LoginUser | null>(null);
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setUser(null);
+  };
 
   const needsPasswordChange = useMemo(() => {
     if (!user?.phone_number || !user.password) {
@@ -47,12 +53,12 @@ export default function Home() {
             password: newPassword,
           })
         }
-        onLogout={() => setUser(null)}
+        onLogout={handleLogout}
       />
     );
   }
 
-  return <MainLayout user={user} onLogout={() => setUser(null)} />;
+  return <MainLayout user={user} onLogout={handleLogout} />;
 }
 
 function PasswordChangePage({
@@ -85,6 +91,16 @@ function PasswordChangePage({
     }
 
     setSaving(true);
+
+    const { error: authError } = await supabase.auth.updateUser({
+      password: newPassword,
+    });
+
+    if (authError) {
+      setSaving(false);
+      alert("Supabase 비밀번호 변경 실패: " + authError.message);
+      return;
+    }
 
     const { error } = await supabase
       .from("app_users")
