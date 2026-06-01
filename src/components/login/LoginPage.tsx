@@ -97,7 +97,21 @@ export default function LoginPage({ onLogin }: Props) {
 
     setLoading(true);
 
-    let profile: LoginUser | null = null;
+    const { data: legacyUser, error: legacyError } = await supabase
+      .from("app_users")
+      .select("*")
+      .eq("user_id", normalizedUserId)
+      .eq("password", password)
+      .eq("is_active", true)
+      .maybeSingle();
+
+    if (legacyError || !legacyUser) {
+      setLoading(false);
+      alert("로그인에 실패했습니다. 승인 여부와 비밀번호를 확인하세요.");
+      return;
+    }
+
+    let profile: LoginUser | null = legacyUser as LoginUser;
     const { data: authData, error: authError } =
       await supabase.auth.signInWithPassword({
         email: normalizedUserId,
@@ -106,52 +120,35 @@ export default function LoginPage({ onLogin }: Props) {
 
     if (authData.user) {
       const { data } = await loadUserProfile(authData.user.id, normalizedUserId);
-      profile = data;
-    }
+      profile = data ?? profile;
+    } else if (authError) {
+      const { data: signupData, error: signupError } =
+        await supabase.auth.signUp({
+          email: normalizedUserId,
+          password,
+        });
 
-    if (!profile && authError) {
-      const { data: legacyUser } = await supabase
-        .from("app_users")
-        .select("*")
-        .eq("user_id", normalizedUserId)
-        .eq("password", password)
-        .eq("is_active", true)
-        .maybeSingle();
+      if (signupError?.message.toLowerCase().includes("registered")) {
+        alert(
+          "ERP 기존 비밀번호로 로그인은 됩니다. 다만 Supabase 로그인 계정 비밀번호가 달라서, RLS 적용 전 Supabase Auth에서 이 계정 비밀번호를 ERP 비밀번호와 같게 재설정해야 합니다."
+        );
+      } else if (signupError) {
+        alert(
+          "ERP 기존 비밀번호로 로그인은 됩니다. 다만 Supabase 로그인 계정 생성은 실패했습니다: " +
+            signupError.message
+        );
+      }
 
-      if (legacyUser) {
-        const { data: signupData, error: signupError } =
-          await supabase.auth.signUp({
-            email: normalizedUserId,
-            password,
-          });
+      if (signupData?.user) {
+        await supabase
+          .from("app_users")
+          .update({ auth_uid: signupData.user.id })
+          .eq("id", legacyUser.id);
 
-        if (signupError?.message.toLowerCase().includes("registered")) {
-          setLoading(false);
-          alert(
-            "Supabase 로그인 계정은 이미 있습니다. 입력한 비밀번호가 Supabase 계정과 맞지 않습니다. 관리자에게 비밀번호 초기화를 요청하세요."
-          );
-          return;
-        }
-
-        if (signupError) {
-          setLoading(false);
-          alert("Supabase 로그인 계정 생성 실패: " + signupError.message);
-          return;
-        }
-
-        if (signupData.user) {
-          await supabase
-            .from("app_users")
-            .update({ auth_uid: signupData.user.id })
-            .eq("id", legacyUser.id);
-
-          profile = {
-            ...legacyUser,
-            auth_uid: signupData.user.id,
-          } as LoginUser;
-        } else {
-          profile = legacyUser as LoginUser;
-        }
+        profile = {
+          ...legacyUser,
+          auth_uid: signupData.user.id,
+        } as LoginUser;
       }
     }
 
