@@ -46,6 +46,8 @@ type PhotoOcrResult = {
   colorCode?: string;
 };
 
+type AudioContextConstructor = typeof AudioContext;
+
 type VehicleCatalogRow = {
   maker: string;
   model: string;
@@ -92,6 +94,46 @@ const readPhotoText = async (file: File) => {
     imageBitmap.close();
   }
 };
+
+function playCameraShutterSound() {
+  const AudioContextClass =
+    window.AudioContext ??
+    (window as Window & { webkitAudioContext?: AudioContextConstructor })
+      .webkitAudioContext;
+
+  if (!AudioContextClass) {
+    return;
+  }
+
+  const audioContext = new AudioContextClass();
+  const now = audioContext.currentTime;
+  const gain = audioContext.createGain();
+  const click = audioContext.createOscillator();
+  const snap = audioContext.createOscillator();
+
+  gain.connect(audioContext.destination);
+  gain.gain.setValueAtTime(0.0001, now);
+  gain.gain.exponentialRampToValueAtTime(0.28, now + 0.01);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.12);
+
+  click.type = "square";
+  click.frequency.setValueAtTime(1200, now);
+  click.frequency.exponentialRampToValueAtTime(280, now + 0.08);
+  click.connect(gain);
+
+  snap.type = "triangle";
+  snap.frequency.setValueAtTime(220, now + 0.03);
+  snap.connect(gain);
+
+  click.start(now);
+  snap.start(now + 0.03);
+  click.stop(now + 0.1);
+  snap.stop(now + 0.12);
+
+  window.setTimeout(() => {
+    void audioContext.close();
+  }, 180);
+}
 
 const parsePhotoText = (text: string): PhotoOcrResult => {
   const compactText = text.replace(/\s+/g, "").toUpperCase();
@@ -680,6 +722,7 @@ async function captureCameraPhoto() {
 
   setCameraFlash(true);
   window.setTimeout(() => setCameraFlash(false), 180);
+  playCameraShutterSound();
 
   const canvas = document.createElement("canvas");
   canvas.width = video.videoWidth;
