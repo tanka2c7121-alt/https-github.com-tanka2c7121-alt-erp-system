@@ -323,6 +323,8 @@ export default function WorkRegisterPage({
   const [photoOcrMessage, setPhotoOcrMessage] = useState("");
   const [cameraOpen, setCameraOpen] = useState(false);
   const [cameraStarting, setCameraStarting] = useState(false);
+  const [cameraFlash, setCameraFlash] = useState(false);
+  const [cameraShotCount, setCameraShotCount] = useState(0);
   const [vehicleCatalog, setVehicleCatalog] = useState<VehicleCatalogRow[]>([]);
   const [businessCatalog, setBusinessCatalog] = useState<BusinessCatalogRow[]>([]);
   const pendingPhotoGroups = chunkArray(pendingWorkPhotos, photoBatchSize);
@@ -664,6 +666,8 @@ function closeCamera() {
   }
 
   setCameraOpen(false);
+  setCameraFlash(false);
+  setCameraShotCount(0);
 }
 
 async function captureCameraPhoto() {
@@ -673,6 +677,9 @@ async function captureCameraPhoto() {
     alert("카메라 화면을 불러오는 중입니다. 잠시 후 다시 촬영하세요.");
     return;
   }
+
+  setCameraFlash(true);
+  window.setTimeout(() => setCameraFlash(false), 180);
 
   const canvas = document.createElement("canvas");
   canvas.width = video.videoWidth;
@@ -702,6 +709,7 @@ async function captureCameraPhoto() {
   });
 
   await addPendingPhotoFiles([file]);
+  setCameraShotCount((prev) => prev + 1);
 }
 
 async function uploadPendingWorkPhotos(targetWorkName = workName) {
@@ -1364,13 +1372,21 @@ function handleClearWorkRow(index: number) {
         </div>
 
         {cameraOpen && (
-          <div className="mt-4 overflow-hidden rounded-xl border border-slate-200 bg-slate-950">
+          <div className="relative mt-4 overflow-hidden rounded-xl border border-slate-200 bg-slate-950">
             <video
               ref={videoRef}
               playsInline
               muted
               className="max-h-[65vh] w-full bg-black object-contain"
             />
+            {cameraFlash && (
+              <div className="pointer-events-none absolute inset-0 z-10 animate-pulse bg-white/85" />
+            )}
+            {cameraShotCount > 0 && (
+              <div className="pointer-events-none absolute left-3 top-3 z-20 rounded-full bg-green-500 px-3 py-1 text-xs font-bold text-white shadow-lg">
+                촬영 완료 {cameraShotCount}장
+              </div>
+            )}
             <div className="flex flex-col gap-2 bg-white p-3 sm:flex-row sm:justify-end">
               <button
                 type="button"
