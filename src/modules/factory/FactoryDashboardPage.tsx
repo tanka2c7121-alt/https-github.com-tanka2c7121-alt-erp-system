@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { MenuItem } from "../../data/menuData";
+import { localDateText } from "../../lib/date";
 import { supabase } from "../../lib/supabase";
 
 type FactoryDashboardPageProps = {
@@ -21,7 +22,7 @@ type WorkOrder = {
   release_date: string;
 };
 
-const todayText = () => new Date().toISOString().slice(0, 10);
+const todayText = localDateText;
 const currentWorkMonth = (orders: WorkOrder[]) => {
   const calendarMonth = todayText().slice(0, 7);
   const workMonths = orders

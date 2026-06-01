@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { MenuItem } from "../../data/menuData";
+import { localDateText } from "../../lib/date";
 import { supabase } from "../../lib/supabase";
 
 type DailyCashPageProps = {
@@ -45,7 +46,7 @@ export default function DailyCashPage({ onSelectMenu }: DailyCashPageProps) {
       const startDate = new Date();
       startDate.setMonth(startDate.getMonth() - selectedPeriod);
 
-      const startDateText = startDate.toISOString().slice(0, 10);
+      const startDateText = localDateText(startDate);
       query = query.gte("date", startDateText);
     }
 
@@ -104,7 +105,7 @@ export default function DailyCashPage({ onSelectMenu }: DailyCashPageProps) {
 
   useEffect(() => {
   async function fetchTodayRows() {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = localDateText();
 
     const { data, error } = await supabase
       .from("daily_cash")

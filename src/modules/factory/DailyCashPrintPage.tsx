@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { localDateText } from "../../lib/date";
 import { supabase } from "../../lib/supabase";
 
 type DailyCashRow = {
@@ -18,7 +19,7 @@ const formatWon = (amount: number) => amount.toLocaleString();
 
 export default function DailyCashPrintPage() {
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateText();
 
 const [printDate, setPrintDate] =
   useState(today);

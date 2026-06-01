@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { MenuItem } from "../../data/menuData";
+import { localDateText } from "../../lib/date";
 import { supabase } from "../../lib/supabase";
 
 type LoginUser = {
@@ -57,7 +58,7 @@ const inputClass =
 const labelClass = "text-sm font-semibold text-slate-800";
 const receiptBucket = "expense-receipts";
 
-const todayText = () => new Date().toISOString().slice(0, 10);
+const todayText = localDateText;
 
 const formatRequesterName = (user: LoginUser) => {
   const department = user.department?.trim();

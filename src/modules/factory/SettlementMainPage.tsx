@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { MenuItem } from "../../data/menuData";
+import { localDateText } from "../../lib/date";
 import { supabase } from "../../lib/supabase";
 
 export default function SettlementMainPage({
@@ -9,9 +10,9 @@ export default function SettlementMainPage({
 }: {
   onSelectMenu: (menu: MenuItem) => void;
 }) {
-  const currentDate = new Date();
-  const currentYear = String(currentDate.getFullYear());
-  const currentMonth = String(currentDate.getMonth() + 1).padStart(2, "0");
+  const currentDate = localDateText();
+  const currentYear = currentDate.slice(0, 4);
+  const currentMonth = currentDate.slice(5, 7);
 
   const [dailyRows, setDailyRows] = useState<any[]>([]);
   const [searchText, setSearchText] = useState("");
@@ -46,7 +47,7 @@ async function fetchReceivableRows() {
 }
 
 async function fetchBalanceRows() {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateText();
 
   const { data, error } = await supabase
     .from("daily_cash")
@@ -94,7 +95,7 @@ const settlementIncome = filteredRows
   .filter((row) => row.category === "차량정산")
   .reduce((sum, row) => sum + Number(row.income || 0), 0);
 
-const today = new Date().toISOString().slice(0, 10);
+const today = localDateText();
 
 const todayIncome = filteredRows
   .filter((row) => row.date === today)

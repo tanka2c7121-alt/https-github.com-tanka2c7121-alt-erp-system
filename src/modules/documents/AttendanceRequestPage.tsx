@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { MenuItem } from "../../data/menuData";
+import { addLocalDaysText, localDateText } from "../../lib/date";
 import { supabase } from "../../lib/supabase";
 
 type LoginUser = {
@@ -78,14 +79,8 @@ const pendingStatuses = [
   "관리자 승인대기",
 ];
 
-const todayText = () => new Date().toISOString().slice(0, 10);
-
-const addDaysText = (days: number) => {
-  const date = new Date();
-  date.setDate(date.getDate() + days);
-
-  return date.toISOString().slice(0, 10);
-};
+const todayText = localDateText;
+const addDaysText = addLocalDaysText;
 
 const formatRequesterName = (user: LoginUser) => {
   const department = user.department?.trim();
