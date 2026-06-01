@@ -80,6 +80,7 @@ export const menuData: MenuItem[] = [
     children: [
       { id: "documents-expense-request", title: "지출결의서" },
       { id: "documents-attendance-request", title: "근태신청서" },
+      { id: "documents-incident-report", title: "경위서" },
     ],
   },
   {

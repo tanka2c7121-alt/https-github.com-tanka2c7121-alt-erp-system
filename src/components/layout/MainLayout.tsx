@@ -27,6 +27,7 @@ import ExpenseRequestPage from "../../modules/documents/ExpenseRequestPage";
 import ExpenseRequestPrintPage from "../../modules/documents/ExpenseRequestPrintPage";
 import AttendanceRequestPage from "../../modules/documents/AttendanceRequestPage";
 import AttendanceRequestPrintPage from "../../modules/documents/AttendanceRequestPrintPage";
+import IncidentReportPage from "../../modules/documents/IncidentReportPage";
 import SalesRevenuePage from "../../modules/sales/SalesRevenuePage";
 
 type LoginUser = {
@@ -369,6 +370,8 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
                 attendanceRequest={selectedData?.attendanceRequest}
                 onSelectMenu={handleSelectMenu}
               />
+            ) : selectedMenu.id === "documents-incident-report" ? (
+              <IncidentReportPage user={user} isAdmin={isAdmin} />
             ) : (
               <>
                 <div className="text-sm text-slate-500">작업 화면 영역</div>
