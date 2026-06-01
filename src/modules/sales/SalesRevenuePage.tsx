@@ -17,18 +17,9 @@ type SettlementPaymentRow = {
   payment_amount: number | null;
   payment_date: string | null;
   payment_method: string | null;
-};
-
-type DailyCashRow = {
-  id: number;
-  date: string;
-  account: string | null;
-  type: string | null;
-  category: string | null;
-  content: string | null;
-  income: number | null;
-  memo: string | null;
-  source_work_name: string | null;
+  approval_number: string | null;
+  merchant_number: string | null;
+  card_number: string | null;
 };
 
 type WorkOrderRow = {
@@ -54,11 +45,12 @@ type RevenueRow = {
   paymentAmount: number;
   supplyAmount: number;
   vatAmount: number;
-  content: string;
+  approvalNumber: string;
+  merchantNumber: string;
+  cardNumber: string;
 };
 
-type SortField = keyof Pick<
-  RevenueRow,
+type SortField =
   | "date"
   | "workName"
   | "insuranceCompany"
@@ -70,16 +62,16 @@ type SortField = keyof Pick<
   | "paymentAmount"
   | "supplyAmount"
   | "vatAmount"
->;
+  | "approvalNumber"
+  | "merchantNumber"
+  | "cardNumber";
 
 const currentDateText = localDateText();
 const currentYear = currentDateText.slice(0, 4);
 const currentMonth = currentDateText.slice(5, 7);
-
 const bankNames = ["국민은행", "부산은행"];
+
 const formatWon = (amount: number) => amount.toLocaleString();
-const includesText = (value: string | null | undefined, keyword: string) =>
-  (value ?? "").includes(keyword);
 const calculateSupplyAmount = (paymentAmount: number) =>
   Math.round(paymentAmount / 1.1);
 const calculateVatAmount = (paymentAmount: number) =>
@@ -129,12 +121,12 @@ export default function SalesRevenuePage({
     );
   }, []);
 
-  const loadInsuranceRows = useCallback(async () => {
+  const loadPaymentRows = useCallback(async () => {
     const { startDate, endDate } = dateRange;
     const { data, error } = await supabase
       .from("settlement_payments")
       .select(
-        "id,work_name,payment_type,payment_detail,payment_amount,payment_date,payment_method"
+        "id,work_name,payment_type,payment_detail,payment_amount,payment_date,payment_method,approval_number,merchant_number,card_number"
       )
       .not("payment_date", "is", null)
       .gte("payment_date", startDate)
@@ -143,18 +135,20 @@ export default function SalesRevenuePage({
       .order("id", { ascending: false });
 
     if (error) {
-      throw new Error(`보험매출 조회 실패: ${error.message}`);
+      throw new Error(`${title} 조회 실패: ${error.message}`);
     }
 
-    const paymentRows = ((data ?? []) as SettlementPaymentRow[]).filter(
-      (row) => {
-        const amount = Number(row.payment_amount ?? 0);
-        const method = row.payment_method ?? "";
-        const isBank = bankNames.some((bankName) => method.includes(bankName));
+    return (data ?? []) as SettlementPaymentRow[];
+  }, [dateRange, title]);
 
-        return amount > 0 && isBank;
-      }
-    );
+  const loadInsuranceRows = useCallback(async () => {
+    const paymentRows = (await loadPaymentRows()).filter((row) => {
+      const amount = Number(row.payment_amount ?? 0);
+      const method = row.payment_method ?? "";
+      const isBank = bankNames.some((bankName) => method.includes(bankName));
+
+      return amount > 0 && isBank;
+    });
 
     const workNames = Array.from(
       new Set(
@@ -172,14 +166,13 @@ export default function SalesRevenuePage({
       const insuranceCompany =
         work?.insurance_company ?? work?.other_insurance_company ?? "";
       const isInsurance =
-        includesText(paymentRow.payment_detail, "보험") ||
+        (paymentRow.payment_detail ?? "").includes("보험") ||
         work?.category === "보험" ||
         Boolean(insuranceCompany);
 
       if (!isInsurance) return;
 
       const paymentAmount = Number(paymentRow.payment_amount ?? 0);
-      const paymentType = paymentRow.payment_type ?? "";
       const key = [
         paymentRow.payment_date ?? "",
         workName,
@@ -200,7 +193,9 @@ export default function SalesRevenuePage({
           paymentAmount: 0,
           supplyAmount: 0,
           vatAmount: 0,
-          content: paymentRow.payment_detail ?? "",
+          approvalNumber: "",
+          merchantNumber: "",
+          cardNumber: "",
         } satisfies RevenueRow);
 
       current.paymentAmount += paymentAmount;
@@ -210,64 +205,48 @@ export default function SalesRevenuePage({
       groupedRows.set(key, current);
     });
 
-    return Array.from(groupedRows.values()).sort((a, b) =>
-      b.date.localeCompare(a.date)
-    );
-  }, [dateRange, loadWorkMap]);
+    return Array.from(groupedRows.values());
+  }, [loadPaymentRows, loadWorkMap]);
 
   const loadCardRows = useCallback(async () => {
-    const { startDate, endDate } = dateRange;
-    const { data, error } = await supabase
-      .from("daily_cash")
-      .select(
-        "id,date,account,type,category,content,income,memo,source_work_name"
-      )
-      .eq("type", "수입")
-      .gte("date", startDate)
-      .lte("date", endDate)
-      .order("date", { ascending: false })
-      .order("id", { ascending: false });
-
-    if (error) {
-      throw new Error(`카드매출 조회 실패: ${error.message}`);
-    }
-
-    const cashRows = ((data ?? []) as DailyCashRow[]).filter((row) => {
-      const text = [row.account, row.category, row.content].join(" ");
-      return Number(row.income ?? 0) > 0 && text.includes("카드");
+    const paymentRows = (await loadPaymentRows()).filter((row) => {
+      const amount = Number(row.payment_amount ?? 0);
+      return amount > 0 && (row.payment_method ?? "").includes("카드");
     });
     const workNames = Array.from(
       new Set(
-        cashRows
-          .map((row) => row.source_work_name)
+        paymentRows
+          .map((row) => row.work_name)
           .filter((workName): workName is string => Boolean(workName))
       )
     );
     const workMap = await loadWorkMap(workNames);
 
-    return cashRows.map((row) => {
-      const workName = row.source_work_name ?? "";
+    return paymentRows.map((paymentRow) => {
+      const workName = paymentRow.work_name ?? "";
       const work = workMap.get(workName);
-      const paymentAmount = Number(row.income ?? 0);
+      const paymentAmount = Number(paymentRow.payment_amount ?? 0);
 
       return {
-        id: String(row.id),
-        date: row.date ?? "",
+        id: String(paymentRow.id),
+        date: paymentRow.payment_date ?? "",
         workName,
         insuranceCompany:
           work?.insurance_company ?? work?.other_insurance_company ?? "",
-        saleType: row.category ?? "",
+        saleType: work?.category ?? paymentRow.payment_detail ?? "",
         coverageType: work?.coverage_type ?? "",
         carNumber: work?.car_number ?? "",
         carModel: work?.car_model ?? "",
-        paymentInfo: row.account ?? "",
+        paymentInfo: paymentRow.payment_method ?? "카드",
         paymentAmount,
         supplyAmount: calculateSupplyAmount(paymentAmount),
         vatAmount: calculateVatAmount(paymentAmount),
-        content: row.content ?? "",
+        approvalNumber: paymentRow.approval_number ?? "",
+        merchantNumber: paymentRow.merchant_number ?? "",
+        cardNumber: paymentRow.card_number ?? "",
       };
     });
-  }, [dateRange, loadWorkMap]);
+  }, [loadPaymentRows, loadWorkMap]);
 
   const loadRows = useCallback(async () => {
     setIsLoading(true);
@@ -303,7 +282,9 @@ export default function SalesRevenuePage({
           row.carNumber,
           row.carModel,
           row.paymentInfo,
-          row.content,
+          row.approvalNumber,
+          row.merchantNumber,
+          row.cardNumber,
         ]
           .join(" ")
           .toLowerCase()
@@ -355,7 +336,7 @@ export default function SalesRevenuePage({
         <div>
           <h3 className="text-xl font-bold md:text-2xl">{title}</h3>
           <p className="text-sm text-slate-700">
-            입금일 기준으로 확인하는 {title} 내역입니다.
+            결제일 기준으로 확인하는 {title} 내역입니다.
           </p>
         </div>
 
@@ -371,10 +352,19 @@ export default function SalesRevenuePage({
       <div className="no-print grid grid-cols-1 gap-3 md:grid-cols-3">
         <SummaryCard label="총 건수" value={`${filteredRows.length.toLocaleString()}건`} />
         <SummaryCard label="결제금액 합계" value={`${formatWon(totalPayment)}원`} />
-        <SummaryCard
-          label="공급가 / 부가세"
-          value={`${formatWon(totalSupply)}원 / ${formatWon(totalVat)}원`}
-        />
+        {kind === "insurance" ? (
+          <SummaryCard
+            label="공급가 / 부가세"
+            value={`${formatWon(totalSupply)}원 / ${formatWon(totalVat)}원`}
+          />
+        ) : (
+          <SummaryCard
+            label="조회 기준"
+            value={`${selectedYear}년 ${
+              selectedMonth ? `${Number(selectedMonth)}월` : "전체"
+            }`}
+          />
+        )}
       </div>
 
       <div className="no-print rounded-xl border border-slate-200 bg-white p-3 md:p-4">
@@ -420,13 +410,18 @@ export default function SalesRevenuePage({
 
           <input
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm lg:w-80"
-            placeholder="작명, 차량번호, 보험사 검색"
+            placeholder={
+              kind === "card"
+                ? "작명, 차량번호, 승인번호, 카드번호 검색"
+                : "작명, 차량번호, 보험사 검색"
+            }
             value={searchText}
             onChange={(event) => setSearchText(event.target.value)}
           />
         </div>
 
         <RevenueTable
+          kind={kind}
           rows={filteredRows}
           isLoading={isLoading}
           totalPayment={totalPayment}
@@ -454,13 +449,14 @@ export default function SalesRevenuePage({
           </div>
 
           <RevenueTable
+            kind={kind}
             rows={filteredRows}
             isLoading={false}
-          totalPayment={totalPayment}
-          totalSupply={totalSupply}
-          totalVat={totalVat}
-          printMode
-        />
+            totalPayment={totalPayment}
+            totalSupply={totalSupply}
+            totalVat={totalVat}
+            printMode
+          />
         </div>
       </section>
     </div>
@@ -477,6 +473,7 @@ function SummaryCard({ label, value }: { label: string; value: string }) {
 }
 
 function RevenueTable({
+  kind,
   rows,
   isLoading,
   totalPayment,
@@ -487,6 +484,7 @@ function RevenueTable({
   onSort,
   printMode = false,
 }: {
+  kind: "insurance" | "card";
   rows: RevenueRow[];
   isLoading: boolean;
   totalPayment: number;
@@ -499,64 +497,78 @@ function RevenueTable({
 }) {
   const tableClassName = printMode
     ? "w-full border-collapse text-[9px]"
-    : "min-w-[1120px] w-full border-collapse text-sm";
+    : "min-w-[980px] w-full border-collapse text-sm";
   const cellClassName = printMode
     ? "border border-slate-400 px-1 py-1"
     : "border px-2 py-2";
+  const colSpan = kind === "card" ? 8 : 11;
 
   return (
     <div className={printMode ? "" : "overflow-x-auto"}>
       <table className={tableClassName}>
         <thead className="bg-slate-100 text-slate-700">
-          <tr>
-            <SortableHeader
-              label="입금일"
-              field="date"
-              cellClassName={cellClassName}
-              sortField={sortField}
-              sortOrder={sortOrder}
-              onSort={onSort}
-            />
-            <SortableHeader label="작명" field="workName" cellClassName={cellClassName} sortField={sortField} sortOrder={sortOrder} onSort={onSort} />
-            <SortableHeader label="보험사" field="insuranceCompany" cellClassName={cellClassName} sortField={sortField} sortOrder={sortOrder} onSort={onSort} />
-            <SortableHeader label="구분" field="saleType" cellClassName={cellClassName} sortField={sortField} sortOrder={sortOrder} onSort={onSort} />
-            <SortableHeader label="담보" field="coverageType" cellClassName={cellClassName} sortField={sortField} sortOrder={sortOrder} onSort={onSort} />
-            <SortableHeader label="차량번호" field="carNumber" cellClassName={cellClassName} sortField={sortField} sortOrder={sortOrder} onSort={onSort} />
-            <SortableHeader label="차량명" field="carModel" cellClassName={cellClassName} sortField={sortField} sortOrder={sortOrder} onSort={onSort} />
-            <SortableHeader label="입금정보" field="paymentInfo" cellClassName={cellClassName} sortField={sortField} sortOrder={sortOrder} onSort={onSort} />
-            <SortableHeader label="결제금액" field="paymentAmount" cellClassName={cellClassName} sortField={sortField} sortOrder={sortOrder} onSort={onSort} />
-            <SortableHeader label="공급가" field="supplyAmount" cellClassName={cellClassName} sortField={sortField} sortOrder={sortOrder} onSort={onSort} />
-            <SortableHeader label="부가세" field="vatAmount" cellClassName={cellClassName} sortField={sortField} sortOrder={sortOrder} onSort={onSort} />
-          </tr>
+          {kind === "card" ? (
+            <tr>
+              <SortableHeader label="결제일" field="date" cellClassName={cellClassName} sortField={sortField} sortOrder={sortOrder} onSort={onSort} />
+              <SortableHeader label="작명" field="workName" cellClassName={cellClassName} sortField={sortField} sortOrder={sortOrder} onSort={onSort} />
+              <SortableHeader label="차량번호" field="carNumber" cellClassName={cellClassName} sortField={sortField} sortOrder={sortOrder} onSort={onSort} />
+              <SortableHeader label="입금정보" field="paymentInfo" cellClassName={cellClassName} sortField={sortField} sortOrder={sortOrder} onSort={onSort} />
+              <SortableHeader label="결제금액" field="paymentAmount" cellClassName={cellClassName} sortField={sortField} sortOrder={sortOrder} onSort={onSort} />
+              <SortableHeader label="승인번호" field="approvalNumber" cellClassName={cellClassName} sortField={sortField} sortOrder={sortOrder} onSort={onSort} />
+              <SortableHeader label="가맹번호" field="merchantNumber" cellClassName={cellClassName} sortField={sortField} sortOrder={sortOrder} onSort={onSort} />
+              <SortableHeader label="카드번호" field="cardNumber" cellClassName={cellClassName} sortField={sortField} sortOrder={sortOrder} onSort={onSort} />
+            </tr>
+          ) : (
+            <tr>
+              <SortableHeader label="입금일" field="date" cellClassName={cellClassName} sortField={sortField} sortOrder={sortOrder} onSort={onSort} />
+              <SortableHeader label="작명" field="workName" cellClassName={cellClassName} sortField={sortField} sortOrder={sortOrder} onSort={onSort} />
+              <SortableHeader label="보험사" field="insuranceCompany" cellClassName={cellClassName} sortField={sortField} sortOrder={sortOrder} onSort={onSort} />
+              <SortableHeader label="구분" field="saleType" cellClassName={cellClassName} sortField={sortField} sortOrder={sortOrder} onSort={onSort} />
+              <SortableHeader label="담보" field="coverageType" cellClassName={cellClassName} sortField={sortField} sortOrder={sortOrder} onSort={onSort} />
+              <SortableHeader label="차량번호" field="carNumber" cellClassName={cellClassName} sortField={sortField} sortOrder={sortOrder} onSort={onSort} />
+              <SortableHeader label="차량명" field="carModel" cellClassName={cellClassName} sortField={sortField} sortOrder={sortOrder} onSort={onSort} />
+              <SortableHeader label="입금정보" field="paymentInfo" cellClassName={cellClassName} sortField={sortField} sortOrder={sortOrder} onSort={onSort} />
+              <SortableHeader label="결제금액" field="paymentAmount" cellClassName={cellClassName} sortField={sortField} sortOrder={sortOrder} onSort={onSort} />
+              <SortableHeader label="공급가" field="supplyAmount" cellClassName={cellClassName} sortField={sortField} sortOrder={sortOrder} onSort={onSort} />
+              <SortableHeader label="부가세" field="vatAmount" cellClassName={cellClassName} sortField={sortField} sortOrder={sortOrder} onSort={onSort} />
+            </tr>
+          )}
         </thead>
         <tbody>
-          {rows.map((row) => (
-            <tr key={row.id} className={printMode ? "" : "hover:bg-slate-50"}>
-              <td className={`${cellClassName} text-center`}>{row.date}</td>
-              <td className={`${cellClassName} text-center font-semibold`}>{row.workName}</td>
-              <td className={`${cellClassName} text-center`}>{row.insuranceCompany}</td>
-              <td className={`${cellClassName} text-center`}>{row.saleType}</td>
-              <td className={`${cellClassName} text-center`}>{row.coverageType}</td>
-              <td className={`${cellClassName} text-center`}>{row.carNumber}</td>
-              <td className={`${cellClassName} text-center`}>{row.carModel}</td>
-              <td className={`${cellClassName} text-center`}>{row.paymentInfo}</td>
-              <td className={`${cellClassName} text-center font-semibold`}>
-                {formatWon(row.paymentAmount)}
-              </td>
-              <td className={`${cellClassName} text-center`}>
-                {formatWon(row.supplyAmount)}
-              </td>
-              <td className={`${cellClassName} text-center`}>
-                {formatWon(row.vatAmount)}
-              </td>
-            </tr>
-          ))}
+          {rows.map((row) =>
+            kind === "card" ? (
+              <tr key={row.id} className={printMode ? "" : "hover:bg-slate-50"}>
+                <TableCell value={row.date} className={cellClassName} />
+                <TableCell value={row.workName} className={cellClassName} strong />
+                <TableCell value={row.carNumber} className={cellClassName} />
+                <TableCell value={row.paymentInfo} className={cellClassName} />
+                <TableCell value={formatWon(row.paymentAmount)} className={cellClassName} strong />
+                <TableCell value={row.approvalNumber} className={cellClassName} />
+                <TableCell value={row.merchantNumber} className={cellClassName} />
+                <TableCell value={row.cardNumber} className={cellClassName} />
+              </tr>
+            ) : (
+              <tr key={row.id} className={printMode ? "" : "hover:bg-slate-50"}>
+                <TableCell value={row.date} className={cellClassName} />
+                <TableCell value={row.workName} className={cellClassName} strong />
+                <TableCell value={row.insuranceCompany} className={cellClassName} />
+                <TableCell value={row.saleType} className={cellClassName} />
+                <TableCell value={row.coverageType} className={cellClassName} />
+                <TableCell value={row.carNumber} className={cellClassName} />
+                <TableCell value={row.carModel} className={cellClassName} />
+                <TableCell value={row.paymentInfo} className={cellClassName} />
+                <TableCell value={formatWon(row.paymentAmount)} className={cellClassName} strong />
+                <TableCell value={formatWon(row.supplyAmount)} className={cellClassName} />
+                <TableCell value={formatWon(row.vatAmount)} className={cellClassName} />
+              </tr>
+            )
+          )}
 
           {rows.length === 0 && (
             <tr>
               <td
                 className={`${cellClassName} py-8 text-center text-slate-500`}
-                colSpan={11}
+                colSpan={colSpan}
               >
                 {isLoading ? "조회 중입니다." : "조회된 내역이 없습니다."}
               </td>
@@ -564,23 +576,51 @@ function RevenueTable({
           )}
         </tbody>
         <tfoot>
-          <tr className="bg-blue-50 font-bold text-blue-900">
-            <td className={`${cellClassName} text-right`} colSpan={8}>
-              합계
-            </td>
-            <td className={`${cellClassName} text-center`}>
-              {formatWon(totalPayment)}
-            </td>
-            <td className={`${cellClassName} text-center`}>
-              {formatWon(totalSupply)}
-            </td>
-            <td className={`${cellClassName} text-center`}>
-              {formatWon(totalVat)}
-            </td>
-          </tr>
+          {kind === "card" ? (
+            <tr className="bg-blue-50 font-bold text-blue-900">
+              <td className={`${cellClassName} text-right`} colSpan={4}>
+                합계
+              </td>
+              <td className={`${cellClassName} text-center`}>
+                {formatWon(totalPayment)}
+              </td>
+              <td className={cellClassName} colSpan={3} />
+            </tr>
+          ) : (
+            <tr className="bg-blue-50 font-bold text-blue-900">
+              <td className={`${cellClassName} text-right`} colSpan={8}>
+                합계
+              </td>
+              <td className={`${cellClassName} text-center`}>
+                {formatWon(totalPayment)}
+              </td>
+              <td className={`${cellClassName} text-center`}>
+                {formatWon(totalSupply)}
+              </td>
+              <td className={`${cellClassName} text-center`}>
+                {formatWon(totalVat)}
+              </td>
+            </tr>
+          )}
         </tfoot>
       </table>
     </div>
+  );
+}
+
+function TableCell({
+  value,
+  className,
+  strong = false,
+}: {
+  value: string;
+  className: string;
+  strong?: boolean;
+}) {
+  return (
+    <td className={`${className} text-center ${strong ? "font-semibold" : ""}`}>
+      {value}
+    </td>
   );
 }
 
