@@ -1483,8 +1483,14 @@ function handleClearWorkRow(index: number) {
                     : "border-slate-200"
                 }`}
               >
-                <span className="absolute left-2 top-2 z-10 rounded-full bg-white/95 px-2 py-1 text-xs font-bold text-slate-800 shadow">
-                  {selectedPhotoPaths.includes(photo.path) ? "선택됨" : "선택"}
+                <span className="absolute left-2 top-2 z-10 flex h-6 w-6 items-center justify-center rounded bg-white/95 shadow">
+                  <input
+                    type="checkbox"
+                    checked={selectedPhotoPaths.includes(photo.path)}
+                    onChange={() => togglePhotoSelection(photo)}
+                    onClick={(event) => event.stopPropagation()}
+                    className="h-4 w-4 accent-blue-600"
+                  />
                 </span>
                 <img
                   src={photo.url}
