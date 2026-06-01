@@ -1096,7 +1096,16 @@ console.log("orderPayload", orderPayload);
       return false;
     }
 
-    const shouldUpdate = isEditMode || (existingOrders ?? []).length > 0;
+    const existingOrderFound = (existingOrders ?? []).length > 0;
+
+    if (!isEditMode && existingOrderFound) {
+      alert(
+        "이미 사용 중인 작명입니다. 다른 직원이 먼저 저장했을 수 있습니다. 새 작명을 다시 받거나 기존 작업을 불러온 뒤 수정하세요."
+      );
+      return false;
+    }
+
+    const shouldUpdate = isEditMode;
 
     const { error: orderError } = shouldUpdate
       ? await supabase

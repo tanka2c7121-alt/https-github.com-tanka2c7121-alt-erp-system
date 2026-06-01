@@ -55,6 +55,17 @@ type PendingAttendanceRequest = {
   reason: string;
 };
 
+type HomeNotice = {
+  id: number;
+  title: string;
+  content: string;
+  is_active: boolean;
+  created_by: string | null;
+  created_name: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 const todayText = localDateText;
 const currentWorkMonth = (orders: WorkOrder[]) => {
   const today = todayText();
@@ -87,6 +98,12 @@ export default function HomeDashboardPage({
   const [pendingAttendanceRequests, setPendingAttendanceRequests] = useState<
     PendingAttendanceRequest[]
   >([]);
+  const [homeNotice, setHomeNotice] = useState<HomeNotice | null>(null);
+  const [noticePopupOpen, setNoticePopupOpen] = useState(false);
+  const [noticeEditorOpen, setNoticeEditorOpen] = useState(false);
+  const [noticeTitle, setNoticeTitle] = useState("");
+  const [noticeContent, setNoticeContent] = useState("");
+  const [noticeSaving, setNoticeSaving] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const loadDashboard = useCallback(async () => {
@@ -112,7 +129,7 @@ export default function HomeDashboardPage({
       );
     }
 
-    const [ordersResult, userResult, expenseResult, attendanceResult] =
+    const [ordersResult, userResult, expenseResult, attendanceResult, noticeResult] =
       await Promise.all([
       supabase
         .from("work_orders")
@@ -135,6 +152,13 @@ export default function HomeDashboardPage({
       canApproveAttendance
         ? attendanceQuery
         : Promise.resolve({ data: [], error: null }),
+      supabase
+        .from("home_notices")
+        .select("*")
+        .eq("is_active", true)
+        .order("id", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
     ]);
 
     setLoading(false);
@@ -156,6 +180,17 @@ export default function HomeDashboardPage({
         ? []
         : ((attendanceResult.data ?? []) as PendingAttendanceRequest[])
     );
+
+    if (!noticeResult.error && noticeResult.data) {
+      const notice = noticeResult.data as HomeNotice;
+
+      setHomeNotice(notice);
+      setNoticeTitle(notice.title);
+      setNoticeContent(notice.content);
+      setNoticePopupOpen(true);
+    } else {
+      setHomeNotice(null);
+    }
   }, [approvalRole, canApproveAttendance, isAdmin, user?.department]);
 
   useEffect(() => {
@@ -209,8 +244,104 @@ export default function HomeDashboardPage({
     });
   };
 
+  const saveNotice = async () => {
+    const title = noticeTitle.trim();
+    const content = noticeContent.trim();
+
+    if (!title || !content) {
+      alert("공지 제목과 내용을 입력하세요.");
+      return;
+    }
+
+    setNoticeSaving(true);
+
+    const payload = {
+      title,
+      content,
+      is_active: true,
+      created_by: user?.user_id ?? "",
+      created_name: user?.user_name ?? "",
+    };
+
+    const { data, error } = homeNotice
+      ? await supabase
+          .from("home_notices")
+          .update(payload)
+          .eq("id", homeNotice.id)
+          .select("*")
+          .single()
+      : await supabase
+          .from("home_notices")
+          .insert(payload)
+          .select("*")
+          .single();
+
+    setNoticeSaving(false);
+
+    if (error || !data) {
+      alert("공지 저장 실패: " + (error?.message ?? "저장 오류"));
+      return;
+    }
+
+    setHomeNotice(data as HomeNotice);
+    setNoticeEditorOpen(false);
+    setNoticePopupOpen(true);
+  };
+
+  const disableNotice = async () => {
+    if (!homeNotice) {
+      setNoticeEditorOpen(false);
+      return;
+    }
+
+    if (!confirm("현재 공지를 내릴까요?")) {
+      return;
+    }
+
+    const { error } = await supabase
+      .from("home_notices")
+      .update({ is_active: false })
+      .eq("id", homeNotice.id);
+
+    if (error) {
+      alert("공지 내리기 실패: " + error.message);
+      return;
+    }
+
+    setHomeNotice(null);
+    setNoticeTitle("");
+    setNoticeContent("");
+    setNoticePopupOpen(false);
+    setNoticeEditorOpen(false);
+  };
+
   return (
     <div className="space-y-5 text-slate-900">
+      {noticePopupOpen && homeNotice && (
+        <NoticePopup
+          notice={homeNotice}
+          onClose={() => setNoticePopupOpen(false)}
+        />
+      )}
+
+      {noticeEditorOpen && isAdmin && (
+        <NoticeEditor
+          title={noticeTitle}
+          content={noticeContent}
+          saving={noticeSaving}
+          hasNotice={Boolean(homeNotice)}
+          onTitleChange={setNoticeTitle}
+          onContentChange={setNoticeContent}
+          onSave={() => {
+            void saveNotice();
+          }}
+          onDisable={() => {
+            void disableNotice();
+          }}
+          onClose={() => setNoticeEditorOpen(false)}
+        />
+      )}
+
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h3 className="text-2xl font-bold">업무 홈</h3>
@@ -226,6 +357,15 @@ export default function HomeDashboardPage({
         >
           새로고침
         </button>
+        {isAdmin && (
+          <button
+            type="button"
+            onClick={() => setNoticeEditorOpen(true)}
+            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+          >
+            공지관리
+          </button>
+        )}
       </div>
 
       <section className="grid grid-cols-1 gap-3 md:grid-cols-5">
@@ -303,6 +443,118 @@ function SummaryCard({
     <div className={`rounded-xl border p-4 ${toneClass}`}>
       <p className="text-sm font-semibold">{title}</p>
       <p className="mt-3 text-3xl font-bold">{value}</p>
+    </div>
+  );
+}
+
+function NoticePopup({
+  notice,
+  onClose,
+}: {
+  notice: HomeNotice;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4">
+      <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div>
+            <p className="text-xs font-bold text-blue-600">업무 공지</p>
+            <h3 className="mt-1 text-xl font-bold text-slate-900">
+              {notice.title}
+            </h3>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg border border-slate-300 px-3 py-1 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+          >
+            닫기
+          </button>
+        </div>
+        <div className="max-h-[50vh] whitespace-pre-wrap overflow-y-auto rounded-xl bg-slate-50 p-4 text-sm leading-6 text-slate-700">
+          {notice.content}
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="mt-5 w-full rounded-lg bg-blue-600 py-3 text-sm font-semibold text-white hover:bg-blue-700"
+        >
+          확인
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function NoticeEditor({
+  title,
+  content,
+  saving,
+  hasNotice,
+  onTitleChange,
+  onContentChange,
+  onSave,
+  onDisable,
+  onClose,
+}: {
+  title: string;
+  content: string;
+  saving: boolean;
+  hasNotice: boolean;
+  onTitleChange: (value: string) => void;
+  onContentChange: (value: string) => void;
+  onSave: () => void;
+  onDisable: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4">
+      <div className="w-full max-w-xl rounded-2xl bg-white p-6 shadow-2xl">
+        <div className="mb-4 flex items-center justify-between">
+          <h3 className="text-xl font-bold text-slate-900">공지관리</h3>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg border border-slate-300 px-3 py-1 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+          >
+            닫기
+          </button>
+        </div>
+        <div className="space-y-3">
+          <input
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            placeholder="공지 제목"
+            value={title}
+            onChange={(event) => onTitleChange(event.target.value)}
+          />
+          <textarea
+            className="min-h-[180px] w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            placeholder="공지 내용"
+            value={content}
+            onChange={(event) => onContentChange(event.target.value)}
+          />
+        </div>
+        <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-end">
+          {hasNotice && (
+            <button
+              type="button"
+              onClick={onDisable}
+              className="rounded-lg border border-red-300 px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50"
+            >
+              공지내리기
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onSave}
+            disabled={saving}
+            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:bg-slate-400"
+          >
+            {saving ? "저장 중..." : "공지저장"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
