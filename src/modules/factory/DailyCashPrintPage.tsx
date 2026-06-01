@@ -123,7 +123,7 @@ async function fetchRows(dateValue = printDate) {
             <tbody>
               <tr>
                 <th className="w-24 border border-slate-900 bg-slate-50 px-2 py-1">일자</th>
-                <td className="border border-slate-900 px-2 py-1">2026-05-19</td>
+                <td className="border border-slate-900 px-2 py-1">{printDate}</td>
                 <th className="w-24 border border-slate-900 bg-slate-50 px-2 py-1">입금합계</th>
                 <td className="border border-slate-900 px-2 py-1 text-right">{formatWon(totalIncome)}</td>
                 <th className="w-24 border border-slate-900 bg-slate-50 px-2 py-1">출금합계</th>

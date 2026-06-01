@@ -93,7 +93,14 @@ export default function AttendanceRequestPrintPage({
         </button>
       </div>
 
-      <article className="mx-auto min-h-[1060px] w-full max-w-[794px] bg-white p-8 shadow-lg print:min-h-0 print:max-w-none print:p-0 print:shadow-none">
+      <article
+        className="mx-auto bg-white text-slate-900 shadow-lg print:m-0 print:shadow-none"
+        style={{
+          width: "190mm",
+          minHeight: "275mm",
+          padding: "7mm",
+        }}
+      >
         <header className="mb-8">
           <h1 className="text-center text-3xl font-bold tracking-[0.35em]">
             근태신청서

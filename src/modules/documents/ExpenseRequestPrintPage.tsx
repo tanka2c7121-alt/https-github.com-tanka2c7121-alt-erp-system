@@ -75,7 +75,14 @@ export default function ExpenseRequestPrintPage({
         </button>
       </div>
 
-      <article className="mx-auto min-h-[1060px] w-full max-w-[794px] bg-white p-8 shadow-lg print:min-h-0 print:max-w-none print:p-0 print:shadow-none">
+      <article
+        className="mx-auto bg-white text-slate-900 shadow-lg print:m-0 print:shadow-none"
+        style={{
+          width: "190mm",
+          minHeight: "275mm",
+          padding: "7mm",
+        }}
+      >
         <header className="mb-6 grid grid-cols-[1fr_260px] gap-4">
           <div>
             <h1 className="text-center text-3xl font-bold tracking-[0.35em]">
