@@ -344,6 +344,8 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
               <SalesRevenuePage kind="partner" title="거래처매출" />
             ) : selectedMenu.id === "sales-card" ? (
               <SalesRevenuePage kind="card" title="카드매출" />
+            ) : selectedMenu.id === "sales-blue" ? (
+              <SalesRevenuePage kind="blue" title="BLUE포인트" />
             ) : selectedMenu.id === "documents" ||
             selectedMenu.id === "documents-expense-request" ? (
               <ExpenseRequestPage

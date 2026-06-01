@@ -5,7 +5,7 @@ import { localDateText } from "../../lib/date";
 import { supabase } from "../../lib/supabase";
 
 type SalesRevenuePageProps = {
-  kind: "insurance" | "card" | "general" | "partner";
+  kind: "insurance" | "card" | "general" | "partner" | "blue";
   title: string;
 };
 
@@ -354,6 +354,49 @@ export default function SalesRevenuePage({
       .filter((row): row is RevenueRow => Boolean(row));
   }, [loadPaymentRows, loadWorkMap]);
 
+  const loadBlueRows = useCallback(async () => {
+    const paymentRows = (await loadPaymentRows()).filter((row) => {
+      const amount = Number(row.payment_amount ?? 0);
+      const text = [row.payment_method, row.payment_detail, row.payment_type].join(" ");
+
+      return amount > 0 && text.includes("BLUE");
+    });
+    const workNames = Array.from(
+      new Set(
+        paymentRows
+          .map((row) => row.work_name)
+          .filter((workName): workName is string => Boolean(workName))
+      )
+    );
+    const workMap = await loadWorkMap(workNames);
+
+    return paymentRows.map((paymentRow) => {
+      const workName = paymentRow.work_name ?? "";
+      const work = workMap.get(workName);
+      const paymentAmount = Number(paymentRow.payment_amount ?? 0);
+
+      return {
+        id: String(paymentRow.id),
+        date: paymentRow.payment_date ?? "",
+        workName,
+        insuranceCompany:
+          work?.insurance_company ?? work?.other_insurance_company ?? "",
+        saleType: work?.category ?? paymentRow.payment_detail ?? "",
+        coverageType: work?.coverage_type ?? "",
+        carNumber: work?.car_number ?? "",
+        carModel: work?.car_model ?? "",
+        partnerCompany: work?.partner_company ?? "",
+        paymentInfo: paymentRow.payment_method ?? "BLUE POINT",
+        paymentAmount,
+        supplyAmount: calculateSupplyAmount(paymentAmount),
+        vatAmount: calculateVatAmount(paymentAmount),
+        approvalNumber: paymentRow.approval_number ?? "",
+        merchantNumber: paymentRow.merchant_number ?? "",
+        cardNumber: paymentRow.card_number ?? "",
+      } satisfies RevenueRow;
+    });
+  }, [loadPaymentRows, loadWorkMap]);
+
   const loadRows = useCallback(async () => {
     setIsLoading(true);
 
@@ -365,6 +408,8 @@ export default function SalesRevenuePage({
             ? await loadGeneralRows()
             : kind === "partner"
               ? await loadPartnerRows()
+              : kind === "blue"
+                ? await loadBlueRows()
               : await loadCardRows();
       setRows(nextRows);
     } catch (error) {
@@ -375,6 +420,7 @@ export default function SalesRevenuePage({
   }, [
     kind,
     loadCardRows,
+    loadBlueRows,
     loadGeneralRows,
     loadInsuranceRows,
     loadPartnerRows,
@@ -495,7 +541,10 @@ export default function SalesRevenuePage({
       <div className="no-print grid grid-cols-1 gap-3 md:grid-cols-3">
         <SummaryCard label="총 건수" value={`${filteredRows.length.toLocaleString()}건`} />
         <SummaryCard label="결제금액 합계" value={`${formatWon(totalPayment)}원`} />
-        {kind === "insurance" || kind === "general" || kind === "partner" ? (
+        {kind === "insurance" ||
+        kind === "general" ||
+        kind === "partner" ||
+        kind === "blue" ? (
           <SummaryCard
             label="공급가 / 부가세"
             value={`${formatWon(totalSupply)}원 / ${formatWon(totalVat)}원`}
@@ -573,7 +622,9 @@ export default function SalesRevenuePage({
                 ? "작명, 차량번호, 승인번호, 카드번호 검색"
                 : kind === "partner"
                   ? "거래처, 작명, 차량번호 검색"
-                : "작명, 차량번호, 보험사 검색"
+                  : kind === "blue"
+                    ? "작명, 차량번호, BLUE 검색"
+                    : "작명, 차량번호, 보험사 검색"
             }
             value={searchText}
             onChange={(event) => setSearchText(event.target.value)}
@@ -672,7 +723,7 @@ function RevenueTable({
   onSort,
   printMode = false,
 }: {
-  kind: "insurance" | "card" | "general" | "partner";
+  kind: "insurance" | "card" | "general" | "partner" | "blue";
   rows: RevenueRow[];
   isLoading: boolean;
   totalPayment: number;
