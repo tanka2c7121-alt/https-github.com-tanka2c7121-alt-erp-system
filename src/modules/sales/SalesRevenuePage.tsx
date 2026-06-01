@@ -57,6 +57,21 @@ type RevenueRow = {
   content: string;
 };
 
+type SortField = keyof Pick<
+  RevenueRow,
+  | "date"
+  | "workName"
+  | "insuranceCompany"
+  | "saleType"
+  | "coverageType"
+  | "carNumber"
+  | "carModel"
+  | "paymentInfo"
+  | "paymentAmount"
+  | "supplyAmount"
+  | "vatAmount"
+>;
+
 const currentDateText = localDateText();
 const currentYear = currentDateText.slice(0, 4);
 const currentMonth = currentDateText.slice(5, 7);
@@ -65,6 +80,10 @@ const bankNames = ["국민은행", "부산은행"];
 const formatWon = (amount: number) => amount.toLocaleString();
 const includesText = (value: string | null | undefined, keyword: string) =>
   (value ?? "").includes(keyword);
+const calculateSupplyAmount = (paymentAmount: number) =>
+  Math.round(paymentAmount / 1.1);
+const calculateVatAmount = (paymentAmount: number) =>
+  paymentAmount - calculateSupplyAmount(paymentAmount);
 
 export default function SalesRevenuePage({
   kind,
@@ -75,6 +94,8 @@ export default function SalesRevenuePage({
   const [selectedMonth, setSelectedMonth] = useState(currentMonth);
   const [searchText, setSearchText] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [sortField, setSortField] = useState<SortField>("date");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
 
   const dateRange = useMemo(() => {
     const startDate = selectedMonth
@@ -183,12 +204,8 @@ export default function SalesRevenuePage({
         } satisfies RevenueRow);
 
       current.paymentAmount += paymentAmount;
-
-      if (paymentType.includes("부가세")) {
-        current.vatAmount += paymentAmount;
-      } else {
-        current.supplyAmount += paymentAmount;
-      }
+      current.supplyAmount = calculateSupplyAmount(current.paymentAmount);
+      current.vatAmount = calculateVatAmount(current.paymentAmount);
 
       groupedRows.set(key, current);
     });
@@ -245,8 +262,8 @@ export default function SalesRevenuePage({
         carModel: work?.car_model ?? "",
         paymentInfo: row.account ?? "",
         paymentAmount,
-        supplyAmount: paymentAmount,
-        vatAmount: 0,
+        supplyAmount: calculateSupplyAmount(paymentAmount),
+        vatAmount: calculateVatAmount(paymentAmount),
         content: row.content ?? "",
       };
     });
@@ -273,25 +290,48 @@ export default function SalesRevenuePage({
   const filteredRows = useMemo(() => {
     const keyword = searchText.trim().toLowerCase();
 
-    if (!keyword) return rows;
+    return rows
+      .filter((row) => {
+        if (!keyword) return true;
 
-    return rows.filter((row) =>
-      [
-        row.date,
-        row.workName,
-        row.insuranceCompany,
-        row.saleType,
-        row.coverageType,
-        row.carNumber,
-        row.carModel,
-        row.paymentInfo,
-        row.content,
-      ]
-        .join(" ")
-        .toLowerCase()
-        .includes(keyword)
-    );
-  }, [rows, searchText]);
+        return [
+          row.date,
+          row.workName,
+          row.insuranceCompany,
+          row.saleType,
+          row.coverageType,
+          row.carNumber,
+          row.carModel,
+          row.paymentInfo,
+          row.content,
+        ]
+          .join(" ")
+          .toLowerCase()
+          .includes(keyword);
+      })
+      .sort((a, b) => {
+        const aValue = a[sortField];
+        const bValue = b[sortField];
+
+        if (typeof aValue === "number" && typeof bValue === "number") {
+          return sortOrder === "asc" ? aValue - bValue : bValue - aValue;
+        }
+
+        return sortOrder === "asc"
+          ? String(aValue ?? "").localeCompare(String(bValue ?? ""))
+          : String(bValue ?? "").localeCompare(String(aValue ?? ""));
+      });
+  }, [rows, searchText, sortField, sortOrder]);
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"));
+      return;
+    }
+
+    setSortField(field);
+    setSortOrder("asc");
+  };
 
   const totalPayment = filteredRows.reduce(
     (sum, row) => sum + row.paymentAmount,
@@ -392,6 +432,9 @@ export default function SalesRevenuePage({
           totalPayment={totalPayment}
           totalSupply={totalSupply}
           totalVat={totalVat}
+          sortField={sortField}
+          sortOrder={sortOrder}
+          onSort={handleSort}
         />
       </div>
 
@@ -413,11 +456,11 @@ export default function SalesRevenuePage({
           <RevenueTable
             rows={filteredRows}
             isLoading={false}
-            totalPayment={totalPayment}
-            totalSupply={totalSupply}
-            totalVat={totalVat}
-            printMode
-          />
+          totalPayment={totalPayment}
+          totalSupply={totalSupply}
+          totalVat={totalVat}
+          printMode
+        />
         </div>
       </section>
     </div>
@@ -439,6 +482,9 @@ function RevenueTable({
   totalPayment,
   totalSupply,
   totalVat,
+  sortField,
+  sortOrder,
+  onSort,
   printMode = false,
 }: {
   rows: RevenueRow[];
@@ -446,6 +492,9 @@ function RevenueTable({
   totalPayment: number;
   totalSupply: number;
   totalVat: number;
+  sortField?: SortField;
+  sortOrder?: "asc" | "desc";
+  onSort?: (field: SortField) => void;
   printMode?: boolean;
 }) {
   const tableClassName = printMode
@@ -460,37 +509,44 @@ function RevenueTable({
       <table className={tableClassName}>
         <thead className="bg-slate-100 text-slate-700">
           <tr>
-            <th className={cellClassName}>입금일</th>
-            <th className={cellClassName}>작명</th>
-            <th className={cellClassName}>보험사</th>
-            <th className={cellClassName}>구분</th>
-            <th className={cellClassName}>담보</th>
-            <th className={cellClassName}>차량번호</th>
-            <th className={cellClassName}>차량명</th>
-            <th className={cellClassName}>입금정보</th>
-            <th className={`${cellClassName} text-right`}>결제금액</th>
-            <th className={`${cellClassName} text-right`}>공급가</th>
-            <th className={`${cellClassName} text-right`}>부가세</th>
+            <SortableHeader
+              label="입금일"
+              field="date"
+              cellClassName={cellClassName}
+              sortField={sortField}
+              sortOrder={sortOrder}
+              onSort={onSort}
+            />
+            <SortableHeader label="작명" field="workName" cellClassName={cellClassName} sortField={sortField} sortOrder={sortOrder} onSort={onSort} />
+            <SortableHeader label="보험사" field="insuranceCompany" cellClassName={cellClassName} sortField={sortField} sortOrder={sortOrder} onSort={onSort} />
+            <SortableHeader label="구분" field="saleType" cellClassName={cellClassName} sortField={sortField} sortOrder={sortOrder} onSort={onSort} />
+            <SortableHeader label="담보" field="coverageType" cellClassName={cellClassName} sortField={sortField} sortOrder={sortOrder} onSort={onSort} />
+            <SortableHeader label="차량번호" field="carNumber" cellClassName={cellClassName} sortField={sortField} sortOrder={sortOrder} onSort={onSort} />
+            <SortableHeader label="차량명" field="carModel" cellClassName={cellClassName} sortField={sortField} sortOrder={sortOrder} onSort={onSort} />
+            <SortableHeader label="입금정보" field="paymentInfo" cellClassName={cellClassName} sortField={sortField} sortOrder={sortOrder} onSort={onSort} />
+            <SortableHeader label="결제금액" field="paymentAmount" cellClassName={cellClassName} sortField={sortField} sortOrder={sortOrder} onSort={onSort} />
+            <SortableHeader label="공급가" field="supplyAmount" cellClassName={cellClassName} sortField={sortField} sortOrder={sortOrder} onSort={onSort} />
+            <SortableHeader label="부가세" field="vatAmount" cellClassName={cellClassName} sortField={sortField} sortOrder={sortOrder} onSort={onSort} />
           </tr>
         </thead>
         <tbody>
           {rows.map((row) => (
             <tr key={row.id} className={printMode ? "" : "hover:bg-slate-50"}>
               <td className={`${cellClassName} text-center`}>{row.date}</td>
-              <td className={`${cellClassName} font-semibold`}>{row.workName}</td>
-              <td className={cellClassName}>{row.insuranceCompany}</td>
-              <td className={cellClassName}>{row.saleType}</td>
-              <td className={cellClassName}>{row.coverageType}</td>
-              <td className={cellClassName}>{row.carNumber}</td>
-              <td className={cellClassName}>{row.carModel}</td>
-              <td className={cellClassName}>{row.paymentInfo}</td>
-              <td className={`${cellClassName} text-right font-semibold`}>
+              <td className={`${cellClassName} text-center font-semibold`}>{row.workName}</td>
+              <td className={`${cellClassName} text-center`}>{row.insuranceCompany}</td>
+              <td className={`${cellClassName} text-center`}>{row.saleType}</td>
+              <td className={`${cellClassName} text-center`}>{row.coverageType}</td>
+              <td className={`${cellClassName} text-center`}>{row.carNumber}</td>
+              <td className={`${cellClassName} text-center`}>{row.carModel}</td>
+              <td className={`${cellClassName} text-center`}>{row.paymentInfo}</td>
+              <td className={`${cellClassName} text-center font-semibold`}>
                 {formatWon(row.paymentAmount)}
               </td>
-              <td className={`${cellClassName} text-right`}>
+              <td className={`${cellClassName} text-center`}>
                 {formatWon(row.supplyAmount)}
               </td>
-              <td className={`${cellClassName} text-right`}>
+              <td className={`${cellClassName} text-center`}>
                 {formatWon(row.vatAmount)}
               </td>
             </tr>
@@ -512,18 +568,54 @@ function RevenueTable({
             <td className={`${cellClassName} text-right`} colSpan={8}>
               합계
             </td>
-            <td className={`${cellClassName} text-right`}>
+            <td className={`${cellClassName} text-center`}>
               {formatWon(totalPayment)}
             </td>
-            <td className={`${cellClassName} text-right`}>
+            <td className={`${cellClassName} text-center`}>
               {formatWon(totalSupply)}
             </td>
-            <td className={`${cellClassName} text-right`}>
+            <td className={`${cellClassName} text-center`}>
               {formatWon(totalVat)}
             </td>
           </tr>
         </tfoot>
       </table>
     </div>
+  );
+}
+
+function SortableHeader({
+  label,
+  field,
+  cellClassName,
+  sortField,
+  sortOrder,
+  onSort,
+}: {
+  label: string;
+  field: SortField;
+  cellClassName: string;
+  sortField?: SortField;
+  sortOrder?: "asc" | "desc";
+  onSort?: (field: SortField) => void;
+}) {
+  const isActive = sortField === field;
+  const mark = isActive ? (sortOrder === "asc" ? "▲" : "▼") : "↕";
+
+  if (!onSort) {
+    return <th className={`${cellClassName} text-center`}>{label}</th>;
+  }
+
+  return (
+    <th className={`${cellClassName} text-center`}>
+      <button
+        type="button"
+        onClick={() => onSort(field)}
+        className="inline-flex items-center justify-center gap-1 font-semibold text-slate-700 hover:text-blue-700"
+      >
+        <span>{label}</span>
+        <span className="text-[10px]">{mark}</span>
+      </button>
+    </th>
   );
 }
