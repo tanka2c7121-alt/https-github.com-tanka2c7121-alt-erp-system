@@ -28,6 +28,7 @@ import ExpenseRequestPrintPage from "../../modules/documents/ExpenseRequestPrint
 import AttendanceRequestPage from "../../modules/documents/AttendanceRequestPage";
 import AttendanceRequestPrintPage from "../../modules/documents/AttendanceRequestPrintPage";
 import IncidentReportPage from "../../modules/documents/IncidentReportPage";
+import SalesDashboardPage from "../../modules/sales/SalesDashboardPage";
 import SalesRevenuePage from "../../modules/sales/SalesRevenuePage";
 
 type LoginUser = {
@@ -337,6 +338,8 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
               <WorkPrintPage
                 workName={selectedData?.workName ?? selectedData?.nextWorkName}
               />
+            ) : selectedMenu.id === "sales" ? (
+              <SalesDashboardPage onSelectMenu={handleSelectMenu} />
             ) : selectedMenu.id === "sales-insurance" ? (
               <SalesRevenuePage kind="insurance" title="보험매출" />
             ) : selectedMenu.id === "sales-general" ? (
