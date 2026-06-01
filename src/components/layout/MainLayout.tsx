@@ -27,6 +27,7 @@ import ExpenseRequestPage from "../../modules/documents/ExpenseRequestPage";
 import ExpenseRequestPrintPage from "../../modules/documents/ExpenseRequestPrintPage";
 import AttendanceRequestPage from "../../modules/documents/AttendanceRequestPage";
 import AttendanceRequestPrintPage from "../../modules/documents/AttendanceRequestPrintPage";
+import SalesRevenuePage from "../../modules/sales/SalesRevenuePage";
 
 type LoginUser = {
   id: string | number;
@@ -335,6 +336,10 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
               <WorkPrintPage
                 workName={selectedData?.workName ?? selectedData?.nextWorkName}
               />
+            ) : selectedMenu.id === "sales-insurance" ? (
+              <SalesRevenuePage kind="insurance" title="보험매출" />
+            ) : selectedMenu.id === "sales-card" ? (
+              <SalesRevenuePage kind="card" title="카드매출" />
             ) : selectedMenu.id === "documents" ||
             selectedMenu.id === "documents-expense-request" ? (
               <ExpenseRequestPage

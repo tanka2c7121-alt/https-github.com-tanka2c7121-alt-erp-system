@@ -64,11 +64,13 @@ export const menuData: MenuItem[] = [
   {
     id: "sales",
     title: "매출현황",
+    roles: ["ADMIN", "STAFF"],
+    departments: ["관리부"],
     children: [
       { id: "sales-insurance", title: "보험매출" },
       { id: "sales-general", title: "일반매출" },
-      { id: "sales-card", title: "카드매입" },
-      { id: "sales-blue", title: "BLUE사인" },
+      { id: "sales-card", title: "카드매출" },
+      { id: "sales-blue", title: "BLUE포인트" },
     ],
   },
   {
