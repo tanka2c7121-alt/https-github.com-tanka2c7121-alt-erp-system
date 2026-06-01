@@ -67,6 +67,8 @@ type HomeNotice = {
 };
 
 const todayText = localDateText;
+const dismissedNoticeKey = (noticeId: number) =>
+  `erpDismissedHomeNotice:${noticeId}:${todayText()}`;
 const currentWorkMonth = (orders: WorkOrder[]) => {
   const today = todayText();
   const calendarMonth = today.slice(0, 7);
@@ -185,11 +187,14 @@ export default function HomeDashboardPage({
 
     if (!noticeResult.error && noticeResult.data) {
       const notice = noticeResult.data as HomeNotice;
+      const dismissedToday =
+        typeof window !== "undefined" &&
+        localStorage.getItem(dismissedNoticeKey(notice.id)) === "1";
 
       setHomeNotice(notice);
       setNoticeTitle(notice.title);
       setNoticeContent(notice.content);
-      setNoticePopupOpen(true);
+      setNoticePopupOpen(!dismissedToday);
     } else {
       setHomeNotice(null);
     }
@@ -408,6 +413,10 @@ export default function HomeDashboardPage({
         <NoticePopup
           notice={homeNotice}
           onClose={() => setNoticePopupOpen(false)}
+          onCloseToday={() => {
+            localStorage.setItem(dismissedNoticeKey(homeNotice.id), "1");
+            setNoticePopupOpen(false);
+          }}
         />
       )}
 
@@ -549,9 +558,11 @@ function SummaryCard({
 function NoticePopup({
   notice,
   onClose,
+  onCloseToday,
 }: {
   notice: HomeNotice;
   onClose: () => void;
+  onCloseToday: () => void;
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4">
@@ -574,6 +585,13 @@ function NoticePopup({
         <div className="max-h-[50vh] whitespace-pre-wrap overflow-y-auto rounded-xl bg-slate-50 p-4 text-sm leading-6 text-slate-700">
           {notice.content}
         </div>
+        <button
+          type="button"
+          onClick={onCloseToday}
+          className="mt-5 w-full rounded-lg border border-slate-300 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+        >
+          오늘 그만보기
+        </button>
         <button
           type="button"
           onClick={onClose}
