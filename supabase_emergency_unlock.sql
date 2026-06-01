@@ -4,6 +4,9 @@
 
 alter table if exists public.app_users disable row level security;
 
+alter table if exists public.app_users
+add column if not exists auth_uid uuid;
+
 select
   id,
   user_id,
