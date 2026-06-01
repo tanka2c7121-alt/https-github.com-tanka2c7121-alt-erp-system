@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { MenuItem } from "../../data/menuData";
+import { localDateText } from "../../lib/date";
 import { supabase } from "../../lib/supabase";
 
 type OutboundStatusPageProps = {
@@ -24,6 +25,9 @@ type WorkItem = {
 };
 
 const pageSize = 30;
+const currentDateText = localDateText();
+const currentYear = currentDateText.slice(0, 4);
+const currentMonth = currentDateText.slice(5, 7);
 
 export default function OutboundStatusPage({
   onSelectMenu,
@@ -31,8 +35,8 @@ export default function OutboundStatusPage({
   const [sortField, setSortField] = useState<keyof WorkItem>("release_date");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [searchText, setSearchText] = useState("");
-  const [selectedYear, setSelectedYear] = useState("");
-  const [selectedMonth, setSelectedMonth] = useState("");
+  const [selectedYear, setSelectedYear] = useState(currentYear);
+  const [selectedMonth, setSelectedMonth] = useState(currentMonth);
   const [workList, setWorkList] = useState<WorkItem[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
 
