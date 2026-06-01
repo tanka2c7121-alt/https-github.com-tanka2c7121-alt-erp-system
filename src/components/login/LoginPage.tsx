@@ -125,10 +125,15 @@ export default function LoginPage({ onLogin }: Props) {
             password,
           });
 
-        if (
-          signupError &&
-          !signupError.message.toLowerCase().includes("registered")
-        ) {
+        if (signupError?.message.toLowerCase().includes("registered")) {
+          setLoading(false);
+          alert(
+            "Supabase 로그인 계정은 이미 있습니다. 입력한 비밀번호가 Supabase 계정과 맞지 않습니다. 관리자에게 비밀번호 초기화를 요청하세요."
+          );
+          return;
+        }
+
+        if (signupError) {
           setLoading(false);
           alert("Supabase 로그인 계정 생성 실패: " + signupError.message);
           return;
