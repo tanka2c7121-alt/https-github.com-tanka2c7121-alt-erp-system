@@ -17,6 +17,10 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+.print-only {
+  display: none !important;
+}
+
 @media print {
   @page {
     size: A4 portrait;
@@ -50,6 +54,23 @@ body {
     padding: 5mm !important;
     box-sizing: border-box !important;
 
+    background: white !important;
+    box-shadow: none !important;
+  }
+
+  .print-only,
+  .print-only * {
+    visibility: visible !important;
+  }
+
+  .print-only {
+    display: block !important;
+    position: fixed !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 200mm !important;
+    min-height: 285mm !important;
+    padding: 5mm !important;
     background: white !important;
     box-shadow: none !important;
   }
