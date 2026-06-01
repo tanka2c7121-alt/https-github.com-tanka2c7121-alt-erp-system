@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
@@ -66,7 +66,7 @@ export default function WorkPrintPage({
     printAfterLoad = false
   ) {
     if (!targetWorkName) {
-      alert("작명을 입력하세요.");
+      alert("?묐챸???낅젰?섏꽭??");
       return;
     }
 
@@ -79,7 +79,7 @@ export default function WorkPrintPage({
       .maybeSingle();
 
     if (orderError || !orderData) {
-      alert("작업 데이터를 찾을 수 없습니다.");
+      alert("?묒뾽 ?곗씠?곕? 李얠쓣 ???놁뒿?덈떎.");
       return;
     }
 
@@ -90,7 +90,7 @@ export default function WorkPrintPage({
       .order("line_no", { ascending: true });
 
     if (detailError) {
-      alert("작업내용 조회 실패: " + detailError.message);
+      alert("?묒뾽?댁슜 議고쉶 ?ㅽ뙣: " + detailError.message);
       return;
     }
 
@@ -126,7 +126,7 @@ export default function WorkPrintPage({
         <div className="no-print mb-4 flex justify-end gap-2">
   <input
     className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-    placeholder="작명 입력"
+    placeholder="?묐챸 ?낅젰"
     value={searchWorkName}
     onChange={(e) =>
   setSearchWorkName(
@@ -140,7 +140,7 @@ export default function WorkPrintPage({
     onClick={() => void handleLoadPrintData()}
     className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-semibold text-white"
   >
-    불러오기
+    遺덈윭?ㅺ린
   </button>
 
   <button
@@ -148,7 +148,7 @@ export default function WorkPrintPage({
     onClick={() => window.print()}
     className="rounded-lg bg-slate-900 px-5 py-2 text-sm font-semibold text-white hover:bg-slate-800"
   >
-    인쇄
+    ?몄뇙
   </button>
 </div>
 
@@ -156,11 +156,11 @@ export default function WorkPrintPage({
   <div className="mb-6 flex items-start justify-between">
     <div className="flex-1 text-center">
       <h1 className="text-3xl font-bold tracking-widest">
-        작업지시서
+        ?묒뾽吏?쒖꽌
       </h1>
 
       <p className="mt-1 text-sm font-semibold">
-        신흥현대서비스 ERP
+        ?좏씎?꾨??쒕퉬??ERP
       </p>
     </div>
 
@@ -183,21 +183,21 @@ export default function WorkPrintPage({
   <tbody>
 <tr>
   <th className="w-20 border border-slate-900 bg-slate-100 px-2 py-0 align-middle">
-    차량번호
+    李⑤웾踰덊샇
   </th>
   <td className="h-8 border border-slate-900 px-2 py-0 align-middle ">
     {order?.car_number || "\u00A0"}
   </td>
 
   <th className="w-20 border border-slate-900 bg-slate-100 px-2 py-0 align-middle">
-    차량명
+    李⑤웾紐?
   </th>
   <td className="h-8 border border-slate-900 px-2 py-0 align-middle whitespace-nowrap overflow-hidden">
     {order?.car_model || "\u00A0"}
   </td>
 
   <th className="w-20 border border-slate-900 bg-slate-100 px-2 py-0 align-middle">
-    차량연식
+    李⑤웾?곗떇
   </th>
   <td className="h-8 border border-slate-900 px-2 py-0 align-middle whitespace-nowrap overflow-hidden">
     {order?.car_year || "\u00A0"}
@@ -213,14 +213,14 @@ export default function WorkPrintPage({
   </td>
 
   <th className="w-20 border border-slate-900 bg-slate-100 px-2 py-0 align-middle">
-    주행거리
+    二쇳뻾嫄곕━
   </th>
   <td className="h-8 border border-slate-900 px-2 py-0 align-middle whitespace-nowrap overflow-hidden">
     {order?.mileage || "\u00A0"}
   </td>
 
   <th className="w-20 border border-slate-900 bg-slate-100 px-2 py-0 align-middle">
-    칼라코드
+    移쇰씪肄붾뱶
   </th>
   <td className="h-8 border border-slate-900 px-2 py-0 align-middle whitespace-nowrap overflow-hidden">
     {order?.color_code || "\u00A0"}
@@ -229,21 +229,21 @@ export default function WorkPrintPage({
 
 <tr>
   <th className="w-20 border border-slate-900 bg-slate-100 px-2 py-0 align-middle">
-    입고일
+    ?낃퀬??
   </th>
   <td className="h-8 border border-slate-900 px-2 py-0 align-middle whitespace-nowrap overflow-hidden">
     {order?.inbound_date || "\u00A0"}
   </td>
     
   <th className="w-20 border border-slate-900 bg-slate-100 px-2 py-0 align-middle">
-    출고예정
+    異쒓퀬?덉젙
   </th>
   <td className="h-8 border border-slate-900 px-2 py-0 align-middle whitespace-nowrap overflow-hidden">
     {order?.outbound_date || "\u00A0"}
   </td>
   
   <th className="w-20 border border-slate-900 bg-slate-100 px-2 py-0 align-middle">
-    출고일
+    異쒓퀬??
   </th>
   <td className="h-8 border border-slate-900 px-2 py-0 align-middle whitespace-nowrap overflow-hidden">
     {order?.release_date || "\u00A0"}
@@ -252,21 +252,21 @@ export default function WorkPrintPage({
 
 <tr>
   <th className="w-20 border border-slate-900 bg-slate-100 px-2 py-0 align-middle">
-    고객 연락처
+    怨좉컼 ?곕씫泥?
   </th>
   <td className="h-8 border border-slate-900 px-2 py-0 align-middle whitespace-nowrap overflow-hidden">
     {order?.phone_number || "\u00A0"}
   </td>
 
   <th className="w-20 border border-slate-900 bg-slate-100 px-2 py-0 align-middle">
-    렌터카업체
+    ?뚰꽣移댁뾽泥?
   </th>
   <td className="h-8 border border-slate-900 px-2 py-0 align-middle whitespace-nowrap overflow-hidden">
     {order?.rental_company || "\u00A0"}
   </td>
 
   <th className="w-20 border border-slate-900 bg-slate-100 px-2 py-0 align-middle">
-    업체 연락처
+    ?낆껜 ?곕씫泥?
   </th>
   <td className="h-8 border border-slate-900 px-2 py-0 align-middle whitespace-nowrap overflow-hidden">
     {order?.rental_phone_number || "\u00A0"}
@@ -275,21 +275,21 @@ export default function WorkPrintPage({
 
 <tr>
   <th className="w-20 border border-slate-900 bg-slate-100 px-2 py-0 align-middle">
-    보험사
+    蹂댄뿕??
   </th>
   <td className="h-8 border border-slate-900 px-2 py-0 align-middle whitespace-nowrap overflow-hidden">
     {order?.insurance_company || "\u00A0"}
   </td>
 
   <th className="w-20 border border-slate-900 bg-slate-100 px-2 py-0 align-middle">
-    접수번호
+    ?묒닔踰덊샇
   </th>
   <td className="h-8 border border-slate-900 px-2 py-0 align-middle whitespace-nowrap overflow-hidden">
     {order?.receipt_number || "\u00A0"}
   </td>
 
   <th className="w-20 border border-slate-900 bg-slate-100 px-2 py-0 align-middle">
-    담보
+    ?대낫
   </th>
   <td className="h-8 border border-slate-900 px-2 py-0 align-middle whitespace-nowrap overflow-hidden">
     {order?.coverage_type || "\u00A0"}
@@ -298,21 +298,21 @@ export default function WorkPrintPage({
 
 <tr>
   <th className="w-20 border border-slate-900 bg-slate-100 px-2 py-0 align-middle">
-    상대 보험사
+    ?곷? 蹂댄뿕??
   </th>
   <td className="h-8 border border-slate-900 px-2 py-0 align-middle whitespace-nowrap overflow-hidden">
     {order?.other_insurance_company || "\u00A0"}
   </td>
 
   <th className="w-20 border border-slate-900 bg-slate-100 px-2 py-0 align-middle">
-    접수번호2
+    ?묒닔踰덊샇2
   </th>
   <td className="h-8 border border-slate-900 px-2 py-0 align-middle whitespace-nowrap overflow-hidden">
     {order?.other_receipt_number || "\u00A0"}
   </td>
 
   <th className="w-20 border border-slate-900 bg-slate-100 px-2 py-0 align-middle">
-    면책금
+    硫댁콉湲?
   </th>
   <td className="h-8 border border-slate-900 px-2 py-0 align-middle whitespace-nowrap overflow-hidden">
     {order?.deductible_amount || "\u00A0"}
@@ -321,21 +321,21 @@ export default function WorkPrintPage({
 
 <tr>
   <th className="w-20 border border-slate-900 bg-slate-100 px-2 py-0 align-middle">
-    부가세
+    遺媛??
   </th>
   <td className="h-8 border border-slate-900 px-2 py-0 align-middle whitespace-nowrap overflow-hidden">
     {order?.vat_yn || "\u00A0"}
   </td>
 
   <th className="w-20 border border-slate-900 bg-slate-100 px-2 py-0 align-middle">
-    견인
+    寃ъ씤
   </th>
   <td className="h-8 border border-slate-900 px-2 py-0 align-middle whitespace-nowrap overflow-hidden">
     {order?.tow_yn || "\u00A0"}
   </td>
 
   <th className="w-20 border border-slate-900 bg-slate-100 px-2 py-0 align-middle">
-    거래처
+    嫄곕옒泥?
   </th>
   <td className="h-8 border border-slate-900 px-2 py-0 align-middle whitespace-nowrap overflow-hidden">
     {order?.partner_company || "\u00A0"}
@@ -347,24 +347,24 @@ export default function WorkPrintPage({
 
           <div className="mt-3">
             <div className="border border-slate-900 bg-slate-100 p-2 text-sm font-bold">
-              전달내용
+              ?꾨떖?댁슜
             </div>
             <div className="min-h-16 border-x border-b border-slate-900 p-3 text-sm">
-              고객 요청사항 및 특이사항 입력 영역
+              {order?.message || "\u00A0"}
             </div>
           </div>
 
           <div className="mt-3">
             <div className="border border-slate-900 bg-slate-100 p-2 text-sm font-bold">
-              작업내용
+              ?묒뾽?댁슜
             </div>
 
             <table className="w-full border-collapse text-[11px]">
               <thead>
                 <tr>
-                  <th className="w-20 border border-slate-900 bg-slate-100 p-2">좌우</th>
+                  <th className="w-20 border border-slate-900 bg-slate-100 p-2">醫뚯슦</th>
                   <th className="border border-slate-900 bg-slate-100 p-2">부위</th>
-                  <th className="w-16 border border-slate-900 bg-slate-100 px-2 py-1 text-center ">작업</th>
+                  <th className="w-16 border border-slate-900 bg-slate-100 px-2 py-1 text-center ">?묒뾽</th>
                 </tr>
               </thead>
               <tbody>
