@@ -17,6 +17,8 @@ type IncidentReportPageProps = {
   isAdmin: boolean;
 };
 
+type IncidentStatus = "확인대기" | "확인완료";
+
 type IncidentReport = {
   id: number;
   report_date: string;
@@ -26,7 +28,7 @@ type IncidentReport = {
   content: string;
   action_taken: string | null;
   memo: string | null;
-  status: "확인대기" | "확인완료";
+  status: IncidentStatus;
   requested_by: string;
   requested_name: string | null;
   requested_department: string | null;
@@ -172,8 +174,7 @@ export default function IncidentReportPage({
   };
 
   const handleCheck = async (row: IncidentReport) => {
-    if (!canCheck) return;
-    if (row.status === "확인완료") return;
+    if (!canCheck || row.status === "확인완료") return;
 
     const ok = confirm("이 경위서를 확인완료 처리할까요?");
     if (!ok) return;
@@ -198,36 +199,47 @@ export default function IncidentReportPage({
 
   return (
     <div className="space-y-5 text-slate-900">
-      <div>
-        <h3 className="text-xl font-bold md:text-2xl">경위서</h3>
-        <p className="text-sm text-slate-700">
-          경위서는 승인이 아니라 관리자 또는 관리부 확인으로 처리됩니다.
-        </p>
-      </div>
+      <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+        <div>
+          <h3 className="text-xl font-bold md:text-2xl">경위서</h3>
+          <p className="text-sm text-slate-700">
+            경위서는 승인이 아니라 관리자 또는 관리부 확인으로 처리됩니다.
+          </p>
+        </div>
 
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-        <SummaryCard label="확인대기" value={`${pendingCount.toLocaleString()}건`} />
-        <SummaryCard label="조회 목록" value={`${visibleRows.length.toLocaleString()}건`} />
-        <SummaryCard label="확인완료" value={`${checkedCount.toLocaleString()}건`} />
+        <div className="flex gap-2 text-sm">
+          <Badge label="확인대기" value={pendingCount} tone="orange" />
+          <Badge label="확인완료" value={checkedCount} tone="blue" />
+        </div>
       </div>
 
       <section className="rounded-xl border border-slate-200 bg-white p-4">
-        <div className="mb-4 text-base font-bold">경위서 작성</div>
+        <div className="mb-4 flex flex-col gap-1">
+          <h4 className="font-bold text-slate-900">경위서 작성</h4>
+          <p className="text-sm text-slate-600">
+            발생 경위와 조치 내용을 기록하면 관리자 또는 관리부가 확인합니다.
+          </p>
+        </div>
+
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           <Field label="작성일" type="date" value={form.reportDate} onChange={(value) => handleChange("reportDate", value)} />
           <Field label="구분" value={form.incidentType} onChange={(value) => handleChange("incidentType", value)} options={incidentTypes} />
           <Field label="장소" value={form.location} onChange={(value) => handleChange("location", value)} placeholder="예: 공장, 사무실, 현장" />
         </div>
+
         <div className="mt-4">
           <Field label="제목" value={form.title} onChange={(value) => handleChange("title", value)} placeholder="경위서 제목" />
         </div>
+
         <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
           <TextArea label="경위 내용" value={form.content} onChange={(value) => handleChange("content", value)} placeholder="발생 경위와 내용을 입력하세요." />
           <TextArea label="조치 내용" value={form.actionTaken} onChange={(value) => handleChange("actionTaken", value)} placeholder="조치했거나 조치 예정인 내용을 입력하세요." />
         </div>
+
         <div className="mt-4">
           <TextArea label="메모" value={form.memo} onChange={(value) => handleChange("memo", value)} placeholder="추가 메모" rows={3} />
         </div>
+
         <div className="mt-4 flex justify-end gap-2">
           <button
             type="button"
@@ -248,8 +260,12 @@ export default function IncidentReportPage({
       </section>
 
       <section className="rounded-xl border border-slate-200 bg-white p-4">
-        <div className="mb-4 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex flex-wrap items-center gap-2">
+        <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+          <h4 className="font-bold text-slate-900">
+            {canCheck ? "경위서 목록" : "내 경위서 목록"}
+          </h4>
+
+          <div className="flex flex-col gap-2 sm:flex-row">
             <select
               className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900"
               value={statusFilter}
@@ -259,105 +275,208 @@ export default function IncidentReportPage({
               <option value="확인대기">확인대기</option>
               <option value="확인완료">확인완료</option>
             </select>
-            <button
-              type="button"
-              onClick={() => void loadRows()}
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-            >
-              새로고침
-            </button>
+
+            <input
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900"
+              placeholder="제목 / 작성자 / 내용 검색"
+              value={searchText}
+              onChange={(event) => setSearchText(event.target.value)}
+            />
           </div>
-          <input
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm lg:w-80"
-            placeholder="제목, 작성자, 내용 검색"
-            value={searchText}
-            onChange={(event) => setSearchText(event.target.value)}
+        </div>
+
+        <div className="hidden overflow-x-auto md:block">
+          <IncidentTable
+            rows={visibleRows}
+            canCheck={canCheck}
+            onCheck={handleCheck}
           />
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="min-w-[980px] w-full border-collapse text-sm">
-            <thead className="bg-slate-100 text-slate-700">
-              <tr>
-                <th className="border px-2 py-2">작성일</th>
-                <th className="border px-2 py-2">구분</th>
-                <th className="border px-2 py-2">제목</th>
-                <th className="border px-2 py-2">작성자</th>
-                <th className="border px-2 py-2">상태</th>
-                <th className="border px-2 py-2">확인자</th>
-                <th className="border px-2 py-2">내용</th>
-                <th className="border px-2 py-2">처리</th>
-              </tr>
-            </thead>
-            <tbody>
-              {visibleRows.map((row) => (
-                <tr key={row.id} className="align-top hover:bg-slate-50">
-                  <td className="border px-2 py-2 text-center">{row.report_date}</td>
-                  <td className="border px-2 py-2 text-center">{row.incident_type}</td>
-                  <td className="border px-2 py-2 font-semibold">{row.title}</td>
-                  <td className="border px-2 py-2 text-center">{row.requested_name}</td>
-                  <td className="border px-2 py-2 text-center">
-                    <span
-                      className={[
-                        "rounded-full px-2 py-1 text-xs font-bold",
-                        row.status === "확인완료"
-                          ? "bg-green-100 text-green-700"
-                          : "bg-amber-100 text-amber-700",
-                      ].join(" ")}
-                    >
-                      {row.status}
-                    </span>
-                  </td>
-                  <td className="border px-2 py-2 text-center">
-                    {row.checked_name ?? "-"}
-                  </td>
-                  <td className="border px-2 py-2">
-                    <div className="max-w-md whitespace-pre-wrap text-slate-700">
-                      {row.content}
-                    </div>
-                    {row.action_taken && (
-                      <div className="mt-2 rounded bg-slate-50 p-2 text-xs text-slate-600">
-                        조치: {row.action_taken}
-                      </div>
-                    )}
-                  </td>
-                  <td className="border px-2 py-2 text-center">
-                    {canCheck && row.status === "확인대기" ? (
-                      <button
-                        type="button"
-                        onClick={() => void handleCheck(row)}
-                        className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700"
-                      >
-                        확인
-                      </button>
-                    ) : (
-                      <span className="text-xs text-slate-400">-</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-
-              {visibleRows.length === 0 && (
-                <tr>
-                  <td className="border px-3 py-8 text-center text-slate-500" colSpan={8}>
-                    조회된 경위서가 없습니다.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+        <MobileIncidentCards
+          rows={visibleRows}
+          canCheck={canCheck}
+          onCheck={handleCheck}
+        />
       </section>
     </div>
   );
 }
 
-function SummaryCard({ label, value }: { label: string; value: string }) {
+function IncidentTable({
+  rows,
+  canCheck,
+  onCheck,
+}: {
+  rows: IncidentReport[];
+  canCheck: boolean;
+  onCheck: (row: IncidentReport) => void;
+}) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4">
-      <p className="text-sm font-semibold text-slate-600">{label}</p>
-      <p className="mt-2 text-2xl font-bold text-blue-700">{value}</p>
+    <table className="min-w-[980px] w-full border-collapse text-sm">
+      <thead className="bg-slate-100 text-slate-700">
+        <tr>
+          <th className="border px-2 py-2">작성일</th>
+          <th className="border px-2 py-2">구분</th>
+          <th className="border px-2 py-2">제목</th>
+          <th className="border px-2 py-2">작성자</th>
+          <th className="border px-2 py-2">상태</th>
+          <th className="border px-2 py-2">확인자</th>
+          <th className="border px-2 py-2">내용</th>
+          <th className="border px-2 py-2">처리</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row) => (
+          <tr key={row.id} className="align-top hover:bg-slate-50">
+            <td className="border px-2 py-2 text-center">{row.report_date}</td>
+            <td className="border px-2 py-2 text-center">{row.incident_type}</td>
+            <td className="border px-2 py-2 font-semibold">{row.title}</td>
+            <td className="border px-2 py-2 text-center">{row.requested_name}</td>
+            <td className="border px-2 py-2 text-center">
+              <StatusBadge status={row.status} />
+            </td>
+            <td className="border px-2 py-2 text-center">
+              {row.checked_name ?? "-"}
+            </td>
+            <td className="border px-2 py-2">
+              <div className="max-w-md whitespace-pre-wrap text-slate-700">
+                {row.content}
+              </div>
+              {row.action_taken && (
+                <div className="mt-2 rounded bg-slate-50 p-2 text-xs text-slate-600">
+                  조치: {row.action_taken}
+                </div>
+              )}
+            </td>
+            <td className="border px-2 py-2 text-center">
+              <CheckButton row={row} canCheck={canCheck} onCheck={onCheck} />
+            </td>
+          </tr>
+        ))}
+
+        {rows.length === 0 && (
+          <tr>
+            <td className="border px-3 py-8 text-center text-slate-500" colSpan={8}>
+              조회된 경위서가 없습니다.
+            </td>
+          </tr>
+        )}
+      </tbody>
+    </table>
+  );
+}
+
+function MobileIncidentCards({
+  rows,
+  canCheck,
+  onCheck,
+}: {
+  rows: IncidentReport[];
+  canCheck: boolean;
+  onCheck: (row: IncidentReport) => void;
+}) {
+  if (rows.length === 0) {
+    return (
+      <div className="rounded-lg border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500 md:hidden">
+        조회된 경위서가 없습니다.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3 md:hidden">
+      {rows.map((row) => (
+        <div key={row.id} className="rounded-xl border border-slate-200 p-3">
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <div className="font-bold text-slate-900">{row.title}</div>
+              <div className="mt-1 text-xs text-slate-500">
+                {row.report_date} / {row.incident_type}
+              </div>
+            </div>
+            <StatusBadge status={row.status} />
+          </div>
+
+          <div className="mt-3 text-sm text-slate-700">
+            <div>작성자: {row.requested_name ?? "-"}</div>
+            <div>확인자: {row.checked_name ?? "-"}</div>
+          </div>
+
+          <div className="mt-3 whitespace-pre-wrap rounded-lg bg-slate-50 p-3 text-sm text-slate-700">
+            {row.content}
+          </div>
+
+          {row.action_taken && (
+            <div className="mt-2 rounded-lg bg-blue-50 p-3 text-sm text-blue-800">
+              조치: {row.action_taken}
+            </div>
+          )}
+
+          <div className="mt-3 flex justify-end">
+            <CheckButton row={row} canCheck={canCheck} onCheck={onCheck} />
+          </div>
+        </div>
+      ))}
     </div>
+  );
+}
+
+function CheckButton({
+  row,
+  canCheck,
+  onCheck,
+}: {
+  row: IncidentReport;
+  canCheck: boolean;
+  onCheck: (row: IncidentReport) => void;
+}) {
+  if (!canCheck || row.status === "확인완료") {
+    return <span className="text-xs text-slate-400">-</span>;
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => void onCheck(row)}
+      className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700"
+    >
+      확인
+    </button>
+  );
+}
+
+function Badge({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: number | string;
+  tone: "orange" | "blue";
+}) {
+  const toneClass =
+    tone === "orange"
+      ? "bg-orange-50 text-orange-700"
+      : "bg-blue-50 text-blue-700";
+
+  return (
+    <div className={`rounded-lg px-3 py-2 font-bold ${toneClass}`}>
+      {label}: {value}
+    </div>
+  );
+}
+
+function StatusBadge({ status }: { status: IncidentStatus }) {
+  const className =
+    status === "확인완료"
+      ? "bg-green-100 text-green-700"
+      : "bg-amber-100 text-amber-700";
+
+  return (
+    <span className={`rounded-full px-2 py-1 text-xs font-bold ${className}`}>
+      {status}
+    </span>
   );
 }
 
