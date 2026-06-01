@@ -33,7 +33,7 @@ export default function Topbar({
     <header className="flex min-h-16 items-center justify-between gap-3 border-b bg-white px-3 py-3 md:h-16 md:px-6 md:py-0">
       <div className="min-w-0">
         <h1 className="truncate text-base font-bold text-slate-900 md:text-xl">
-          신흥현대서비스 ??ERP
+          신흥현대서비스 ERP
         </h1>
         <p className="hidden text-xs text-slate-500 sm:block">
           Shinhung Hyundai Service Management System
