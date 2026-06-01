@@ -69,6 +69,7 @@ export const menuData: MenuItem[] = [
     children: [
       { id: "sales-insurance", title: "보험매출" },
       { id: "sales-general", title: "일반매출" },
+      { id: "sales-partner", title: "거래처매출" },
       { id: "sales-card", title: "카드매출" },
       { id: "sales-blue", title: "BLUE포인트" },
     ],
