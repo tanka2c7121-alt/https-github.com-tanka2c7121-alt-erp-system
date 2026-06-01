@@ -11,6 +11,7 @@ import {
   passwordRuleText,
 } from "../src/lib/passwordPolicy";
 import { supabase } from "../src/lib/supabase";
+import type { UserRole } from "../src/types/roles";
 
 type LoginUser = {
   id: string | number;
@@ -19,7 +20,7 @@ type LoginUser = {
   user_name: string;
   department?: string | null;
   approval_role?: string | null;
-  role: "ADMIN" | "STAFF";
+  role: UserRole;
   is_active: boolean;
   password?: string;
   phone_number?: string | null;

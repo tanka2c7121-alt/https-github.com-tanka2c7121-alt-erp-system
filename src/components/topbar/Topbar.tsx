@@ -1,5 +1,6 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import type { MenuItem } from "../../data/menuData";
+import { roleLabel } from "../../types/roles";
 
 export type NotificationItem = {
   id: string;
@@ -32,7 +33,7 @@ export default function Topbar({
     <header className="flex min-h-16 items-center justify-between gap-3 border-b bg-white px-3 py-3 md:h-16 md:px-6 md:py-0">
       <div className="min-w-0">
         <h1 className="truncate text-base font-bold text-slate-900 md:text-xl">
-          신흥현대서비스 ERP
+          ?좏씎?꾨??쒕퉬??ERP
         </h1>
         <p className="hidden text-xs text-slate-500 sm:block">
           Shinhung Hyundai Service Management System
@@ -41,7 +42,7 @@ export default function Topbar({
 
       <div className="flex shrink-0 items-center gap-2 md:gap-4">
         <div className="hidden text-sm text-slate-600 sm:block">
-          {user?.role === "ADMIN" ? "관리자 모드" : "직원 모드"}
+          {roleLabel(user?.role)} 모드
         </div>
 
         {notifications.length > 0 && (
@@ -51,7 +52,7 @@ export default function Topbar({
               onClick={() => setIsOpen((value) => !value)}
               className="relative rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 md:text-sm"
             >
-              알림
+              ?뚮┝
               {totalCount > 0 && (
                 <span className="absolute -right-2 -top-2 min-w-5 rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-bold text-white">
                   {totalCount}
@@ -61,11 +62,11 @@ export default function Topbar({
 
             {isOpen && (
               <div className="absolute right-0 top-11 z-50 w-72 rounded-xl border border-slate-200 bg-white p-3 text-sm shadow-xl">
-                <div className="mb-2 font-bold text-slate-900">승인 알림</div>
+                <div className="mb-2 font-bold text-slate-900">?뱀씤 ?뚮┝</div>
 
                 {activeNotifications.length === 0 ? (
                   <div className="rounded-lg bg-slate-50 p-4 text-center text-slate-500">
-                    새 알림이 없습니다.
+                    ???뚮┝???놁뒿?덈떎.
                   </div>
                 ) : (
                   <div className="space-y-2">
@@ -83,8 +84,7 @@ export default function Topbar({
                           {item.title}
                         </span>
                         <span className="rounded-full bg-red-100 px-2 py-1 text-xs font-bold text-red-700">
-                          {item.count}건
-                        </span>
+                          {item.count}嫄?                        </span>
                       </button>
                     ))}
                   </div>
@@ -99,7 +99,7 @@ export default function Topbar({
           onClick={onLogout}
           className="rounded-lg bg-slate-800 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-700 md:px-4 md:text-sm"
         >
-          로그아웃
+          濡쒓렇?꾩썐
         </button>
       </div>
     </header>

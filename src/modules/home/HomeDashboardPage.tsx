@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { MenuItem } from "../../data/menuData";
 import { localDateText } from "../../lib/date";
 import { supabase } from "../../lib/supabase";
+import type { UserRole } from "../../types/roles";
 
 type HomeDashboardPageProps = {
   isAdmin: boolean;
@@ -12,7 +13,7 @@ type HomeDashboardPageProps = {
     user_name: string;
     department?: string | null;
     approval_role?: string | null;
-    role: "ADMIN" | "STAFF";
+    role: UserRole;
   };
   userName?: string;
   onSelectMenu: (menu: MenuItem) => void;

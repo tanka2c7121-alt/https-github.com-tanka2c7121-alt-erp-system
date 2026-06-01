@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { MenuItem } from "../../data/menuData";
 import { addLocalDaysText, localDateText } from "../../lib/date";
 import { supabase } from "../../lib/supabase";
+import type { UserRole } from "../../types/roles";
 
 type LoginUser = {
   id: string | number;
@@ -11,7 +12,7 @@ type LoginUser = {
   user_name: string;
   department?: string | null;
   approval_role?: string | null;
-  role: "ADMIN" | "STAFF";
+  role: UserRole;
 };
 
 type AttendanceRequestPageProps = {

@@ -2,11 +2,13 @@
 
 import { useState } from "react";
 import { menuData, type MenuItem } from "../../data/menuData";
+import type { UserRole } from "../../types/roles";
 
 type SidebarProps = {
   selectedMenuId: string;
   onSelectMenu: (menu: MenuItem) => void;
   isAdmin: boolean;
+  userRole: UserRole;
   userDepartment?: string | null;
 };
 
@@ -14,6 +16,7 @@ export default function Sidebar({
   selectedMenuId,
   onSelectMenu,
   isAdmin,
+  userRole,
   userDepartment,
 }: SidebarProps) {
   const [openMenus, setOpenMenus] = useState<Record<string, boolean>>({
@@ -31,8 +34,6 @@ export default function Sidebar({
 
   const renderMenu = (items: MenuItem[], depth = 0) => {
     return items.map((item) => {
-      const userRole = isAdmin ? "ADMIN" : "STAFF";
-
       if (item.roles && !item.roles.includes(userRole)) {
         return null;
       }

@@ -4,13 +4,14 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { MenuItem } from "../../data/menuData";
 import { localDateText } from "../../lib/date";
 import { supabase } from "../../lib/supabase";
+import type { UserRole } from "../../types/roles";
 
 type LoginUser = {
   id: string | number;
   user_id: string;
   user_name: string;
   department?: string | null;
-  role: "ADMIN" | "STAFF";
+  role: UserRole;
 };
 
 type ExpenseRequestPageProps = {

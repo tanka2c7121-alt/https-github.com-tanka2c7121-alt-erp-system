@@ -1,7 +1,9 @@
+import type { UserRole } from "../types/roles";
+
 export type MenuItem = {
   id: string;
   title: string;
-  roles?: Array<"ADMIN" | "STAFF">;
+  roles?: UserRole[];
   departments?: string[];
 
   data?: {
@@ -39,6 +41,7 @@ export const menuData: MenuItem[] = [
       {
         id: "factory-settlement",
         title: "정산관리",
+        roles: ["ADMIN", "CHIEF"],
         children: [
           {
             id: "factory-settlement-repair",
@@ -64,8 +67,7 @@ export const menuData: MenuItem[] = [
   {
     id: "sales",
     title: "매출현황",
-    roles: ["ADMIN", "STAFF"],
-    departments: ["관리부"],
+    roles: ["ADMIN", "CHIEF"],
     children: [
       { id: "sales-insurance", title: "보험매출" },
       { id: "sales-general", title: "일반매출" },
@@ -95,8 +97,7 @@ export const menuData: MenuItem[] = [
       {
         id: "vehicle-catalog",
         title: "기초자료관리",
-        roles: ["ADMIN", "STAFF"],
-        departments: ["관리부"],
+        roles: ["ADMIN", "CHIEF"],
       },
     ],
   },

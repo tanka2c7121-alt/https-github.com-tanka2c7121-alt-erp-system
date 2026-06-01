@@ -2,12 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
+import type { UserRole } from "../../types/roles";
 
 type LoginUser = {
   user_id: string;
   user_name: string;
   department?: string | null;
-  role: "ADMIN" | "STAFF";
+  role: UserRole;
 };
 
 type VehicleCatalogRow = {
