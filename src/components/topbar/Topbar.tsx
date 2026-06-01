@@ -62,11 +62,11 @@ export default function Topbar({
 
             {isOpen && (
               <div className="absolute right-0 top-11 z-50 w-72 rounded-xl border border-slate-200 bg-white p-3 text-sm shadow-xl">
-                <div className="mb-2 font-bold text-slate-900">?뱀씤 ?뚮┝</div>
+                <div className="mb-2 font-bold text-slate-900">안내</div>
 
                 {activeNotifications.length === 0 ? (
                   <div className="rounded-lg bg-slate-50 p-4 text-center text-slate-500">
-                    로그아웃.
+                    항목없음.
                   </div>
                 ) : (
                   <div className="space-y-2">
