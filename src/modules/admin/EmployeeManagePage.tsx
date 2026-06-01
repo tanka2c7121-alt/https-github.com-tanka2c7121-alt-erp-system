@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { isValidErpPassword, passwordRuleText } from "../../lib/passwordPolicy";
 import { supabase } from "../../lib/supabase";
 
 type AppUser = {
@@ -69,6 +70,11 @@ export default function EmployeeManagePage() {
 
     if (!emailPattern.test(userId)) {
       alert("아이디는 이메일 형식으로 입력하세요.");
+      return;
+    }
+
+    if (!isValidErpPassword(password)) {
+      alert(passwordRuleText);
       return;
     }
 

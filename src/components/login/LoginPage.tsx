@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { supabaseAuthPassword } from "../../lib/authPassword";
+import { initialPasswordFromPhone } from "../../lib/passwordPolicy";
 import { supabase } from "../../lib/supabase";
 
 type LoginUser = {
@@ -123,7 +124,7 @@ export default function LoginPage({ onLogin }: Props) {
     if (authData.user) {
       const { data } = await loadUserProfile(authData.user.id, normalizedUserId);
       profile = data ?? profile;
-    } else if (authError) {
+    } else if (authError && !legacyUser.auth_uid) {
       const { data: signupData, error: signupError } =
         await supabase.auth.signUp({
           email: normalizedUserId,
@@ -152,6 +153,8 @@ export default function LoginPage({ onLogin }: Props) {
           auth_uid: signupData.user.id,
         } as LoginUser;
       }
+    } else if (authError && legacyUser.auth_uid) {
+      console.warn("Supabase Auth login failed:", authError.message);
     }
 
     setLoading(false);
@@ -173,7 +176,7 @@ export default function LoginPage({ onLogin }: Props) {
   async function handleSignup() {
     const normalizedSignupUserId = signupUserId.trim().toLowerCase();
     const phoneNumber = phoneDigits(signupPhone);
-    const initialPassword = phoneNumber.slice(-4);
+    const initialPassword = initialPasswordFromPhone(phoneNumber);
 
     if (!normalizedSignupUserId || !signupName || !signupDepartment || !phoneNumber) {
       alert("아이디, 이름, 부서, 전화번호를 모두 입력하세요.");

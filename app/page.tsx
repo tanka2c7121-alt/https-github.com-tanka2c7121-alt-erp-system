@@ -5,6 +5,11 @@ import { useMemo, useState } from "react";
 import MainLayout from "../src/components/layout/MainLayout";
 import LoginPage from "../src/components/login/LoginPage";
 import { supabaseAuthPassword } from "../src/lib/authPassword";
+import {
+  initialPasswordFromPhone,
+  isValidErpPassword,
+  passwordRuleText,
+} from "../src/lib/passwordPolicy";
 import { supabase } from "../src/lib/supabase";
 
 type LoginUser = {
@@ -35,7 +40,7 @@ export default function Home() {
       return false;
     }
 
-    const initialPassword = phoneDigits(user.phone_number).slice(-4);
+    const initialPassword = initialPasswordFromPhone(user.phone_number);
 
     return Boolean(initialPassword) && user.password === initialPassword;
   }, [user]);
@@ -76,7 +81,9 @@ function PasswordChangePage({
   const [saving, setSaving] = useState(false);
 
   async function handleChangePassword() {
-    if (newPassword.length < 4) {
+    if (!isValidErpPassword(newPassword)) {
+      alert(passwordRuleText);
+      return;
       alert("새 비밀번호는 4자리 이상 입력하세요.");
       return;
     }
@@ -86,7 +93,7 @@ function PasswordChangePage({
       return;
     }
 
-    if (newPassword === phoneDigits(user.phone_number).slice(-4)) {
+    if (newPassword === initialPasswordFromPhone(user.phone_number ?? "")) {
       alert("초기 비밀번호와 다른 비밀번호를 입력하세요.");
       return;
     }
