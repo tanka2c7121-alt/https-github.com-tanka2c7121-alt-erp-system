@@ -456,6 +456,7 @@ export default function HomeDashboardPage({
           </p>
         </div>
 
+        <div className="ml-auto flex flex-wrap justify-end gap-2">
         <button
           type="button"
           onClick={() => void loadDashboard()}
@@ -474,6 +475,7 @@ export default function HomeDashboardPage({
             공지관리
           </button>
         )}
+        </div>
       </div>
 
       <section className="grid grid-cols-1 gap-3 md:grid-cols-5">
