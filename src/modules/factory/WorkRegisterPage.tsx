@@ -31,6 +31,20 @@ type PendingWorkPhoto = {
   previewUrl: string;
 };
 
+type DirectoryPickerWindow = Window & {
+  showDirectoryPicker?: () => Promise<{
+    getFileHandle: (
+      name: string,
+      options: { create: boolean }
+    ) => Promise<{
+      createWritable: () => Promise<{
+        write: (data: Blob) => Promise<void>;
+        close: () => Promise<void>;
+      }>;
+    }>;
+  }>;
+};
+
 type TextDetectorResult = {
   rawValue?: string;
 };
@@ -865,6 +879,70 @@ function downloadSelectedPhotos() {
   });
 }
 
+const safeFileName = (name: string) =>
+  name.replace(/[\\/:*?"<>|]/g, "_").replace(/\s+/g, "_");
+
+function downloadPhotosWithBrowser(photos: WorkPhoto[]) {
+  photos.forEach((photo, index) => {
+    setTimeout(() => {
+      const link = document.createElement("a");
+      link.href = photo.url;
+      link.download = photo.name;
+      link.target = "_blank";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    }, index * 200);
+  });
+}
+
+async function downloadSelectedPhotosToFolder() {
+  if (selectedWorkPhotos.length === 0) {
+    alert("다운로드할 사진을 선택하세요.");
+    return;
+  }
+
+  const directoryPicker = (window as DirectoryPickerWindow).showDirectoryPicker;
+
+  if (!directoryPicker) {
+    alert("이 브라우저는 폴더 선택 저장을 지원하지 않습니다. 기본 다운로드로 저장합니다.");
+    downloadPhotosWithBrowser(selectedWorkPhotos);
+    return;
+  }
+
+  try {
+    const directoryHandle = await directoryPicker();
+
+    for (let index = 0; index < selectedWorkPhotos.length; index += 1) {
+      const photo = selectedWorkPhotos[index];
+      const response = await fetch(photo.url);
+
+      if (!response.ok) {
+        throw new Error(`${photo.name} 다운로드 실패`);
+      }
+
+      const blob = await response.blob();
+      const fileHandle = await directoryHandle.getFileHandle(
+        `${String(index + 1).padStart(2, "0")}_${safeFileName(photo.name)}`,
+        { create: true }
+      );
+      const writable = await fileHandle.createWritable();
+
+      await writable.write(blob);
+      await writable.close();
+    }
+
+    alert(`선택한 사진 ${selectedWorkPhotos.length}장을 저장했습니다.`);
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      return;
+    }
+
+    alert("폴더 저장에 실패해 기본 다운로드로 저장합니다.");
+    downloadPhotosWithBrowser(selectedWorkPhotos);
+  }
+}
+
 async function deleteSelectedPhotos() {
   if (selectedWorkPhotos.length === 0) {
     alert("삭제할 사진을 선택하세요.");
@@ -1533,7 +1611,9 @@ function handleClearWorkRow(index: number) {
                 </button>
                 <button
                   type="button"
-                  onClick={downloadSelectedPhotos}
+                  onClick={() => {
+                    void downloadSelectedPhotosToFolder();
+                  }}
                   className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700"
                 >
                   선택 다운로드
