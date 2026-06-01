@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import { supabaseAuthPassword } from "../../lib/authPassword";
 import { supabase } from "../../lib/supabase";
 
 type LoginUser = {
@@ -112,10 +113,11 @@ export default function LoginPage({ onLogin }: Props) {
     }
 
     let profile: LoginUser | null = legacyUser as LoginUser;
+    const authPassword = supabaseAuthPassword(password);
     const { data: authData, error: authError } =
       await supabase.auth.signInWithPassword({
         email: normalizedUserId,
-        password,
+        password: authPassword,
       });
 
     if (authData.user) {
@@ -125,12 +127,12 @@ export default function LoginPage({ onLogin }: Props) {
       const { data: signupData, error: signupError } =
         await supabase.auth.signUp({
           email: normalizedUserId,
-          password,
+          password: authPassword,
         });
 
       if (signupError?.message.toLowerCase().includes("registered")) {
         alert(
-          "ERP 기존 비밀번호로 로그인은 됩니다. 다만 Supabase 로그인 계정 비밀번호가 달라서, RLS 적용 전 Supabase Auth에서 이 계정 비밀번호를 ERP 비밀번호와 같게 재설정해야 합니다."
+            "ERP 기존 비밀번호로 로그인은 됩니다. 다만 Supabase 로그인 계정 비밀번호가 달라서, RLS 적용 전 Supabase Auth에서 이 계정 비밀번호를 다시 설정해야 합니다."
         );
       } else if (signupError) {
         alert(
@@ -204,7 +206,7 @@ export default function LoginPage({ onLogin }: Props) {
 
     const { data: signupData, error: signupError } = await supabase.auth.signUp({
       email: normalizedSignupUserId,
-      password: initialPassword,
+      password: supabaseAuthPassword(initialPassword),
       options: {
         data: {
           user_name: signupName,

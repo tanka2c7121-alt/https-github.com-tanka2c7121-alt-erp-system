@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 
 import MainLayout from "../src/components/layout/MainLayout";
 import LoginPage from "../src/components/login/LoginPage";
+import { supabaseAuthPassword } from "../src/lib/authPassword";
 import { supabase } from "../src/lib/supabase";
 
 type LoginUser = {
@@ -93,7 +94,7 @@ function PasswordChangePage({
     setSaving(true);
 
     const { error: authError } = await supabase.auth.updateUser({
-      password: newPassword,
+      password: supabaseAuthPassword(newPassword),
     });
 
     if (authError) {
