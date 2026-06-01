@@ -825,7 +825,7 @@ async function deleteSelectedPhotos() {
   setSelectedPhotoPaths([]);
 }
 
- function handleReset() {
+ function handleReset(nextWorkName = "") {
   setPhoneNumber("");
   setMileage("");
   setCarMaker("");
@@ -837,7 +837,7 @@ async function deleteSelectedPhotos() {
   setRentalCompany("");
   setRentalPhoneNumber("");
     
-  setWorkName("");
+  setWorkName(nextWorkName);
   setCarNumber("");
   setCarYear("");
   setVin("");
@@ -877,6 +877,7 @@ async function deleteSelectedPhotos() {
       work: "",
     }))
   );
+  setIsEditMode(false);
 }
 async function handlePrint() {
   try {
@@ -929,6 +930,7 @@ async function handleLoadWorkOrder(
     .single();
 
   if (orderError || !order) {
+    handleReset(targetWorkName);
     alert("해당 작명을 찾을 수 없습니다.");
     return;
   }
