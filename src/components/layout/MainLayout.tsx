@@ -338,6 +338,8 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
               />
             ) : selectedMenu.id === "sales-insurance" ? (
               <SalesRevenuePage kind="insurance" title="보험매출" />
+            ) : selectedMenu.id === "sales-general" ? (
+              <SalesRevenuePage kind="general" title="일반매출" />
             ) : selectedMenu.id === "sales-card" ? (
               <SalesRevenuePage kind="card" title="카드매출" />
             ) : selectedMenu.id === "documents" ||

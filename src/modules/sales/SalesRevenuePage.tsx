@@ -5,7 +5,7 @@ import { localDateText } from "../../lib/date";
 import { supabase } from "../../lib/supabase";
 
 type SalesRevenuePageProps = {
-  kind: "insurance" | "card";
+  kind: "insurance" | "card" | "general";
   title: string;
 };
 
@@ -165,10 +165,7 @@ export default function SalesRevenuePage({
       const work = workMap.get(workName);
       const insuranceCompany =
         work?.insurance_company ?? work?.other_insurance_company ?? "";
-      const isInsurance =
-        (paymentRow.payment_detail ?? "").includes("보험") ||
-        work?.category === "보험" ||
-        Boolean(insuranceCompany);
+      const isInsurance = isInsurancePayment(paymentRow, work, insuranceCompany);
 
       if (!isInsurance) return;
 
@@ -206,6 +203,63 @@ export default function SalesRevenuePage({
     });
 
     return Array.from(groupedRows.values());
+  }, [loadPaymentRows, loadWorkMap]);
+
+  const loadGeneralRows = useCallback(async () => {
+    const paymentRows = await loadPaymentRows();
+    const workNames = Array.from(
+      new Set(
+        paymentRows
+          .map((row) => row.work_name)
+          .filter((workName): workName is string => Boolean(workName))
+      )
+    );
+    const workMap = await loadWorkMap(workNames);
+
+    return paymentRows
+      .map((paymentRow) => {
+        const workName = paymentRow.work_name ?? "";
+        const work = workMap.get(workName);
+        const insuranceCompany =
+          work?.insurance_company ?? work?.other_insurance_company ?? "";
+        const paymentAmount = Number(paymentRow.payment_amount ?? 0);
+        const method = paymentRow.payment_method ?? "";
+        const detail = paymentRow.payment_detail ?? "";
+        const isCard = method.includes("카드");
+        const isBlue = [method, detail].join(" ").includes("BLUE");
+        const isInsurance = isInsurancePayment(
+          paymentRow,
+          work,
+          insuranceCompany
+        );
+        const isGeneral =
+          detail.includes("일반") ||
+          work?.category === "일반" ||
+          (!isCard && !isBlue && !isInsurance);
+
+        if (paymentAmount <= 0 || !isGeneral || isCard || isBlue || isInsurance) {
+          return null;
+        }
+
+        return {
+          id: String(paymentRow.id),
+          date: paymentRow.payment_date ?? "",
+          workName,
+          insuranceCompany,
+          saleType: work?.category ?? detail,
+          coverageType: work?.coverage_type ?? "",
+          carNumber: work?.car_number ?? "",
+          carModel: work?.car_model ?? "",
+          paymentInfo: method,
+          paymentAmount,
+          supplyAmount: calculateSupplyAmount(paymentAmount),
+          vatAmount: calculateVatAmount(paymentAmount),
+          approvalNumber: paymentRow.approval_number ?? "",
+          merchantNumber: paymentRow.merchant_number ?? "",
+          cardNumber: paymentRow.card_number ?? "",
+        } satisfies RevenueRow;
+      })
+      .filter((row): row is RevenueRow => Boolean(row));
   }, [loadPaymentRows, loadWorkMap]);
 
   const loadCardRows = useCallback(async () => {
@@ -253,14 +307,18 @@ export default function SalesRevenuePage({
 
     try {
       const nextRows =
-        kind === "insurance" ? await loadInsuranceRows() : await loadCardRows();
+        kind === "insurance"
+          ? await loadInsuranceRows()
+          : kind === "general"
+            ? await loadGeneralRows()
+            : await loadCardRows();
       setRows(nextRows);
     } catch (error) {
       alert(error instanceof Error ? error.message : `${title} 조회 실패`);
     } finally {
       setIsLoading(false);
     }
-  }, [kind, loadCardRows, loadInsuranceRows, title]);
+  }, [kind, loadCardRows, loadGeneralRows, loadInsuranceRows, title]);
 
   useEffect(() => {
     void loadRows();
@@ -411,7 +469,7 @@ export default function SalesRevenuePage({
           <input
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm lg:w-80"
             placeholder={
-              kind === "card"
+            kind === "card"
                 ? "작명, 차량번호, 승인번호, 카드번호 검색"
                 : "작명, 차량번호, 보험사 검색"
             }
@@ -484,7 +542,7 @@ function RevenueTable({
   onSort,
   printMode = false,
 }: {
-  kind: "insurance" | "card";
+  kind: "insurance" | "card" | "general";
   rows: RevenueRow[];
   isLoading: boolean;
   totalPayment: number;
@@ -657,5 +715,17 @@ function SortableHeader({
         <span className="text-[10px]">{mark}</span>
       </button>
     </th>
+  );
+}
+
+function isInsurancePayment(
+  paymentRow: SettlementPaymentRow,
+  work: WorkOrderRow | undefined,
+  insuranceCompany: string
+) {
+  return (
+    (paymentRow.payment_detail ?? "").includes("보험") ||
+    work?.category === "보험" ||
+    Boolean(insuranceCompany)
   );
 }
