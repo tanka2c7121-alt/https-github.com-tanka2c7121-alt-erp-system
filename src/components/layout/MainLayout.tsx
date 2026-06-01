@@ -12,6 +12,7 @@ import WorkPrintPage from "../../modules/factory/WorkPrintPage";
 import FactoryDashboardPage from "../../modules/factory/FactoryDashboardPage";
 import InboundStatusPage from "../../modules/factory/InboundstatusPage";
 import OutboundStatusPage from "../../modules/factory/OutboundStatusPage";
+import ReleaseListPage from "../../modules/factory/ReleaseListPage";
 import FactorySettlementPage from "../../modules/factory/FactorySettlementPage";
 import SettlementRegisterPage from "../../modules/factory/SettlementRegisterPage";
 import DailyCashPage from "../../modules/factory/DailyCashPage";
@@ -321,6 +322,8 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
               <DailyCashPage onSelectMenu={handleSelectMenu} />
             ) : selectedMenu.id === "factory-inbound" ? (
               <InboundStatusPage onSelectMenu={handleSelectMenu} />
+            ) : selectedMenu.id === "factory-release-list" ? (
+              <ReleaseListPage onSelectMenu={handleSelectMenu} />
             ) : selectedMenu.id === "factory-outbound" ? (
               <OutboundStatusPage onSelectMenu={handleSelectMenu} />
             ) : selectedMenu.id === "factory-work-register" ? (

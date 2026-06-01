@@ -31,6 +31,7 @@ export const menuData: MenuItem[] = [
         id: "factory-inbound",
         title: "입고현황",
         children: [
+          { id: "factory-release-list", title: "출고리스트" },
           { id: "factory-work-register", title: "작업등록" },
         ],
       },
@@ -67,7 +68,7 @@ export const menuData: MenuItem[] = [
       { id: "sales-insurance", title: "보험매출" },
       { id: "sales-general", title: "일반매출" },
       { id: "sales-card", title: "카드매입" },
-      { id: "sales-blue", title: "BLUE포인트" },
+      { id: "sales-blue", title: "BLUE사인" },
     ],
   },
   {
