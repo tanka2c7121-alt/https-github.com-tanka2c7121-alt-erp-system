@@ -99,8 +99,10 @@ export default function HomeDashboardPage({
     PendingAttendanceRequest[]
   >([]);
   const [homeNotice, setHomeNotice] = useState<HomeNotice | null>(null);
+  const [noticeList, setNoticeList] = useState<HomeNotice[]>([]);
   const [noticePopupOpen, setNoticePopupOpen] = useState(false);
   const [noticeEditorOpen, setNoticeEditorOpen] = useState(false);
+  const [editingNoticeId, setEditingNoticeId] = useState<number | null>(null);
   const [noticeTitle, setNoticeTitle] = useState("");
   const [noticeContent, setNoticeContent] = useState("");
   const [noticeSaving, setNoticeSaving] = useState(false);
@@ -244,6 +246,42 @@ export default function HomeDashboardPage({
     });
   };
 
+  const loadNoticeList = async () => {
+    if (!isAdmin) return;
+
+    const { data, error } = await supabase
+      .from("home_notices")
+      .select("*")
+      .order("id", { ascending: false });
+
+    if (error) {
+      alert("공지 목록 조회 실패: " + error.message);
+      return;
+    }
+
+    setNoticeList((data ?? []) as HomeNotice[]);
+  };
+
+  const openNoticeManager = async () => {
+    setEditingNoticeId(homeNotice?.id ?? null);
+    setNoticeTitle(homeNotice?.title ?? "");
+    setNoticeContent(homeNotice?.content ?? "");
+    await loadNoticeList();
+    setNoticeEditorOpen(true);
+  };
+
+  const startNewNotice = () => {
+    setEditingNoticeId(null);
+    setNoticeTitle("");
+    setNoticeContent("");
+  };
+
+  const editNotice = (notice: HomeNotice) => {
+    setEditingNoticeId(notice.id);
+    setNoticeTitle(notice.title);
+    setNoticeContent(notice.content);
+  };
+
   const saveNotice = async () => {
     const title = noticeTitle.trim();
     const content = noticeContent.trim();
@@ -263,11 +301,11 @@ export default function HomeDashboardPage({
       created_name: user?.user_name ?? "",
     };
 
-    const { data, error } = homeNotice
+    const { data, error } = editingNoticeId
       ? await supabase
           .from("home_notices")
           .update(payload)
-          .eq("id", homeNotice.id)
+          .eq("id", editingNoticeId)
           .select("*")
           .single()
       : await supabase
@@ -284,6 +322,8 @@ export default function HomeDashboardPage({
     }
 
     setHomeNotice(data as HomeNotice);
+    setEditingNoticeId((data as HomeNotice).id);
+    await loadNoticeList();
     setNoticeEditorOpen(false);
     setNoticePopupOpen(true);
   };
@@ -315,6 +355,53 @@ export default function HomeDashboardPage({
     setNoticeEditorOpen(false);
   };
 
+  const setNoticeActive = async (notice: HomeNotice, isActive: boolean) => {
+    const { error } = await supabase
+      .from("home_notices")
+      .update({ is_active: isActive })
+      .eq("id", notice.id);
+
+    if (error) {
+      alert("공지 상태 변경 실패: " + error.message);
+      return;
+    }
+
+    if (homeNotice?.id === notice.id && !isActive) {
+      setHomeNotice(null);
+      setNoticePopupOpen(false);
+    }
+
+    if (isActive) {
+      setHomeNotice({ ...notice, is_active: true });
+    }
+
+    await loadNoticeList();
+  };
+
+  const deleteNotice = async (notice: HomeNotice) => {
+    if (!confirm(`공지 "${notice.title}"을 삭제할까요?`)) {
+      return;
+    }
+
+    const { error } = await supabase.from("home_notices").delete().eq("id", notice.id);
+
+    if (error) {
+      alert("공지 삭제 실패: " + error.message);
+      return;
+    }
+
+    if (homeNotice?.id === notice.id) {
+      setHomeNotice(null);
+      setNoticePopupOpen(false);
+    }
+
+    if (editingNoticeId === notice.id) {
+      startNewNotice();
+    }
+
+    await loadNoticeList();
+  };
+
   return (
     <div className="space-y-5 text-slate-900">
       {noticePopupOpen && homeNotice && (
@@ -325,11 +412,21 @@ export default function HomeDashboardPage({
       )}
 
       {noticeEditorOpen && isAdmin && (
-        <NoticeEditor
+        <NoticeManager
+          notices={noticeList}
+          editingNoticeId={editingNoticeId}
           title={noticeTitle}
           content={noticeContent}
           saving={noticeSaving}
-          hasNotice={Boolean(homeNotice)}
+          hasNotice={Boolean(editingNoticeId)}
+          onNew={startNewNotice}
+          onEdit={editNotice}
+          onToggleActive={(notice, isActive) => {
+            void setNoticeActive(notice, isActive);
+          }}
+          onDelete={(notice) => {
+            void deleteNotice(notice);
+          }}
           onTitleChange={setNoticeTitle}
           onContentChange={setNoticeContent}
           onSave={() => {
@@ -360,7 +457,9 @@ export default function HomeDashboardPage({
         {isAdmin && (
           <button
             type="button"
-            onClick={() => setNoticeEditorOpen(true)}
+          onClick={() => {
+            void openNoticeManager();
+          }}
             className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
           >
             공지관리
@@ -482,6 +581,170 @@ function NoticePopup({
         >
           확인
         </button>
+      </div>
+    </div>
+  );
+}
+
+function NoticeManager({
+  notices,
+  editingNoticeId,
+  title,
+  content,
+  saving,
+  hasNotice,
+  onNew,
+  onEdit,
+  onToggleActive,
+  onDelete,
+  onTitleChange,
+  onContentChange,
+  onSave,
+  onDisable,
+  onClose,
+}: {
+  notices: HomeNotice[];
+  editingNoticeId: number | null;
+  title: string;
+  content: string;
+  saving: boolean;
+  hasNotice: boolean;
+  onNew: () => void;
+  onEdit: (notice: HomeNotice) => void;
+  onToggleActive: (notice: HomeNotice, isActive: boolean) => void;
+  onDelete: (notice: HomeNotice) => void;
+  onTitleChange: (value: string) => void;
+  onContentChange: (value: string) => void;
+  onSave: () => void;
+  onDisable: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4">
+      <div className="grid max-h-[90vh] w-full max-w-5xl grid-cols-1 gap-4 overflow-hidden rounded-2xl bg-white p-5 shadow-2xl md:grid-cols-[360px_1fr]">
+        <section className="min-h-0 rounded-xl border border-slate-200">
+          <div className="flex items-center justify-between border-b border-slate-200 p-3">
+            <h3 className="font-bold text-slate-900">공지 목록</h3>
+            <button
+              type="button"
+              onClick={onNew}
+              className="rounded-lg bg-blue-600 px-3 py-1 text-xs font-semibold text-white hover:bg-blue-700"
+            >
+              새 공지
+            </button>
+          </div>
+
+          <div className="max-h-[68vh] overflow-y-auto p-2">
+            {notices.length === 0 ? (
+              <div className="rounded-lg bg-slate-50 p-6 text-center text-sm text-slate-500">
+                등록된 공지가 없습니다.
+              </div>
+            ) : (
+              notices.map((notice) => (
+                <div
+                  key={notice.id}
+                  className={[
+                    "mb-2 rounded-lg border p-3",
+                    editingNoticeId === notice.id
+                      ? "border-blue-300 bg-blue-50"
+                      : "border-slate-200 bg-white",
+                  ].join(" ")}
+                >
+                  <button
+                    type="button"
+                    onClick={() => onEdit(notice)}
+                    className="block w-full text-left"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="truncate font-semibold text-slate-900">
+                        {notice.title}
+                      </p>
+                      <span
+                        className={
+                          notice.is_active
+                            ? "shrink-0 rounded-full bg-green-100 px-2 py-1 text-[11px] font-bold text-green-700"
+                            : "shrink-0 rounded-full bg-slate-100 px-2 py-1 text-[11px] font-bold text-slate-500"
+                        }
+                      >
+                        {notice.is_active ? "활성" : "보관"}
+                      </span>
+                    </div>
+                    <p className="mt-1 line-clamp-2 text-xs text-slate-500">
+                      {notice.content}
+                    </p>
+                  </button>
+
+                  <div className="mt-3 flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => onToggleActive(notice, !notice.is_active)}
+                      className="rounded border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+                    >
+                      {notice.is_active ? "내리기" : "띄우기"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onDelete(notice)}
+                      className="rounded border border-red-300 px-2 py-1 text-xs font-semibold text-red-600 hover:bg-red-50"
+                    >
+                      삭제
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </section>
+
+        <section className="min-h-0">
+          <div className="mb-4 flex items-center justify-between">
+            <h3 className="text-xl font-bold text-slate-900">
+              {hasNotice ? "공지 수정" : "새 공지"}
+            </h3>
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-lg border border-slate-300 px-3 py-1 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+            >
+              닫기
+            </button>
+          </div>
+
+          <div className="space-y-3">
+            <input
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              placeholder="공지 제목"
+              value={title}
+              onChange={(event) => onTitleChange(event.target.value)}
+            />
+            <textarea
+              className="min-h-[260px] w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              placeholder="공지 내용"
+              value={content}
+              onChange={(event) => onContentChange(event.target.value)}
+            />
+          </div>
+
+          <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-end">
+            {hasNotice && (
+              <button
+                type="button"
+                onClick={onDisable}
+                className="rounded-lg border border-red-300 px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50"
+              >
+                현재 공지 내리기
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onSave}
+              disabled={saving}
+              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:bg-slate-400"
+            >
+              {saving ? "저장 중..." : "공지 저장"}
+            </button>
+          </div>
+        </section>
       </div>
     </div>
   );
