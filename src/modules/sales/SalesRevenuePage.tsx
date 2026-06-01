@@ -9,6 +9,16 @@ type SalesRevenuePageProps = {
   title: string;
 };
 
+type SettlementPaymentRow = {
+  id: number;
+  work_name: string | null;
+  payment_type: string | null;
+  payment_detail: string | null;
+  payment_amount: number | null;
+  payment_date: string | null;
+  payment_method: string | null;
+};
+
 type DailyCashRow = {
   id: number;
   date: string;
@@ -29,32 +39,32 @@ type WorkOrderRow = {
   insurance_company: string | null;
   other_insurance_company: string | null;
   coverage_type: string | null;
-  manager_name: string | null;
-  own_manager_name: string | null;
-  other_manager_name: string | null;
 };
 
 type RevenueRow = {
-  id: number;
+  id: string;
   date: string;
   workName: string;
+  insuranceCompany: string;
+  saleType: string;
+  coverageType: string;
   carNumber: string;
   carModel: string;
-  insuranceCompany: string;
-  coverageType: string;
-  managerName: string;
-  account: string;
-  category: string;
+  paymentInfo: string;
+  paymentAmount: number;
+  supplyAmount: number;
+  vatAmount: number;
   content: string;
-  income: number;
-  memo: string;
 };
 
 const currentDateText = localDateText();
 const currentYear = currentDateText.slice(0, 4);
 const currentMonth = currentDateText.slice(5, 7);
 
+const bankNames = ["국민은행", "부산은행"];
 const formatWon = (amount: number) => amount.toLocaleString();
+const includesText = (value: string | null | undefined, keyword: string) =>
+  (value ?? "").includes(keyword);
 
 export default function SalesRevenuePage({
   kind,
@@ -66,9 +76,7 @@ export default function SalesRevenuePage({
   const [searchText, setSearchText] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  const loadRows = useCallback(async () => {
-    setIsLoading(true);
-
+  const dateRange = useMemo(() => {
     const startDate = selectedMonth
       ? `${selectedYear}-${selectedMonth}-01`
       : `${selectedYear}-01-01`;
@@ -78,7 +86,121 @@ export default function SalesRevenuePage({
         ).padStart(2, "0")}`
       : `${selectedYear}-12-31`;
 
-    const { data: cashData, error: cashError } = await supabase
+    return { startDate, endDate };
+  }, [selectedMonth, selectedYear]);
+
+  const loadWorkMap = useCallback(async (workNames: string[]) => {
+    if (workNames.length === 0) return new Map<string, WorkOrderRow>();
+
+    const { data, error } = await supabase
+      .from("work_orders")
+      .select(
+        "work_name,car_number,car_model,category,insurance_company,other_insurance_company,coverage_type"
+      )
+      .in("work_name", workNames);
+
+    if (error) {
+      throw new Error(`차량정보 조회 실패: ${error.message}`);
+    }
+
+    return new Map(
+      ((data ?? []) as WorkOrderRow[]).map((work) => [work.work_name, work])
+    );
+  }, []);
+
+  const loadInsuranceRows = useCallback(async () => {
+    const { startDate, endDate } = dateRange;
+    const { data, error } = await supabase
+      .from("settlement_payments")
+      .select(
+        "id,work_name,payment_type,payment_detail,payment_amount,payment_date,payment_method"
+      )
+      .not("payment_date", "is", null)
+      .gte("payment_date", startDate)
+      .lte("payment_date", endDate)
+      .order("payment_date", { ascending: false })
+      .order("id", { ascending: false });
+
+    if (error) {
+      throw new Error(`보험매출 조회 실패: ${error.message}`);
+    }
+
+    const paymentRows = ((data ?? []) as SettlementPaymentRow[]).filter(
+      (row) => {
+        const amount = Number(row.payment_amount ?? 0);
+        const method = row.payment_method ?? "";
+        const isBank = bankNames.some((bankName) => method.includes(bankName));
+
+        return amount > 0 && isBank;
+      }
+    );
+
+    const workNames = Array.from(
+      new Set(
+        paymentRows
+          .map((row) => row.work_name)
+          .filter((workName): workName is string => Boolean(workName))
+      )
+    );
+    const workMap = await loadWorkMap(workNames);
+    const groupedRows = new Map<string, RevenueRow>();
+
+    paymentRows.forEach((paymentRow) => {
+      const workName = paymentRow.work_name ?? "";
+      const work = workMap.get(workName);
+      const insuranceCompany =
+        work?.insurance_company ?? work?.other_insurance_company ?? "";
+      const isInsurance =
+        includesText(paymentRow.payment_detail, "보험") ||
+        work?.category === "보험" ||
+        Boolean(insuranceCompany);
+
+      if (!isInsurance) return;
+
+      const paymentAmount = Number(paymentRow.payment_amount ?? 0);
+      const paymentType = paymentRow.payment_type ?? "";
+      const key = [
+        paymentRow.payment_date ?? "",
+        workName,
+        paymentRow.payment_method ?? "",
+      ].join("__");
+      const current =
+        groupedRows.get(key) ??
+        ({
+          id: key,
+          date: paymentRow.payment_date ?? "",
+          workName,
+          insuranceCompany,
+          saleType: work?.category ?? paymentRow.payment_detail ?? "",
+          coverageType: work?.coverage_type ?? "",
+          carNumber: work?.car_number ?? "",
+          carModel: work?.car_model ?? "",
+          paymentInfo: paymentRow.payment_method ?? "",
+          paymentAmount: 0,
+          supplyAmount: 0,
+          vatAmount: 0,
+          content: paymentRow.payment_detail ?? "",
+        } satisfies RevenueRow);
+
+      current.paymentAmount += paymentAmount;
+
+      if (paymentType.includes("부가세")) {
+        current.vatAmount += paymentAmount;
+      } else {
+        current.supplyAmount += paymentAmount;
+      }
+
+      groupedRows.set(key, current);
+    });
+
+    return Array.from(groupedRows.values()).sort((a, b) =>
+      b.date.localeCompare(a.date)
+    );
+  }, [dateRange, loadWorkMap]);
+
+  const loadCardRows = useCallback(async () => {
+    const { startDate, endDate } = dateRange;
+    const { data, error } = await supabase
       .from("daily_cash")
       .select(
         "id,date,account,type,category,content,income,memo,source_work_name"
@@ -89,16 +211,14 @@ export default function SalesRevenuePage({
       .order("date", { ascending: false })
       .order("id", { ascending: false });
 
-    if (cashError) {
-      setIsLoading(false);
-      alert(`${title} 조회 실패: ${cashError.message}`);
-      return;
+    if (error) {
+      throw new Error(`카드매출 조회 실패: ${error.message}`);
     }
 
-    const cashRows = ((cashData ?? []) as DailyCashRow[]).filter(
-      (row) => Number(row.income ?? 0) > 0
-    );
-
+    const cashRows = ((data ?? []) as DailyCashRow[]).filter((row) => {
+      const text = [row.account, row.category, row.content].join(" ");
+      return Number(row.income ?? 0) > 0 && text.includes("카드");
+    });
     const workNames = Array.from(
       new Set(
         cashRows
@@ -106,82 +226,45 @@ export default function SalesRevenuePage({
           .filter((workName): workName is string => Boolean(workName))
       )
     );
+    const workMap = await loadWorkMap(workNames);
 
-    let workMap = new Map<string, WorkOrderRow>();
+    return cashRows.map((row) => {
+      const workName = row.source_work_name ?? "";
+      const work = workMap.get(workName);
+      const paymentAmount = Number(row.income ?? 0);
 
-    if (workNames.length > 0) {
-      const { data: workData, error: workError } = await supabase
-        .from("work_orders")
-        .select(
-          "work_name,car_number,car_model,category,insurance_company,other_insurance_company,coverage_type,manager_name,own_manager_name,other_manager_name"
-        )
-        .in("work_name", workNames);
+      return {
+        id: String(row.id),
+        date: row.date ?? "",
+        workName,
+        insuranceCompany:
+          work?.insurance_company ?? work?.other_insurance_company ?? "",
+        saleType: row.category ?? "",
+        coverageType: work?.coverage_type ?? "",
+        carNumber: work?.car_number ?? "",
+        carModel: work?.car_model ?? "",
+        paymentInfo: row.account ?? "",
+        paymentAmount,
+        supplyAmount: paymentAmount,
+        vatAmount: 0,
+        content: row.content ?? "",
+      };
+    });
+  }, [dateRange, loadWorkMap]);
 
-      if (workError) {
-        setIsLoading(false);
-        alert(`차량정보 조회 실패: ${workError.message}`);
-        return;
-      }
+  const loadRows = useCallback(async () => {
+    setIsLoading(true);
 
-      workMap = new Map(
-        ((workData ?? []) as WorkOrderRow[]).map((work) => [
-          work.work_name,
-          work,
-        ])
-      );
+    try {
+      const nextRows =
+        kind === "insurance" ? await loadInsuranceRows() : await loadCardRows();
+      setRows(nextRows);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : `${title} 조회 실패`);
+    } finally {
+      setIsLoading(false);
     }
-
-    const nextRows = cashRows
-      .map((cashRow) => {
-        const work = cashRow.source_work_name
-          ? workMap.get(cashRow.source_work_name)
-          : undefined;
-        const text = [
-          cashRow.account,
-          cashRow.category,
-          cashRow.content,
-          work?.category,
-          work?.insurance_company,
-          work?.other_insurance_company,
-        ]
-          .join(" ")
-          .toLowerCase();
-        const isCardSale = text.includes("카드");
-        const isInsuranceSale =
-          !isCardSale &&
-          (text.includes("보험") ||
-            work?.category === "보험" ||
-            Boolean(work?.insurance_company || work?.other_insurance_company));
-
-        if (kind === "card" && !isCardSale) return null;
-        if (kind === "insurance" && !isInsuranceSale) return null;
-
-        return {
-          id: cashRow.id,
-          date: cashRow.date ?? "",
-          workName: cashRow.source_work_name ?? "",
-          carNumber: work?.car_number ?? "",
-          carModel: work?.car_model ?? "",
-          insuranceCompany:
-            work?.insurance_company ?? work?.other_insurance_company ?? "",
-          coverageType: work?.coverage_type ?? "",
-          managerName:
-            work?.manager_name ??
-            work?.own_manager_name ??
-            work?.other_manager_name ??
-            "",
-          account: cashRow.account ?? "",
-          category: cashRow.category ?? "",
-          content: cashRow.content ?? "",
-          income: Number(cashRow.income ?? 0),
-          memo: cashRow.memo ?? "",
-        };
-      })
-      .filter((row): row is RevenueRow => Boolean(row));
-
-    setRows(nextRows);
-    setIsLoading(false);
-  }, [kind, selectedMonth, selectedYear, title]);
+  }, [kind, loadCardRows, loadInsuranceRows, title]);
 
   useEffect(() => {
     void loadRows();
@@ -196,15 +279,13 @@ export default function SalesRevenuePage({
       [
         row.date,
         row.workName,
+        row.insuranceCompany,
+        row.saleType,
+        row.coverageType,
         row.carNumber,
         row.carModel,
-        row.insuranceCompany,
-        row.coverageType,
-        row.managerName,
-        row.account,
-        row.category,
+        row.paymentInfo,
         row.content,
-        row.memo,
       ]
         .join(" ")
         .toLowerCase()
@@ -212,7 +293,15 @@ export default function SalesRevenuePage({
     );
   }, [rows, searchText]);
 
-  const totalAmount = filteredRows.reduce((sum, row) => sum + row.income, 0);
+  const totalPayment = filteredRows.reduce(
+    (sum, row) => sum + row.paymentAmount,
+    0
+  );
+  const totalSupply = filteredRows.reduce(
+    (sum, row) => sum + row.supplyAmount,
+    0
+  );
+  const totalVat = filteredRows.reduce((sum, row) => sum + row.vatAmount, 0);
 
   const yearOptions = useMemo(() => {
     const baseYear = Number(currentYear);
@@ -240,24 +329,12 @@ export default function SalesRevenuePage({
       </div>
 
       <div className="no-print grid grid-cols-1 gap-3 md:grid-cols-3">
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <p className="text-sm font-semibold text-slate-600">총 건수</p>
-          <p className="mt-2 text-2xl font-bold text-slate-900">
-            {filteredRows.length.toLocaleString()}건
-          </p>
-        </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <p className="text-sm font-semibold text-slate-600">매출 합계</p>
-          <p className="mt-2 text-2xl font-bold text-blue-700">
-            {formatWon(totalAmount)}원
-          </p>
-        </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <p className="text-sm font-semibold text-slate-600">조회 기준</p>
-          <p className="mt-2 text-lg font-bold text-slate-900">
-            {selectedYear}년 {selectedMonth ? `${Number(selectedMonth)}월` : "전체"}
-          </p>
-        </div>
+        <SummaryCard label="총 건수" value={`${filteredRows.length.toLocaleString()}건`} />
+        <SummaryCard label="결제금액 합계" value={`${formatWon(totalPayment)}원`} />
+        <SummaryCard
+          label="공급가 / 부가세"
+          value={`${formatWon(totalSupply)}원 / ${formatWon(totalVat)}원`}
+        />
       </div>
 
       <div className="no-print rounded-xl border border-slate-200 bg-white p-3 md:p-4">
@@ -303,72 +380,19 @@ export default function SalesRevenuePage({
 
           <input
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm lg:w-80"
-            placeholder="작명, 차량번호, 보험사, 내용 검색"
+            placeholder="작명, 차량번호, 보험사 검색"
             value={searchText}
             onChange={(event) => setSearchText(event.target.value)}
           />
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="min-w-[980px] w-full border-collapse text-sm">
-            <thead className="bg-slate-100 text-slate-700">
-              <tr>
-                <th className="border px-2 py-2">입금일</th>
-                <th className="border px-2 py-2">작명</th>
-                <th className="border px-2 py-2">차량번호</th>
-                <th className="border px-2 py-2">차량명</th>
-                <th className="border px-2 py-2">
-                  {kind === "card" ? "보험사/거래처" : "보험사"}
-                </th>
-                <th className="border px-2 py-2">담보</th>
-                <th className="border px-2 py-2">담당자</th>
-                <th className="border px-2 py-2">입금구분</th>
-                <th className="border px-2 py-2 text-right">입금액</th>
-                <th className="border px-2 py-2">내용</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredRows.map((row) => (
-                <tr key={row.id} className="hover:bg-slate-50">
-                  <td className="border px-2 py-2 text-center">{row.date}</td>
-                  <td className="border px-2 py-2 font-semibold">{row.workName}</td>
-                  <td className="border px-2 py-2">{row.carNumber}</td>
-                  <td className="border px-2 py-2">{row.carModel}</td>
-                  <td className="border px-2 py-2">{row.insuranceCompany}</td>
-                  <td className="border px-2 py-2">{row.coverageType}</td>
-                  <td className="border px-2 py-2">{row.managerName}</td>
-                  <td className="border px-2 py-2">{row.account || row.category}</td>
-                  <td className="border px-2 py-2 text-right font-semibold">
-                    {formatWon(row.income)}
-                  </td>
-                  <td className="border px-2 py-2">{row.content}</td>
-                </tr>
-              ))}
-
-              {filteredRows.length === 0 && (
-                <tr>
-                  <td
-                    className="border px-3 py-8 text-center text-slate-500"
-                    colSpan={10}
-                  >
-                    {isLoading ? "조회 중입니다." : "조회된 내역이 없습니다."}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-            <tfoot>
-              <tr className="bg-blue-50 font-bold text-blue-900">
-                <td className="border px-2 py-2 text-right" colSpan={8}>
-                  합계
-                </td>
-                <td className="border px-2 py-2 text-right">
-                  {formatWon(totalAmount)}
-                </td>
-                <td className="border px-2 py-2" />
-              </tr>
-            </tfoot>
-          </table>
-        </div>
+        <RevenueTable
+          rows={filteredRows}
+          isLoading={isLoading}
+          totalPayment={totalPayment}
+          totalSupply={totalSupply}
+          totalVat={totalVat}
+        />
       </div>
 
       <section className="print-only mx-auto bg-white text-black">
@@ -383,45 +407,123 @@ export default function SalesRevenuePage({
 
           <div className="mb-3 flex justify-between text-sm font-semibold">
             <span>총 {filteredRows.length.toLocaleString()}건</span>
-            <span>합계 {formatWon(totalAmount)}원</span>
+            <span>결제금액 {formatWon(totalPayment)}원</span>
           </div>
 
-          <table className="w-full border-collapse text-[10px]">
-            <thead>
-              <tr className="bg-slate-100">
-                <th className="border border-slate-400 px-1 py-1">입금일</th>
-                <th className="border border-slate-400 px-1 py-1">작명</th>
-                <th className="border border-slate-400 px-1 py-1">차량번호</th>
-                <th className="border border-slate-400 px-1 py-1">차량명</th>
-                <th className="border border-slate-400 px-1 py-1">보험사</th>
-                <th className="border border-slate-400 px-1 py-1">담당자</th>
-                <th className="border border-slate-400 px-1 py-1">구분</th>
-                <th className="border border-slate-400 px-1 py-1">입금액</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredRows.map((row) => (
-                <tr key={`print-${row.id}`}>
-                  <td className="border border-slate-400 px-1 py-1">{row.date}</td>
-                  <td className="border border-slate-400 px-1 py-1">{row.workName}</td>
-                  <td className="border border-slate-400 px-1 py-1">{row.carNumber}</td>
-                  <td className="border border-slate-400 px-1 py-1">{row.carModel}</td>
-                  <td className="border border-slate-400 px-1 py-1">
-                    {row.insuranceCompany}
-                  </td>
-                  <td className="border border-slate-400 px-1 py-1">{row.managerName}</td>
-                  <td className="border border-slate-400 px-1 py-1">
-                    {row.account || row.category}
-                  </td>
-                  <td className="border border-slate-400 px-1 py-1 text-right">
-                    {formatWon(row.income)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <RevenueTable
+            rows={filteredRows}
+            isLoading={false}
+            totalPayment={totalPayment}
+            totalSupply={totalSupply}
+            totalVat={totalVat}
+            printMode
+          />
         </div>
       </section>
+    </div>
+  );
+}
+
+function SummaryCard({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-4">
+      <p className="text-sm font-semibold text-slate-600">{label}</p>
+      <p className="mt-2 text-xl font-bold text-blue-700">{value}</p>
+    </div>
+  );
+}
+
+function RevenueTable({
+  rows,
+  isLoading,
+  totalPayment,
+  totalSupply,
+  totalVat,
+  printMode = false,
+}: {
+  rows: RevenueRow[];
+  isLoading: boolean;
+  totalPayment: number;
+  totalSupply: number;
+  totalVat: number;
+  printMode?: boolean;
+}) {
+  const tableClassName = printMode
+    ? "w-full border-collapse text-[9px]"
+    : "min-w-[1120px] w-full border-collapse text-sm";
+  const cellClassName = printMode
+    ? "border border-slate-400 px-1 py-1"
+    : "border px-2 py-2";
+
+  return (
+    <div className={printMode ? "" : "overflow-x-auto"}>
+      <table className={tableClassName}>
+        <thead className="bg-slate-100 text-slate-700">
+          <tr>
+            <th className={cellClassName}>입금일</th>
+            <th className={cellClassName}>작명</th>
+            <th className={cellClassName}>보험사</th>
+            <th className={cellClassName}>구분</th>
+            <th className={cellClassName}>담보</th>
+            <th className={cellClassName}>차량번호</th>
+            <th className={cellClassName}>차량명</th>
+            <th className={cellClassName}>입금정보</th>
+            <th className={`${cellClassName} text-right`}>결제금액</th>
+            <th className={`${cellClassName} text-right`}>공급가</th>
+            <th className={`${cellClassName} text-right`}>부가세</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.id} className={printMode ? "" : "hover:bg-slate-50"}>
+              <td className={`${cellClassName} text-center`}>{row.date}</td>
+              <td className={`${cellClassName} font-semibold`}>{row.workName}</td>
+              <td className={cellClassName}>{row.insuranceCompany}</td>
+              <td className={cellClassName}>{row.saleType}</td>
+              <td className={cellClassName}>{row.coverageType}</td>
+              <td className={cellClassName}>{row.carNumber}</td>
+              <td className={cellClassName}>{row.carModel}</td>
+              <td className={cellClassName}>{row.paymentInfo}</td>
+              <td className={`${cellClassName} text-right font-semibold`}>
+                {formatWon(row.paymentAmount)}
+              </td>
+              <td className={`${cellClassName} text-right`}>
+                {formatWon(row.supplyAmount)}
+              </td>
+              <td className={`${cellClassName} text-right`}>
+                {formatWon(row.vatAmount)}
+              </td>
+            </tr>
+          ))}
+
+          {rows.length === 0 && (
+            <tr>
+              <td
+                className={`${cellClassName} py-8 text-center text-slate-500`}
+                colSpan={11}
+              >
+                {isLoading ? "조회 중입니다." : "조회된 내역이 없습니다."}
+              </td>
+            </tr>
+          )}
+        </tbody>
+        <tfoot>
+          <tr className="bg-blue-50 font-bold text-blue-900">
+            <td className={`${cellClassName} text-right`} colSpan={8}>
+              합계
+            </td>
+            <td className={`${cellClassName} text-right`}>
+              {formatWon(totalPayment)}
+            </td>
+            <td className={`${cellClassName} text-right`}>
+              {formatWon(totalSupply)}
+            </td>
+            <td className={`${cellClassName} text-right`}>
+              {formatWon(totalVat)}
+            </td>
+          </tr>
+        </tfoot>
+      </table>
     </div>
   );
 }
