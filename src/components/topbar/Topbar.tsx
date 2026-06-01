@@ -99,7 +99,7 @@ export default function Topbar({
           onClick={onLogout}
           className="rounded-lg bg-slate-800 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-700 md:px-4 md:text-sm"
         >
-          濡쒓렇?꾩썐
+          로그아웃
         </button>
       </div>
     </header>
