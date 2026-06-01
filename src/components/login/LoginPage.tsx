@@ -99,70 +99,55 @@ export default function LoginPage({ onLogin }: Props) {
 
     setLoading(true);
 
-    const { data: legacyUser, error: legacyError } = await supabase
-      .from("app_users")
-      .select("*")
-      .eq("user_id", normalizedUserId)
-      .eq("password", password)
-      .eq("is_active", true)
-      .maybeSingle();
+    const passwordCandidates = Array.from(
+      new Set([password, supabaseAuthPassword(password)])
+    );
+    let authUserId = "";
+    let authErrorMessage = "";
 
-    if (legacyError || !legacyUser) {
-      setLoading(false);
-      alert("로그인에 실패했습니다. 승인 여부와 비밀번호를 확인하세요.");
-      return;
-    }
-
-    let profile: LoginUser | null = legacyUser as LoginUser;
-    const authPassword = supabaseAuthPassword(password);
-    const { data: authData, error: authError } =
-      await supabase.auth.signInWithPassword({
+    for (const authPassword of passwordCandidates) {
+      const { data, error } = await supabase.auth.signInWithPassword({
         email: normalizedUserId,
         password: authPassword,
       });
 
-    if (authData.user) {
-      const { data } = await loadUserProfile(authData.user.id, normalizedUserId);
-      profile = data ?? profile;
-    } else if (authError && !legacyUser.auth_uid) {
-      const { data: signupData, error: signupError } =
-        await supabase.auth.signUp({
-          email: normalizedUserId,
-          password: authPassword,
-        });
-
-      if (signupError?.message.toLowerCase().includes("registered")) {
-        alert(
-            "ERP 기존 비밀번호로 로그인은 됩니다. 다만 Supabase 로그인 계정 비밀번호가 달라서, RLS 적용 전 Supabase Auth에서 이 계정 비밀번호를 다시 설정해야 합니다."
-        );
-      } else if (signupError) {
-        alert(
-          "ERP 기존 비밀번호로 로그인은 됩니다. 다만 Supabase 로그인 계정 생성은 실패했습니다: " +
-            signupError.message
-        );
+      if (data.user) {
+        authUserId = data.user.id;
+        break;
       }
 
-      if (signupData?.user) {
-        await supabase
-          .from("app_users")
-          .update({ auth_uid: signupData.user.id })
-          .eq("id", legacyUser.id);
+      authErrorMessage = error?.message ?? "";
+    }
 
-        profile = {
-          ...legacyUser,
-          auth_uid: signupData.user.id,
-        } as LoginUser;
-      }
-    } else if (authError && legacyUser.auth_uid) {
-      console.warn("Supabase Auth login failed:", authError.message);
+    if (!authUserId) {
+      setLoading(false);
+      alert(
+        "로그인에 실패했습니다. Supabase Auth 비밀번호를 확인하세요." +
+          (authErrorMessage ? `\n${authErrorMessage}` : "")
+      );
+      return;
+    }
+
+    const { data: profile } = await loadUserProfile(authUserId, normalizedUserId);
+
+    if (!profile) {
+      setLoading(false);
+      alert("로그인 계정은 확인됐지만 직원정보가 없습니다. app_users 연결을 확인하세요.");
+      return;
+    }
+
+    if (!profile.is_active) {
+      setLoading(false);
+      alert("아직 승인되지 않은 계정입니다. 관리자 승인 후 로그인하세요.");
+      return;
+    }
+
+    if (profile.password !== password) {
+      await supabase.from("app_users").update({ password }).eq("id", profile.id);
+      profile.password = password;
     }
 
     setLoading(false);
-
-    if (!profile || !profile.is_active) {
-      alert("로그인에 실패했습니다. 승인 여부와 비밀번호를 확인하세요.");
-      return;
-    }
 
     if (rememberId) {
       localStorage.setItem(rememberedUserIdKey, normalizedUserId);
@@ -194,18 +179,6 @@ export default function LoginPage({ onLogin }: Props) {
     }
 
     setLoading(true);
-
-    const { data: existingUser } = await supabase
-      .from("app_users")
-      .select("id")
-      .eq("user_id", normalizedSignupUserId)
-      .maybeSingle();
-
-    if (existingUser) {
-      setLoading(false);
-      alert("이미 사용 중인 아이디입니다.");
-      return;
-    }
 
     const { data: signupData, error: signupError } = await supabase.auth.signUp({
       email: normalizedSignupUserId,
@@ -244,9 +217,7 @@ export default function LoginPage({ onLogin }: Props) {
       return;
     }
 
-    alert(
-      "회원가입 신청이 완료되었습니다. 관리자 승인 후 전화번호 뒤 4자리로 로그인하세요."
-    );
+    alert("회원가입 신청이 완료되었습니다. 관리자 승인 후 초기 비밀번호는 전화번호 뒤 4자리 + !! 입니다.");
     setSignupUserId("");
     setSignupName("");
     setSignupDepartment("관리부");
@@ -345,8 +316,8 @@ export default function LoginPage({ onLogin }: Props) {
             />
 
             <div className="rounded-xl bg-slate-50 p-3 text-xs text-slate-500">
-              신청 후 관리자가 승인해야 로그인할 수 있습니다. 승인 후 초기
-              비밀번호는 전화번호 뒤 4자리입니다.
+              신청 후 관리자가 승인해야 로그인할 수 있습니다. 초기 비밀번호는
+              전화번호 뒤 4자리 + !! 입니다.
             </div>
 
             <button

@@ -170,6 +170,18 @@ alter table if exists public.settlement_expenses enable row level security;
 alter table if exists public.daily_cash enable row level security;
 alter table if exists public.vehicle_catalog enable row level security;
 alter table if exists public.business_catalog enable row level security;
+
+create table if not exists public.home_notices (
+  id bigserial primary key,
+  title text not null,
+  content text not null,
+  is_active boolean not null default true,
+  created_by text,
+  created_name text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 alter table if exists public.home_notices enable row level security;
 
 drop policy if exists work_orders_authenticated_all on public.work_orders;
