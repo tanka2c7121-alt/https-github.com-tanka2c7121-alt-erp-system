@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
 import { menuData, type MenuItem } from "../../data/menuData";

@@ -84,7 +84,8 @@ export default function Topbar({
                           {item.title}
                         </span>
                         <span className="rounded-full bg-red-100 px-2 py-1 text-xs font-bold text-red-700">
-                          {item.count}嫄?                        </span>
+                          {item.count}건
+                        </span>
                       </button>
                     ))}
                   </div>
