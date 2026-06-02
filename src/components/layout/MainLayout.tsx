@@ -25,6 +25,7 @@ import VehicleCatalogPage from "../../modules/admin/VehicleCatalogPage";
 import EmployeeStatusPage from "../../modules/employee/EmployeeStatusPage";
 import SettingsDashboardPage from "../../modules/settings/SettingsDashboardPage";
 import HomeDashboardPage from "../../modules/home/HomeDashboardPage";
+import DocumentsDashboardPage from "../../modules/documents/DocumentsDashboardPage";
 import ExpenseRequestPage from "../../modules/documents/ExpenseRequestPage";
 import ExpenseRequestPrintPage from "../../modules/documents/ExpenseRequestPrintPage";
 import AttendanceRequestPage from "../../modules/documents/AttendanceRequestPage";
@@ -438,8 +439,9 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
               <SalesRevenuePage kind="card" title="카드매출" />
             ) : selectedMenu.id === "sales-blue" ? (
               <SalesRevenuePage kind="blue" title="BLUE포인트" />
-            ) : selectedMenu.id === "documents" ||
-            selectedMenu.id === "documents-expense-request" ? (
+            ) : selectedMenu.id === "documents" ? (
+              <DocumentsDashboardPage onSelectMenu={handleSelectMenu} />
+            ) : selectedMenu.id === "documents-expense-request" ? (
               <ExpenseRequestPage
                 user={user}
                 isAdmin={isAdmin}
