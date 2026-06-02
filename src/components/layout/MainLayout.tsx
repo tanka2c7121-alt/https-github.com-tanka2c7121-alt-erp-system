@@ -23,6 +23,7 @@ import SettlementMainPage from "../../modules/factory/SettlementMainPage";
 import EmployeeManagePage from "../../modules/admin/EmployeeManagePage";
 import VehicleCatalogPage from "../../modules/admin/VehicleCatalogPage";
 import EmployeeStatusPage from "../../modules/employee/EmployeeStatusPage";
+import SettingsDashboardPage from "../../modules/settings/SettingsDashboardPage";
 import HomeDashboardPage from "../../modules/home/HomeDashboardPage";
 import ExpenseRequestPage from "../../modules/documents/ExpenseRequestPage";
 import ExpenseRequestPrintPage from "../../modules/documents/ExpenseRequestPrintPage";
@@ -331,7 +332,7 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
         <main className="flex-1 overflow-y-auto p-3 md:p-6">
           <div className="mb-3 rounded-xl border border-slate-200 bg-white p-3 md:hidden">
             <label className="mb-1 block text-xs font-semibold text-slate-500">
-              硫붾돱 ?좏깮
+              메뉴 선택
             </label>
             <select
               className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-900"
@@ -379,17 +380,17 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
                   })
                 }
               />
+            ) : selectedMenu.id === "settings" ? (
+              <SettingsDashboardPage
+                userRole={userRole}
+                onSelectMenu={handleSelectMenu}
+              />
             ) : selectedMenu.id === "employee-manage" && !isAdmin ? (
               <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-red-700">
-                吏곸썝愿由??섏씠吏??愿由ъ옄留??묎렐?????덉뒿?덈떎.
+                직원관리 페이지는 관리자만 접근할 수 있습니다.
               </div>
             ) : selectedMenu.id === "employee-manage" ? (
               <EmployeeManagePage />
-            ) : selectedMenu.id === "vehicle-catalog" &&
-            !["ADMIN", "CHIEF"].includes(userRole) ? (
-              <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-red-700">
-                기초자료관리 페이지는 관리자와 총괄관리만 접근할 수 있습니다.
-              </div>
             ) : selectedMenu.id === "vehicle-catalog" ? (
               <VehicleCatalogPage user={user} />
             ) : selectedMenu.id === "factory" ? (

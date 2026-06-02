@@ -97,7 +97,6 @@ export const menuData: MenuItem[] = [
       {
         id: "vehicle-catalog",
         title: "기초자료관리",
-        roles: ["ADMIN", "CHIEF"],
       },
     ],
   },
