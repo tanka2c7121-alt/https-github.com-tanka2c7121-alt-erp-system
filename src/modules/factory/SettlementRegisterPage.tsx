@@ -52,14 +52,12 @@ const defaultFaultPaymentRows = (): PaymentRow[] => [
     ...emptyPaymentRow(),
     paymentType: "수리비",
     paymentDetail: "자차",
-    invoiceIssued: true,
     paymentStatus: "청구",
   },
   {
     ...emptyPaymentRow(),
     paymentType: "수리비",
     paymentDetail: "대물",
-    invoiceIssued: true,
     paymentStatus: "청구",
   },
 ];
@@ -485,6 +483,7 @@ export default function SettlementRegisterPage({
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           <Field label="차량번호" value={form.carNumber} />
           <Field label="차량명" value={form.carModel} />
+          <Field label="구분" value={form.category} />
           {form.coverageType === "과실" ? (
             <StackedField
               label="보험사"
@@ -495,19 +494,6 @@ export default function SettlementRegisterPage({
             />
           ) : (
             <Field label="보험사" value={form.insuranceCompany} />
-          )}
-          <Field label="구분" value={form.category} />
-          <Field label="담보" value={form.coverageType} />
-          {form.coverageType === "과실" ? (
-            <StackedField
-              label="담당자"
-              rows={[
-                { label: "자차", value: form.ownManagerName || form.managerName },
-                { label: "대물", value: form.otherManagerName },
-              ]}
-            />
-          ) : (
-            <Field label="담당자" value={form.managerName} />
           )}
           {form.coverageType === "과실" ? (
             <StackedField
@@ -520,6 +506,18 @@ export default function SettlementRegisterPage({
           ) : (
             <Field label="접수번호" value={form.receiptNumber} />
           )}
+          {form.coverageType === "과실" ? (
+            <StackedField
+              label="담당자"
+              rows={[
+                { label: "자차", value: form.ownManagerName || form.managerName },
+                { label: "대물", value: form.otherManagerName },
+              ]}
+            />
+          ) : (
+            <Field label="담당자" value={form.managerName} />
+          )}
+          <Field label="담보" value={form.coverageType} />
           <Field label="합계금액" value={totalAmount.toLocaleString()} />
           <Field
             label="진행상황"
