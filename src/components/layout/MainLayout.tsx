@@ -51,6 +51,7 @@ type MainLayoutProps = {
 export default function MainLayout({ user, onLogout }: MainLayoutProps) {
   const isAdmin = user?.role === "ADMIN";
   const userRole = user?.role ?? "STAFF";
+  const canViewSales = ["ADMIN", "CHIEF"].includes(userRole);
   const approvalRole =
     user?.approval_role ?? (isAdmin ? "관리자" : "직원");
 
@@ -59,6 +60,7 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
     title: "업무홈",
   });
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const isSalesMenu = selectedMenu.id === "sales" || selectedMenu.id.startsWith("sales-");
   const [notificationCounts, setNotificationCounts] = useState({
     employees: 0,
     expenses: 0,
@@ -419,6 +421,10 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
               <WorkPrintPage
                 workName={selectedData?.workName ?? selectedData?.nextWorkName}
               />
+            ) : isSalesMenu && !canViewSales ? (
+              <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-red-700">
+                매출현황 페이지는 관리자와 총괄관리만 접근할 수 있습니다.
+              </div>
             ) : selectedMenu.id === "sales" ? (
               <SalesDashboardPage onSelectMenu={handleSelectMenu} />
             ) : selectedMenu.id === "sales-insurance" ? (
