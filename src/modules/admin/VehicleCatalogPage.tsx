@@ -8,6 +8,7 @@ type LoginUser = {
   user_id: string;
   user_name: string;
   department?: string | null;
+  approval_role?: string | null;
   role: UserRole;
 };
 
@@ -44,7 +45,11 @@ export default function VehicleCatalogPage({ user }: { user: LoginUser }) {
   const [verified, setVerified] = useState(false);
   const [password, setPassword] = useState("");
   const [checking, setChecking] = useState(false);
-  const canManageCatalog = user.role === "ADMIN" || user.department === "관리부";
+  const canManageCatalog =
+    user.role === "ADMIN" ||
+    user.department?.trim() === "관리부" ||
+    user.approval_role?.trim() === "관리부" ||
+    user.approval_role?.trim() === "관리자";
 
   if (!verified) {
     return (
