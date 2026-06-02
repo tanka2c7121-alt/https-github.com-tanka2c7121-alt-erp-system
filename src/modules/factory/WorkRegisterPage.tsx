@@ -1300,7 +1300,6 @@ async function getNextWorkName() {
 }
 
 async function handleSave() {
-  console.log("handleSave 시작");
   try {
     const targetWorkName = workName;
     const normalizedCarNumber = carNumber.trim();
@@ -1356,7 +1355,6 @@ async function handleSave() {
 
       message,
     };
-console.log("orderPayload", orderPayload);
 
     const { data: existingOrders, error: existingOrderError } = await supabase
       .from("work_orders")
@@ -1398,10 +1396,6 @@ console.log("orderPayload", orderPayload);
       return false;
     }
 
-console.log("orderError", orderError);
-
-
-
     if (shouldUpdate) {
       const { error: deleteDetailError } = await supabase
         .from("work_details")
@@ -1423,8 +1417,6 @@ console.log("orderError", orderError);
         part: row.part,
         work_type: row.work,
       }));
-
-console.log("detailRows", detailRows);
 
     if (detailRows.length > 0) {
       const { error: detailError } = await supabase
