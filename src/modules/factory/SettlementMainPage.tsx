@@ -71,7 +71,7 @@ const accountNames = [
   "국민은행",
   "부산은행",
   "카드",
-  "BLUE",
+  "BLUE POINT",
   "현금",
   "법인1층",
 ];
@@ -155,7 +155,7 @@ const receivableRows = paymentRows.filter(isReceivableRow);
 const receivableSummary = [
   "국민은행",
   "부산은행",
-  "BLUE",
+  "BLUE POINT",
 ].map((accountName) => {
 
   const amount = paymentRows
