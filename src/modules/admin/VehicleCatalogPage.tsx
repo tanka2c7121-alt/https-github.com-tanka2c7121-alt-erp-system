@@ -44,6 +44,7 @@ export default function VehicleCatalogPage({ user }: { user: LoginUser }) {
   const [verified, setVerified] = useState(false);
   const [password, setPassword] = useState("");
   const [checking, setChecking] = useState(false);
+  const canManageCatalog = user.role === "ADMIN" || user.department === "관리부";
 
   if (!verified) {
     return (
@@ -58,7 +59,7 @@ export default function VehicleCatalogPage({ user }: { user: LoginUser }) {
     );
   }
 
-  return <CatalogManager />;
+  return <CatalogManager canManage={canManageCatalog} />;
 }
 
 function PasswordCheck({
@@ -134,7 +135,7 @@ function PasswordCheck({
   );
 }
 
-function CatalogManager() {
+function CatalogManager({ canManage }: { canManage: boolean }) {
   const [activeTab, setActiveTab] = useState<TabId>("vehicle");
   const [vehicleRows, setVehicleRows] = useState<VehicleCatalogRow[]>([]);
   const [businessRows, setBusinessRows] = useState<BusinessCatalogRow[]>([]);
@@ -367,6 +368,7 @@ function CatalogManager() {
         ))}
       </div>
 
+      {canManage ? (
       <section className="rounded-xl border border-slate-200 bg-slate-50 p-4">
         {activeTab === "vehicle" ? (
           <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
@@ -449,6 +451,11 @@ function CatalogManager() {
           </div>
         )}
       </section>
+      ) : (
+        <section className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
+          기초자료는 조회만 가능합니다. 목록 추가, 사용상태 변경, 삭제는 관리자 또는 관리부만 가능합니다.
+        </section>
+      )}
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm font-semibold text-slate-700">
@@ -465,12 +472,14 @@ function CatalogManager() {
       {activeTab === "vehicle" ? (
         <VehicleTable
           rows={visibleVehicleRows}
+          canManage={canManage}
           onToggle={toggleVehicleActive}
           onDelete={deleteVehicle}
         />
       ) : (
         <BusinessTable
           rows={visibleBusinessRows}
+          canManage={canManage}
           showGroup={activeTab === "insurer"}
           showPhone={activeTab === "rental"}
           onToggle={toggleBusinessActive}
@@ -481,14 +490,15 @@ function CatalogManager() {
   );
 }
 
-function StatusButton({ active, onClick }: { active: boolean; onClick: () => void }) {
+function StatusButton({ active, onClick }: { active: boolean; onClick?: () => void }) {
   return (
     <button
       type="button"
       onClick={onClick}
+      disabled={!onClick}
       className={`rounded-full px-3 py-1 text-xs font-semibold ${
         active ? "bg-blue-50 text-blue-700" : "bg-slate-100 text-slate-500"
-      }`}
+      } ${onClick ? "" : "cursor-default"}`}
     >
       {active ? "사용중" : "중지"}
     </button>
@@ -497,10 +507,12 @@ function StatusButton({ active, onClick }: { active: boolean; onClick: () => voi
 
 function VehicleTable({
   rows,
+  canManage,
   onToggle,
   onDelete,
 }: {
   rows: VehicleCatalogRow[];
+  canManage: boolean;
   onToggle: (row: VehicleCatalogRow) => Promise<void>;
   onDelete: (row: VehicleCatalogRow) => Promise<void>;
 }) {
@@ -524,13 +536,19 @@ function VehicleTable({
                 <td className="border-b border-slate-100 px-3 py-2 text-sm font-semibold">{row.model}</td>
                 <td className="border-b border-slate-100 px-3 py-2 text-sm">{row.color_code || "-"}</td>
                 <td className="border-b border-slate-100 px-3 py-2 text-center">
-                  <StatusButton active={row.is_active} onClick={() => void onToggle(row)} />
+                  <StatusButton
+                    active={row.is_active}
+                    onClick={canManage ? () => void onToggle(row) : undefined}
+                  />
                 </td>
                 <td className="border-b border-slate-100 px-3 py-2 text-center">
                   <button
                     type="button"
-                    onClick={() => void onDelete(row)}
-                    className="rounded-lg border border-red-300 px-3 py-1 text-xs font-semibold text-red-600 hover:bg-red-50"
+                    onClick={() => {
+                      if (canManage) void onDelete(row);
+                    }}
+                    disabled={!canManage}
+                    className="rounded-lg border border-red-300 px-3 py-1 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:border-slate-200 disabled:text-slate-400 disabled:hover:bg-transparent"
                   >
                     삭제
                   </button>
@@ -546,12 +564,14 @@ function VehicleTable({
 
 function BusinessTable({
   rows,
+  canManage,
   showGroup,
   showPhone,
   onToggle,
   onDelete,
 }: {
   rows: BusinessCatalogRow[];
+  canManage: boolean;
   showGroup: boolean;
   showPhone: boolean;
   onToggle: (row: BusinessCatalogRow) => Promise<void>;
@@ -585,13 +605,19 @@ function BusinessTable({
                   <td className="border-b border-slate-100 px-3 py-2 text-sm">{row.group_name || "-"}</td>
                 )}
                 <td className="border-b border-slate-100 px-3 py-2 text-center">
-                  <StatusButton active={row.is_active} onClick={() => void onToggle(row)} />
+                  <StatusButton
+                    active={row.is_active}
+                    onClick={canManage ? () => void onToggle(row) : undefined}
+                  />
                 </td>
                 <td className="border-b border-slate-100 px-3 py-2 text-center">
                   <button
                     type="button"
-                    onClick={() => void onDelete(row)}
-                    className="rounded-lg border border-red-300 px-3 py-1 text-xs font-semibold text-red-600 hover:bg-red-50"
+                    onClick={() => {
+                      if (canManage) void onDelete(row);
+                    }}
+                    disabled={!canManage}
+                    className="rounded-lg border border-red-300 px-3 py-1 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:border-slate-200 disabled:text-slate-400 disabled:hover:bg-transparent"
                   >
                     삭제
                   </button>
