@@ -18,7 +18,10 @@ set search_path = public
 as $$
   select role
   from public.app_users
-  where auth_uid = auth.uid()
+  where (
+      auth_uid = auth.uid()
+      or lower(user_id) = lower(auth.jwt() ->> 'email')
+    )
     and is_active = true
   limit 1
 $$;
@@ -32,7 +35,10 @@ set search_path = public
 as $$
   select department
   from public.app_users
-  where auth_uid = auth.uid()
+  where (
+      auth_uid = auth.uid()
+      or lower(user_id) = lower(auth.jwt() ->> 'email')
+    )
     and is_active = true
   limit 1
 $$;
@@ -46,7 +52,10 @@ set search_path = public
 as $$
   select coalesce(approval_role, case when role = 'ADMIN' then '관리자' else '직원' end)
   from public.app_users
-  where auth_uid = auth.uid()
+  where (
+      auth_uid = auth.uid()
+      or lower(user_id) = lower(auth.jwt() ->> 'email')
+    )
     and is_active = true
   limit 1
 $$;
@@ -60,7 +69,10 @@ set search_path = public
 as $$
   select user_id
   from public.app_users
-  where auth_uid = auth.uid()
+  where (
+      auth_uid = auth.uid()
+      or lower(user_id) = lower(auth.jwt() ->> 'email')
+    )
     and is_active = true
   limit 1
 $$;
@@ -75,7 +87,10 @@ as $$
   select exists (
     select 1
     from public.app_users
-    where auth_uid = auth.uid()
+    where (
+        auth_uid = auth.uid()
+        or lower(user_id) = lower(auth.jwt() ->> 'email')
+      )
       and is_active = true
       and role = 'ADMIN'
   )
@@ -91,12 +106,15 @@ as $$
   select exists (
     select 1
     from public.app_users
-    where auth_uid = auth.uid()
+    where (
+        auth_uid = auth.uid()
+        or lower(user_id) = lower(auth.jwt() ->> 'email')
+      )
       and is_active = true
       and (
         role = 'ADMIN'
-        or department = '관리부'
-        or approval_role in ('관리부', '관리자')
+        or btrim(coalesce(department, '')) = '관리부'
+        or btrim(coalesce(approval_role, '')) in ('관리부', '관리자')
       )
   )
 $$;

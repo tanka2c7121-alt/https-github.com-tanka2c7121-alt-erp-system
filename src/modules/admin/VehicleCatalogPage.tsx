@@ -41,6 +41,13 @@ const tabs: Array<{ id: TabId; label: string }> = [
   { id: "insurer", label: "보험사" },
 ];
 
+const catalogErrorMessage = (action: string, message: string) => {
+  const policyHint =
+    "관리부 직원인데도 실패하면 Supabase SQL Editor에서 supabase_fix_admin_dept_rls.sql을 실행해 주세요.";
+
+  return `${action}: ${message}\n\n${policyHint}`;
+};
+
 export default function VehicleCatalogPage({ user }: { user: LoginUser }) {
   const [verified, setVerified] = useState(false);
   const [password, setPassword] = useState("");
@@ -243,7 +250,7 @@ function CatalogManager({ canManage }: { canManage: boolean }) {
     setSaving(false);
 
     if (error) {
-      alert("차량목록 추가 실패: " + error.message);
+      alert(catalogErrorMessage("차량목록 추가 실패", error.message));
       return;
     }
 
@@ -274,7 +281,7 @@ function CatalogManager({ canManage }: { canManage: boolean }) {
     setSaving(false);
 
     if (error) {
-      alert("목록 추가 실패: " + error.message);
+      alert(catalogErrorMessage("목록 추가 실패", error.message));
       return;
     }
 
@@ -289,7 +296,7 @@ function CatalogManager({ canManage }: { canManage: boolean }) {
       .eq("id", row.id);
 
     if (error) {
-      alert("상태 변경 실패: " + error.message);
+      alert(catalogErrorMessage("상태 변경 실패", error.message));
       return;
     }
 
@@ -303,7 +310,7 @@ function CatalogManager({ canManage }: { canManage: boolean }) {
       .eq("id", row.id);
 
     if (error) {
-      alert("상태 변경 실패: " + error.message);
+      alert(catalogErrorMessage("상태 변경 실패", error.message));
       return;
     }
 
@@ -318,7 +325,7 @@ function CatalogManager({ canManage }: { canManage: boolean }) {
     const { error } = await supabase.from("vehicle_catalog").delete().eq("id", row.id);
 
     if (error) {
-      alert("삭제 실패: " + error.message);
+      alert(catalogErrorMessage("삭제 실패", error.message));
       return;
     }
 
@@ -333,7 +340,7 @@ function CatalogManager({ canManage }: { canManage: boolean }) {
     const { error } = await supabase.from("business_catalog").delete().eq("id", row.id);
 
     if (error) {
-      alert("삭제 실패: " + error.message);
+      alert(catalogErrorMessage("삭제 실패", error.message));
       return;
     }
 
