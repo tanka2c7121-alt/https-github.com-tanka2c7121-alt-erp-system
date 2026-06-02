@@ -137,23 +137,21 @@ const totalBalance = accountSummary.reduce(
   0
   );
 
-const isReceivableRow = (row: any) => {
-  const amount = Number(row.payment_amount || 0);
+const getReceivableAmount = (row: any) => {
+  const hasClaimAmount = row.claim_amount !== null && row.claim_amount !== undefined;
+  const claimAmount = Number(hasClaimAmount ? row.claim_amount : row.payment_amount || 0);
+  const paidAmount = row.payment_date ? Number(row.payment_amount || 0) : 0;
 
-  if (amount <= 0) {
-    return false;
-  }
-
-  return (
-    !row.payment_date
-  );
+  return Math.max(claimAmount - paidAmount, 0);
 };
+
+const isReceivableRow = (row: any) => getReceivableAmount(row) > 0;
 
 const receivableAmount = paymentRows
   .filter(isReceivableRow)
   .reduce(
     (sum, row) =>
-      sum + Number(row.payment_amount || 0),
+      sum + getReceivableAmount(row),
     0
   );
 
@@ -169,7 +167,7 @@ const receivableSummary = [
     .filter((row) => isReceivableRow(row) && row.payment_method === accountName)
     .reduce(
       (sum, row) =>
-        sum + Number(row.payment_amount || 0),
+        sum + getReceivableAmount(row),
       0
     );
 
@@ -377,7 +375,7 @@ const fetchSettlementMain = useCallback(async (year: string, month: string) => {
                         {row.payment_date ?? ""}
                       </td>
                       <td className="border border-orange-100 px-3 py-2 text-right font-semibold text-orange-700">
-                        ₩ {Number(row.payment_amount || 0).toLocaleString()}
+                        ₩ {getReceivableAmount(row).toLocaleString()}
                       </td>
                       <td className="border border-orange-100 px-3 py-2 text-center">
                         <button

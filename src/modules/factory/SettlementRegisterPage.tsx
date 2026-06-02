@@ -10,6 +10,7 @@ type SettlementRegisterPageProps = {
 type PaymentRow = {
   paymentType: string;
   paymentDetail: string;
+  claimAmount: string;
   amount: string;
   date: string;
   method: string;
@@ -36,6 +37,7 @@ const labelClass = "text-sm font-semibold text-slate-800";
 const emptyPaymentRow = (): PaymentRow => ({
   paymentType: "",
   paymentDetail: "",
+  claimAmount: "",
   amount: "",
   date: "",
   method: "",
@@ -160,7 +162,11 @@ export default function SettlementRegisterPage({
     () =>
       paymentRows
         .filter((row) => row.invoiceIssued && row.paymentStatus === "청구")
-        .reduce((sum, row) => sum + toNumber(row.amount), 0),
+        .reduce(
+          (sum, row) =>
+            sum + Math.max(toNumber(row.claimAmount) - toNumber(row.amount), 0),
+          0
+        ),
     [paymentRows]
   );
   const ownPaymentIndex = paymentRows.findIndex(
@@ -276,6 +282,10 @@ export default function SettlementRegisterPage({
         ? payments.map((item: any) => ({
             paymentType: item.payment_type ?? "",
             paymentDetail: item.payment_detail ?? "",
+            claimAmount:
+              item.claim_amount?.toLocaleString() ??
+              item.payment_amount?.toLocaleString() ??
+              "",
             amount: item.payment_amount?.toLocaleString() ?? "",
             date: item.payment_date ?? "",
             method: item.payment_method ?? "",
@@ -315,6 +325,7 @@ export default function SettlementRegisterPage({
         (row) =>
           row.paymentType ||
           row.paymentDetail ||
+          row.claimAmount ||
           row.amount ||
           row.date ||
           row.method
@@ -323,6 +334,7 @@ export default function SettlementRegisterPage({
         work_name: form.workName,
         payment_type: row.paymentType,
         payment_detail: row.paymentDetail,
+        claim_amount: toNumber(row.claimAmount),
         payment_amount: toNumber(row.amount),
         payment_date: row.date || null,
         payment_method: row.method,
@@ -538,26 +550,26 @@ export default function SettlementRegisterPage({
                 rows={[
                   {
                     label: "자차",
-                    value: ownPaymentRow?.amount ?? "",
+                    value: ownPaymentRow?.claimAmount ?? "",
                     onChange:
                       ownPaymentIndex >= 0
                         ? (value) =>
                             handlePaymentChange(
                               ownPaymentIndex,
-                              "amount",
+                              "claimAmount",
                               formatAmount(value)
                             )
                         : undefined,
                   },
                   {
                     label: "대물",
-                    value: otherPaymentRow?.amount ?? "",
+                    value: otherPaymentRow?.claimAmount ?? "",
                     onChange:
                       otherPaymentIndex >= 0
                         ? (value) =>
                             handlePaymentChange(
                               otherPaymentIndex,
-                              "amount",
+                              "claimAmount",
                               formatAmount(value)
                             )
                         : undefined,
