@@ -3,7 +3,13 @@
 
 import { supabase } from "../../lib/supabase";
 import type { MenuItem } from "../../data/menuData";
-import { useEffect, useRef, useState, type ChangeEvent } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 
 
 const getInputStateClass = (value: string) =>
@@ -29,6 +35,20 @@ type PendingWorkPhoto = {
   id: string;
   file: File;
   previewUrl: string;
+};
+
+type PhotoViewerItem = {
+  id: string;
+  name: string;
+  url: string;
+  source: "pending" | "saved";
+};
+
+type PhotoViewerFrame = {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
 };
 
 type DirectoryPickerWindow = Window & {
@@ -83,6 +103,47 @@ function chunkArray<T>(items: T[], size: number) {
   }
 
   return chunks;
+}
+
+function getDefaultPhotoViewerFrame(): PhotoViewerFrame {
+  if (typeof window === "undefined") {
+    return { left: 80, top: 60, width: 960, height: 680 };
+  }
+
+  const width = Math.min(Math.max(window.innerWidth * 0.78, 520), 1120);
+  const height = Math.min(Math.max(window.innerHeight * 0.78, 380), 820);
+
+  return {
+    left: Math.max((window.innerWidth - width) / 2, 12),
+    top: Math.max((window.innerHeight - height) / 2, 12),
+    width,
+    height,
+  };
+}
+
+function constrainPhotoViewerFrame(frame: PhotoViewerFrame): PhotoViewerFrame {
+  if (typeof window === "undefined") {
+    return frame;
+  }
+
+  const margin = 12;
+  const minWidth = Math.min(420, window.innerWidth - margin * 2);
+  const minHeight = Math.min(300, window.innerHeight - margin * 2);
+  const width = Math.min(
+    Math.max(frame.width, minWidth),
+    window.innerWidth - margin * 2
+  );
+  const height = Math.min(
+    Math.max(frame.height, minHeight),
+    window.innerHeight - margin * 2
+  );
+
+  return {
+    left: Math.min(Math.max(frame.left, margin), window.innerWidth - width - margin),
+    top: Math.min(Math.max(frame.top, margin), window.innerHeight - height - margin),
+    width,
+    height,
+  };
 }
 
 const readPhotoText = async (file: File) => {
@@ -381,9 +442,29 @@ export default function WorkRegisterPage({
   const [cameraStarting, setCameraStarting] = useState(false);
   const [cameraFlash, setCameraFlash] = useState(false);
   const [cameraShotCount, setCameraShotCount] = useState(0);
+  const [photoViewerIndex, setPhotoViewerIndex] = useState<number | null>(null);
+  const [photoViewerFrame, setPhotoViewerFrame] = useState<PhotoViewerFrame>(() =>
+    getDefaultPhotoViewerFrame()
+  );
   const [vehicleCatalog, setVehicleCatalog] = useState<VehicleCatalogRow[]>([]);
   const [businessCatalog, setBusinessCatalog] = useState<BusinessCatalogRow[]>([]);
   const pendingPhotoGroups = chunkArray(pendingWorkPhotos, photoBatchSize);
+  const photoViewerItems: PhotoViewerItem[] = [
+    ...pendingWorkPhotos.map((photo) => ({
+      id: photo.id,
+      name: photo.file.name,
+      url: photo.previewUrl,
+      source: "pending" as const,
+    })),
+    ...workPhotos.map((photo) => ({
+      id: photo.path,
+      name: photo.name,
+      url: photo.url,
+      source: "saved" as const,
+    })),
+  ];
+  const activeViewerPhoto =
+    photoViewerIndex === null ? null : photoViewerItems[photoViewerIndex] ?? null;
   const selectedWorkPhotos = workPhotos.filter((photo) =>
     selectedPhotoPaths.includes(photo.path)
   );
@@ -844,6 +925,85 @@ function selectAllPhotos() {
 
 function clearPhotoSelection() {
   setSelectedPhotoPaths([]);
+}
+
+function openPhotoViewer(photoId?: string) {
+  if (photoViewerItems.length === 0) {
+    alert("볼 사진이 없습니다.");
+    return;
+  }
+
+  const nextIndex = photoId
+    ? photoViewerItems.findIndex((photo) => photo.id === photoId)
+    : 0;
+
+  setPhotoViewerFrame(getDefaultPhotoViewerFrame());
+  setPhotoViewerIndex(nextIndex >= 0 ? nextIndex : 0);
+}
+
+function movePhotoViewer(direction: 1 | -1) {
+  if (photoViewerItems.length === 0) {
+    setPhotoViewerIndex(null);
+    return;
+  }
+
+  setPhotoViewerIndex((currentIndex) => {
+    const safeIndex = currentIndex ?? 0;
+    return (
+      (safeIndex + direction + photoViewerItems.length) % photoViewerItems.length
+    );
+  });
+}
+
+function startPhotoViewerMove(event: ReactPointerEvent<HTMLDivElement>) {
+  const startX = event.clientX;
+  const startY = event.clientY;
+  const startFrame = photoViewerFrame;
+
+  const handlePointerMove = (moveEvent: PointerEvent) => {
+    setPhotoViewerFrame(
+      constrainPhotoViewerFrame({
+        ...startFrame,
+        left: startFrame.left + moveEvent.clientX - startX,
+        top: startFrame.top + moveEvent.clientY - startY,
+      })
+    );
+  };
+
+  const handlePointerUp = () => {
+    window.removeEventListener("pointermove", handlePointerMove);
+    window.removeEventListener("pointerup", handlePointerUp);
+  };
+
+  window.addEventListener("pointermove", handlePointerMove);
+  window.addEventListener("pointerup", handlePointerUp);
+}
+
+function startPhotoViewerResize(event: ReactPointerEvent<HTMLButtonElement>) {
+  event.preventDefault();
+  event.stopPropagation();
+
+  const startX = event.clientX;
+  const startY = event.clientY;
+  const startFrame = photoViewerFrame;
+
+  const handlePointerMove = (moveEvent: PointerEvent) => {
+    setPhotoViewerFrame(
+      constrainPhotoViewerFrame({
+        ...startFrame,
+        width: startFrame.width + moveEvent.clientX - startX,
+        height: startFrame.height + moveEvent.clientY - startY,
+      })
+    );
+  };
+
+  const handlePointerUp = () => {
+    window.removeEventListener("pointermove", handlePointerMove);
+    window.removeEventListener("pointerup", handlePointerUp);
+  };
+
+  window.addEventListener("pointermove", handlePointerMove);
+  window.addEventListener("pointerup", handlePointerUp);
 }
 
 const safeFileName = (name: string) =>
@@ -1452,7 +1612,7 @@ function handleClearWorkRow(index: number) {
               {cameraStarting ? "카메라 여는 중..." : "카메라 열기"}
             </button>
             <label className="inline-flex cursor-pointer items-center justify-center rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
-              사진선택
+              사진 업로드
               <input
                 type="file"
                 accept="image/*"
@@ -1462,6 +1622,14 @@ function handleClearWorkRow(index: number) {
                 onChange={handlePhotoCapture}
               />
             </label>
+            <button
+              type="button"
+              onClick={() => openPhotoViewer()}
+              disabled={photoViewerItems.length === 0}
+              className="rounded-lg border border-blue-300 bg-white px-4 py-2 text-sm font-semibold text-blue-600 hover:bg-blue-50 disabled:border-slate-200 disabled:text-slate-400 disabled:hover:bg-white"
+            >
+              보기
+            </button>
           </div>
         </div>
 
@@ -1544,7 +1712,8 @@ function handleClearWorkRow(index: number) {
                         <img
                           src={photo.previewUrl}
                           alt="저장 대기 사진"
-                          className="h-24 w-full object-cover"
+                          className="h-24 w-full cursor-pointer object-cover"
+                          onClick={() => openPhotoViewer(photo.id)}
                         />
                         <button
                           type="button"
@@ -1609,7 +1778,7 @@ function handleClearWorkRow(index: number) {
               <button
                 type="button"
                 key={photo.path}
-                onClick={() => togglePhotoSelection(photo)}
+                onClick={() => openPhotoViewer(photo.path)}
                 className={`relative overflow-hidden rounded-lg border bg-slate-50 text-left ${
                   selectedPhotoPaths.includes(photo.path)
                     ? "border-blue-500 ring-2 ring-blue-200"
@@ -1639,6 +1808,86 @@ function handleClearWorkRow(index: number) {
           <p className="mt-3 text-xs text-slate-500">등록된 사진이 없습니다.</p>
         ) : null}
       </section>
+
+      {activeViewerPhoto && (
+        <div
+          className="fixed inset-0 z-50 bg-slate-950/80"
+          onWheel={(event) => {
+            event.preventDefault();
+            movePhotoViewer(event.deltaY > 0 ? 1 : -1);
+          }}
+        >
+          <div
+            className="absolute flex min-h-0 flex-col overflow-hidden rounded-xl bg-white shadow-2xl"
+            style={{
+              left: photoViewerFrame.left,
+              top: photoViewerFrame.top,
+              width: photoViewerFrame.width,
+              height: photoViewerFrame.height,
+            }}
+          >
+            <div
+              className="flex cursor-move flex-wrap items-center justify-between gap-2 border-b border-slate-200 p-3"
+              onPointerDown={startPhotoViewerMove}
+            >
+              <div className="min-w-0">
+                <p className="truncate text-sm font-bold text-slate-900">
+                  {activeViewerPhoto.name}
+                </p>
+                <p className="text-xs text-slate-500">
+                  {(photoViewerIndex ?? 0) + 1} / {photoViewerItems.length}
+                  {" · "}
+                  {activeViewerPhoto.source === "pending" ? "저장 대기" : "저장됨"}
+                </p>
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onClick={() => movePhotoViewer(-1)}
+                  className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  이전
+                </button>
+                <button
+                  type="button"
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onClick={() => movePhotoViewer(1)}
+                  className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  다음
+                </button>
+                <button
+                  type="button"
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onClick={() => setPhotoViewerIndex(null)}
+                  className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+                >
+                  닫기
+                </button>
+              </div>
+            </div>
+
+            <div className="flex min-h-0 flex-1 items-center justify-center bg-slate-100 p-3">
+              {/* eslint-disable-next-line @next/next/no-img-element -- Viewer shows local previews and short-lived Supabase signed URLs. */}
+              <img
+                src={activeViewerPhoto.url}
+                alt={activeViewerPhoto.name}
+                className="max-h-full max-w-full object-contain"
+              />
+            </div>
+            <button
+              type="button"
+              aria-label="사진 보기 창 크기 조절"
+              onPointerDown={startPhotoViewerResize}
+              className="absolute bottom-0 right-0 h-7 w-7 cursor-nwse-resize rounded-tl-lg bg-slate-900/80 text-xs font-bold text-white hover:bg-slate-900"
+            >
+              ↘
+            </button>
+          </div>
+        </div>
+      )}
 
       
       <section className="grid grid-cols-2 gap-3 xl:grid-cols-8 xl:gap-4">
