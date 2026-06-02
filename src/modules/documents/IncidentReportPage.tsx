@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { localDateText } from "../../lib/date";
 import { supabase } from "../../lib/supabase";
+import type { MenuItem } from "../../data/menuData";
 import type { UserRole } from "../../types/roles";
 
 type LoginUser = {
@@ -16,9 +17,10 @@ type LoginUser = {
 type IncidentReportPageProps = {
   user: LoginUser;
   isAdmin: boolean;
+  onSelectMenu: (menu: MenuItem) => void;
 };
 
-type IncidentStatus = "확인대기" | "확인완료";
+type IncidentStatus = "확인대기" | "확인완료" | "반려";
 
 type IncidentReport = {
   id: number;
@@ -62,6 +64,7 @@ const formatRequesterName = (user: LoginUser) => {
 export default function IncidentReportPage({
   user,
   isAdmin,
+  onSelectMenu,
 }: IncidentReportPageProps) {
   const [rows, setRows] = useState<IncidentReport[]>([]);
   const [searchText, setSearchText] = useState("");
@@ -175,7 +178,7 @@ export default function IncidentReportPage({
   };
 
   const handleCheck = async (row: IncidentReport) => {
-    if (!canCheck || row.status === "확인완료") return;
+    if (!canCheck || row.status !== "확인대기") return;
 
     const ok = confirm("이 경위서를 확인완료 처리할까요?");
     if (!ok) return;
@@ -196,6 +199,38 @@ export default function IncidentReportPage({
     }
 
     void loadRows();
+  };
+
+  const handleReject = async (row: IncidentReport) => {
+    if (!canCheck || row.status !== "확인대기") return;
+
+    const ok = confirm("이 경위서를 반려 처리할까요?");
+    if (!ok) return;
+
+    const { error } = await supabase
+      .from("incident_reports")
+      .update({
+        status: "반려",
+        checked_by: user.user_id,
+        checked_name: formatRequesterName(user),
+        checked_at: new Date().toISOString(),
+      })
+      .eq("id", row.id);
+
+    if (error) {
+      alert("반려 처리 실패: " + error.message);
+      return;
+    }
+
+    void loadRows();
+  };
+
+  const openPrintPage = (row: IncidentReport) => {
+    onSelectMenu({
+      id: "documents-incident-report-print",
+      title: "경위서 출력",
+      data: { incidentReport: row },
+    });
   };
 
   return (
@@ -275,6 +310,7 @@ export default function IncidentReportPage({
               <option value="">전체 상태</option>
               <option value="확인대기">확인대기</option>
               <option value="확인완료">확인완료</option>
+              <option value="반려">반려</option>
             </select>
 
             <input
@@ -291,6 +327,8 @@ export default function IncidentReportPage({
             rows={visibleRows}
             canCheck={canCheck}
             onCheck={handleCheck}
+            onReject={handleReject}
+            onPrint={openPrintPage}
           />
         </div>
 
@@ -298,6 +336,8 @@ export default function IncidentReportPage({
           rows={visibleRows}
           canCheck={canCheck}
           onCheck={handleCheck}
+          onReject={handleReject}
+          onPrint={openPrintPage}
         />
       </section>
     </div>
@@ -308,10 +348,14 @@ function IncidentTable({
   rows,
   canCheck,
   onCheck,
+  onReject,
+  onPrint,
 }: {
   rows: IncidentReport[];
   canCheck: boolean;
   onCheck: (row: IncidentReport) => void;
+  onReject: (row: IncidentReport) => void;
+  onPrint: (row: IncidentReport) => void;
 }) {
   return (
     <table className="min-w-[980px] w-full border-collapse text-sm">
@@ -335,7 +379,14 @@ function IncidentTable({
             <td className="border px-2 py-2 font-semibold">{row.title}</td>
             <td className="border px-2 py-2 text-center">{row.requested_name}</td>
             <td className="border px-2 py-2 text-center">
-              <StatusBadge status={row.status} />
+              <button
+                type="button"
+                onClick={() => onPrint(row)}
+                className="rounded-full focus:outline-none focus:ring-2 focus:ring-blue-200"
+                title="경위서 내용 보기"
+              >
+                <StatusBadge status={row.status} />
+              </button>
             </td>
             <td className="border px-2 py-2 text-center">
               {row.checked_name ?? "-"}
@@ -351,7 +402,12 @@ function IncidentTable({
               )}
             </td>
             <td className="border px-2 py-2 text-center">
-              <CheckButton row={row} canCheck={canCheck} onCheck={onCheck} />
+              <ActionButtons
+                row={row}
+                canCheck={canCheck}
+                onCheck={onCheck}
+                onReject={onReject}
+              />
             </td>
           </tr>
         ))}
@@ -372,10 +428,14 @@ function MobileIncidentCards({
   rows,
   canCheck,
   onCheck,
+  onReject,
+  onPrint,
 }: {
   rows: IncidentReport[];
   canCheck: boolean;
   onCheck: (row: IncidentReport) => void;
+  onReject: (row: IncidentReport) => void;
+  onPrint: (row: IncidentReport) => void;
 }) {
   if (rows.length === 0) {
     return (
@@ -396,7 +456,14 @@ function MobileIncidentCards({
                 {row.report_date} / {row.incident_type}
               </div>
             </div>
-            <StatusBadge status={row.status} />
+            <button
+              type="button"
+              onClick={() => onPrint(row)}
+              className="rounded-full focus:outline-none focus:ring-2 focus:ring-blue-200"
+              title="경위서 내용 보기"
+            >
+              <StatusBadge status={row.status} />
+            </button>
           </div>
 
           <div className="mt-3 text-sm text-slate-700">
@@ -414,8 +481,20 @@ function MobileIncidentCards({
             </div>
           )}
 
-          <div className="mt-3 flex justify-end">
-            <CheckButton row={row} canCheck={canCheck} onCheck={onCheck} />
+          <div className="mt-3 flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => onPrint(row)}
+              className="rounded-lg border border-blue-300 px-3 py-1.5 text-xs font-semibold text-blue-600"
+            >
+              출력
+            </button>
+            <ActionButtons
+              row={row}
+              canCheck={canCheck}
+              onCheck={onCheck}
+              onReject={onReject}
+            />
           </div>
         </div>
       ))}
@@ -423,27 +502,38 @@ function MobileIncidentCards({
   );
 }
 
-function CheckButton({
+function ActionButtons({
   row,
   canCheck,
   onCheck,
+  onReject,
 }: {
   row: IncidentReport;
   canCheck: boolean;
   onCheck: (row: IncidentReport) => void;
+  onReject: (row: IncidentReport) => void;
 }) {
-  if (!canCheck || row.status === "확인완료") {
+  if (!canCheck || row.status !== "확인대기") {
     return <span className="text-xs text-slate-400">-</span>;
   }
 
   return (
-    <button
-      type="button"
-      onClick={() => void onCheck(row)}
-      className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700"
-    >
-      확인
-    </button>
+    <div className="flex justify-center gap-2">
+      <button
+        type="button"
+        onClick={() => void onCheck(row)}
+        className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700"
+      >
+        확인
+      </button>
+      <button
+        type="button"
+        onClick={() => void onReject(row)}
+        className="rounded-lg border border-red-300 bg-white px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50"
+      >
+        반려
+      </button>
+    </div>
   );
 }
 
@@ -472,6 +562,8 @@ function StatusBadge({ status }: { status: IncidentStatus }) {
   const className =
     status === "확인완료"
       ? "bg-green-100 text-green-700"
+      : status === "반려"
+        ? "bg-red-100 text-red-700"
       : "bg-amber-100 text-amber-700";
 
   return (

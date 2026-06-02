@@ -1,6 +1,18 @@
 "use client";
 
 import type { MenuItem } from "../../data/menuData";
+import { supabase } from "../../lib/supabase";
+import type { UserRole } from "../../types/roles";
+
+type LoginUser = {
+  id: string | number;
+  user_id: string;
+  user_name: string;
+  department?: string | null;
+  approval_role?: string | null;
+  role: UserRole;
+  is_active: boolean;
+};
 
 type AttendanceRequest = {
   id: number;
@@ -20,12 +32,16 @@ type AttendanceRequest = {
   requested_by: string;
   requested_name: string | null;
   requested_department: string | null;
+  department_approved_by?: string | null;
   department_approved_name: string | null;
   department_approved_at: string | null;
+  admin_dept_approved_by?: string | null;
   admin_dept_approved_name: string | null;
   admin_dept_approved_at: string | null;
+  final_approved_by?: string | null;
   final_approved_name: string | null;
   final_approved_at: string | null;
+  approved_by?: string | null;
   approved_name: string | null;
   approved_at: string | null;
   reject_reason: string | null;
@@ -34,6 +50,8 @@ type AttendanceRequest = {
 
 type AttendanceRequestPrintPageProps = {
   attendanceRequest?: AttendanceRequest;
+  user: LoginUser;
+  isAdmin: boolean;
   onSelectMenu: (menu: MenuItem) => void;
 };
 
@@ -58,6 +76,8 @@ const formatPeriod = (row: AttendanceRequest) => {
 
 export default function AttendanceRequestPrintPage({
   attendanceRequest,
+  user,
+  isAdmin,
   onSelectMenu,
 }: AttendanceRequestPrintPageProps) {
   if (!attendanceRequest) {
@@ -68,17 +88,143 @@ export default function AttendanceRequestPrintPage({
     );
   }
 
+  const isDepartmentHead = user.approval_role === "부서장";
+  const isAdminDept = user.approval_role === "관리부";
+  const isFinalAdmin = isAdmin || user.approval_role === "관리자";
+  const canApprove =
+    attendanceRequest.status === "부서장 승인대기"
+      ? isFinalAdmin ||
+        (isDepartmentHead && attendanceRequest.requested_department === user.department)
+      : attendanceRequest.status === "관리부 확인대기"
+        ? isFinalAdmin || isAdminDept
+        : attendanceRequest.status === "관리자 승인대기"
+          ? isFinalAdmin
+          : false;
+
+  const goList = () =>
+    onSelectMenu({
+      id: "documents-attendance-request",
+      title: "근태신청서",
+    });
+
+  const nextApprovalStatus = (): AttendanceRequest["status"] => {
+    if (attendanceRequest.status === "부서장 승인대기") return "관리부 확인대기";
+    if (attendanceRequest.status === "관리부 확인대기") return "관리자 승인대기";
+    return "승인완료";
+  };
+
+  const approveRequest = async () => {
+    if (!canApprove) {
+      alert("현재 단계의 승인 권한이 없습니다.");
+      return;
+    }
+
+    if (!confirm("이 근태신청서를 다음 단계로 승인할까요?")) {
+      return;
+    }
+
+    const approvedAt = new Date().toISOString();
+    const nextStatus = nextApprovalStatus();
+    const stagePayload =
+      attendanceRequest.status === "부서장 승인대기"
+        ? {
+            department_approved_by: user.user_id,
+            department_approved_name: user.user_name,
+            department_approved_at: approvedAt,
+          }
+        : attendanceRequest.status === "관리부 확인대기"
+          ? {
+              admin_dept_approved_by: user.user_id,
+              admin_dept_approved_name: user.user_name,
+              admin_dept_approved_at: approvedAt,
+            }
+          : {
+              final_approved_by: user.user_id,
+              final_approved_name: user.user_name,
+              final_approved_at: approvedAt,
+            };
+
+    const { error } = await supabase
+      .from("attendance_requests")
+      .update({
+        status: nextStatus,
+        ...(nextStatus === "승인완료"
+          ? {
+              approved_by: user.user_id,
+              approved_name: user.user_name,
+              approved_at: approvedAt,
+            }
+          : {}),
+        ...stagePayload,
+        reject_reason: null,
+      })
+      .eq("id", attendanceRequest.id);
+
+    if (error) {
+      alert("승인 처리 실패: " + error.message);
+      return;
+    }
+
+    alert(nextStatus === "승인완료" ? "최종 승인되었습니다." : "다음 단계로 승인되었습니다.");
+    goList();
+  };
+
+  const rejectRequest = async () => {
+    if (!canApprove) {
+      alert("현재 단계의 반려 권한이 없습니다.");
+      return;
+    }
+
+    const reason = prompt("반려 사유를 입력하세요.");
+
+    if (reason === null) {
+      return;
+    }
+
+    const { error } = await supabase
+      .from("attendance_requests")
+      .update({
+        status: "반려",
+        approved_by: user.user_id,
+        approved_name: user.user_name,
+        approved_at: new Date().toISOString(),
+        reject_reason: reason,
+      })
+      .eq("id", attendanceRequest.id);
+
+    if (error) {
+      alert("반려 처리 실패: " + error.message);
+      return;
+    }
+
+    alert("반려되었습니다.");
+    goList();
+  };
+
   return (
     <div className="print-area min-h-screen bg-slate-200 p-4 text-slate-900 print:bg-white print:p-0">
       <div className="no-print mb-4 flex justify-end gap-2">
+        {canApprove && (
+          <>
+            <button
+              type="button"
+              onClick={() => void approveRequest()}
+              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+            >
+              승인
+            </button>
+            <button
+              type="button"
+              onClick={() => void rejectRequest()}
+              className="rounded-lg border border-red-300 bg-white px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50"
+            >
+              반려
+            </button>
+          </>
+        )}
         <button
           type="button"
-          onClick={() =>
-            onSelectMenu({
-              id: "documents-attendance-request",
-              title: "근태신청서",
-            })
-          }
+          onClick={goList}
           className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
         >
           목록으로

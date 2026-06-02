@@ -1,6 +1,18 @@
 "use client";
 
 import type { MenuItem } from "../../data/menuData";
+import { supabase } from "../../lib/supabase";
+import type { UserRole } from "../../types/roles";
+
+type LoginUser = {
+  id: string | number;
+  user_id: string;
+  user_name: string;
+  department?: string | null;
+  approval_role?: string | null;
+  role: UserRole;
+  is_active: boolean;
+};
 
 type ExpenseRequest = {
   id: number;
@@ -26,6 +38,8 @@ type ExpenseRequest = {
 
 type ExpenseRequestPrintPageProps = {
   expenseRequest?: ExpenseRequest;
+  user: LoginUser;
+  isAdmin: boolean;
   onSelectMenu: (menu: MenuItem) => void;
 };
 
@@ -40,6 +54,8 @@ const formatDateTime = (value?: string | null) => {
 
 export default function ExpenseRequestPrintPage({
   expenseRequest,
+  user,
+  isAdmin,
   onSelectMenu,
 }: ExpenseRequestPrintPageProps) {
   if (!expenseRequest) {
@@ -50,17 +66,118 @@ export default function ExpenseRequestPrintPage({
     );
   }
 
+  const goList = () =>
+    onSelectMenu({
+      id: "documents-expense-request",
+      title: "지출결의서",
+    });
+
+  const approveRequest = async () => {
+    if (!isAdmin || expenseRequest.status !== "승인대기") {
+      return;
+    }
+
+    if (!confirm("이 지출결의서를 승인하고 일일입출금에 반영할까요?")) {
+      return;
+    }
+
+    const sourceName = `expense-request-${expenseRequest.id}`;
+
+    const { error: cashError } = await supabase.from("daily_cash").insert({
+      date: expenseRequest.request_date,
+      account: expenseRequest.account,
+      type: expenseRequest.expense_type,
+      category: expenseRequest.category,
+      content: expenseRequest.vendor
+        ? `${expenseRequest.vendor} - ${expenseRequest.content}`
+        : expenseRequest.content,
+      income: 0,
+      expense: Number(expenseRequest.amount || 0),
+      memo: expenseRequest.memo,
+      source_type: "expense_request",
+      source_work_name: sourceName,
+    });
+
+    if (cashError) {
+      alert("일일입출금 반영 실패: " + cashError.message);
+      return;
+    }
+
+    const { error } = await supabase
+      .from("expense_requests")
+      .update({
+        status: "승인완료",
+        approved_by: user.user_id,
+        approved_name: user.user_name,
+        approved_at: new Date().toISOString(),
+        reject_reason: null,
+      })
+      .eq("id", expenseRequest.id);
+
+    if (error) {
+      alert("승인 처리 실패: " + error.message);
+      return;
+    }
+
+    alert("승인되었습니다.");
+    goList();
+  };
+
+  const rejectRequest = async () => {
+    if (!isAdmin || expenseRequest.status !== "승인대기") {
+      return;
+    }
+
+    const reason = prompt("반려 사유를 입력하세요.");
+
+    if (reason === null) {
+      return;
+    }
+
+    const { error } = await supabase
+      .from("expense_requests")
+      .update({
+        status: "반려",
+        approved_by: user.user_id,
+        approved_name: user.user_name,
+        approved_at: new Date().toISOString(),
+        reject_reason: reason,
+      })
+      .eq("id", expenseRequest.id);
+
+    if (error) {
+      alert("반려 처리 실패: " + error.message);
+      return;
+    }
+
+    alert("반려되었습니다.");
+    goList();
+  };
+
   return (
     <div className="print-area min-h-screen bg-slate-200 p-4 text-slate-900 print:bg-white print:p-0">
       <div className="no-print mb-4 flex justify-end gap-2">
+        {isAdmin && expenseRequest.status === "승인대기" && (
+          <>
+            <button
+              type="button"
+              onClick={() => void approveRequest()}
+              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+            >
+              승인
+            </button>
+            <button
+              type="button"
+              onClick={() => void rejectRequest()}
+              className="rounded-lg border border-red-300 bg-white px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50"
+            >
+              반려
+            </button>
+          </>
+        )}
         <button
           type="button"
-          onClick={() =>
-            onSelectMenu({
-              id: "documents-expense-request",
-              title: "지출결의서",
-            })
-          }
+          onClick={goList}
           className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
         >
           목록으로

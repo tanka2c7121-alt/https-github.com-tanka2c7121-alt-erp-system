@@ -29,6 +29,7 @@ import ExpenseRequestPrintPage from "../../modules/documents/ExpenseRequestPrint
 import AttendanceRequestPage from "../../modules/documents/AttendanceRequestPage";
 import AttendanceRequestPrintPage from "../../modules/documents/AttendanceRequestPrintPage";
 import IncidentReportPage from "../../modules/documents/IncidentReportPage";
+import IncidentReportPrintPage from "../../modules/documents/IncidentReportPrintPage";
 import SalesDashboardPage from "../../modules/sales/SalesDashboardPage";
 import SalesRevenuePage from "../../modules/sales/SalesRevenuePage";
 
@@ -70,6 +71,7 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
         nextWorkName?: string;
         expenseRequest?: any;
         attendanceRequest?: any;
+        incidentReport?: any;
       }
     | undefined;
   const mobileMenus = flattenMenus(menuData, userRole, user.department);
@@ -361,6 +363,8 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
             ) : selectedMenu.id === "documents-expense-request-print" ? (
               <ExpenseRequestPrintPage
                 expenseRequest={selectedData?.expenseRequest}
+                user={user}
+                isAdmin={isAdmin}
                 onSelectMenu={handleSelectMenu}
               />
             ) : selectedMenu.id === "documents-attendance-request" ? (
@@ -372,10 +376,23 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
             ) : selectedMenu.id === "documents-attendance-request-print" ? (
               <AttendanceRequestPrintPage
                 attendanceRequest={selectedData?.attendanceRequest}
+                user={user}
+                isAdmin={isAdmin}
                 onSelectMenu={handleSelectMenu}
               />
             ) : selectedMenu.id === "documents-incident-report" ? (
-              <IncidentReportPage user={user} isAdmin={isAdmin} />
+              <IncidentReportPage
+                user={user}
+                isAdmin={isAdmin}
+                onSelectMenu={handleSelectMenu}
+              />
+            ) : selectedMenu.id === "documents-incident-report-print" ? (
+              <IncidentReportPrintPage
+                incidentReport={selectedData?.incidentReport}
+                user={user}
+                isAdmin={isAdmin}
+                onSelectMenu={handleSelectMenu}
+              />
             ) : (
               <>
                 <div className="text-sm text-slate-500">?묒뾽 ?붾㈃ ?곸뿭</div>

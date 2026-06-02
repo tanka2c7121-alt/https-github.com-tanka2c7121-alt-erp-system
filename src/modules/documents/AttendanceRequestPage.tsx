@@ -665,7 +665,14 @@ function AttendanceTable({
           rows.map((row) => (
             <tr key={row.id} className="hover:bg-slate-50">
               <td className="border border-slate-200 px-3 py-2">
-                <StatusBadge status={row.status} />
+                <button
+                  type="button"
+                  onClick={() => onPrint(row)}
+                  className="rounded-full focus:outline-none focus:ring-2 focus:ring-blue-200"
+                  title="근태신청서 내용 보기"
+                >
+                  <StatusBadge status={row.status} />
+                </button>
               </td>
               <td className="border border-slate-200 px-3 py-2">
                 {row.requested_name ?? row.requested_by}
@@ -792,7 +799,14 @@ function MobileAttendanceCards({
           <div key={row.id} className="rounded-xl border border-slate-200 p-4">
             <div className="mb-3 flex items-start justify-between gap-3">
               <div>
-                <StatusBadge status={row.status} />
+                <button
+                  type="button"
+                  onClick={() => onPrint(row)}
+                  className="rounded-full focus:outline-none focus:ring-2 focus:ring-blue-200"
+                  title="근태신청서 내용 보기"
+                >
+                  <StatusBadge status={row.status} />
+                </button>
                 <span className="ml-2">
                   <UrgentBadge startDate={row.start_date} />
                 </span>

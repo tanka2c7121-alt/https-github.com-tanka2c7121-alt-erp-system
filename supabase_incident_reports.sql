@@ -8,7 +8,7 @@ create table if not exists public.incident_reports (
   action_taken text,
   memo text,
   status text not null default '확인대기'
-    check (status in ('확인대기', '확인완료')),
+    check (status in ('확인대기', '확인완료', '반려')),
   requested_by text not null,
   requested_name text,
   requested_department text,
@@ -17,6 +17,13 @@ create table if not exists public.incident_reports (
   checked_at timestamptz,
   created_at timestamptz not null default now()
 );
+
+alter table public.incident_reports
+  drop constraint if exists incident_reports_status_check;
+
+alter table public.incident_reports
+  add constraint incident_reports_status_check
+  check (status in ('확인대기', '확인완료', '반려'));
 
 create index if not exists incident_reports_report_date_idx
   on public.incident_reports (report_date desc);

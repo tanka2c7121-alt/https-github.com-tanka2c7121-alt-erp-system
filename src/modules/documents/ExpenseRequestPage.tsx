@@ -697,7 +697,14 @@ function ExpenseTable({
           rows.map((row) => (
             <tr key={row.id} className="hover:bg-slate-50">
               <td className="border border-slate-200 px-3 py-2">
-                <StatusBadge status={row.status} />
+                <button
+                  type="button"
+                  onClick={() => onPrint(row)}
+                  className="rounded-full focus:outline-none focus:ring-2 focus:ring-blue-200"
+                  title="지출결의서 내용 보기"
+                >
+                  <StatusBadge status={row.status} />
+                </button>
               </td>
               <td className="border border-slate-200 px-3 py-2">
                 {row.requested_name ?? row.requested_by}
@@ -797,7 +804,14 @@ function MobileExpenseCards({
           <div key={row.id} className="rounded-xl border border-slate-200 p-4">
             <div className="mb-3 flex items-start justify-between gap-3">
               <div>
-                <StatusBadge status={row.status} />
+                <button
+                  type="button"
+                  onClick={() => onPrint(row)}
+                  className="rounded-full focus:outline-none focus:ring-2 focus:ring-blue-200"
+                  title="지출결의서 내용 보기"
+                >
+                  <StatusBadge status={row.status} />
+                </button>
                 <div className="mt-2 text-lg font-bold">
                   ₩ {Number(row.amount || 0).toLocaleString()}
                 </div>
