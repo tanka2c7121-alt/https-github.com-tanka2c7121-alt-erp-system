@@ -144,13 +144,6 @@ export default function ReleaseListPage({ onSelectMenu }: ReleaseListPageProps) 
     };
   }, [loadItems]);
 
-  const sortValue = (item: ReleaseItem, field: SortField) => {
-    if (field === "delay_days") return delayDays(item, today);
-    if (field === "insurance_display") return insuranceName(item);
-    if (field === "manager_display") return managerName(item);
-    return item[field] ?? "";
-  };
-
   const handleSort = (field: SortField) => {
     if (sortField === field) {
       setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"));
@@ -163,6 +156,12 @@ export default function ReleaseListPage({ onSelectMenu }: ReleaseListPageProps) 
 
   const filteredItems = useMemo(() => {
     const keyword = searchText.trim().toLowerCase();
+    const sortValue = (item: ReleaseItem, field: SortField) => {
+      if (field === "delay_days") return delayDays(item, today);
+      if (field === "insurance_display") return insuranceName(item);
+      if (field === "manager_display") return managerName(item);
+      return item[field] ?? "";
+    };
 
     return items
       .filter((item) => {

@@ -524,6 +524,8 @@ useEffect(() => {
 
   void loadData();
 
+// initialWorkName is the only trigger; handleLoadWorkOrder restores a large form snapshot.
+// eslint-disable-next-line react-hooks/exhaustive-deps
 }, [initialWorkName]);
 
 useEffect(() => {
@@ -548,6 +550,8 @@ useEffect(() => {
   }
 
   void loadWorkPhotos(workName);
+// workName changes are the trigger; loadWorkPhotos is a hoisted helper that reads the target name argument.
+// eslint-disable-next-line react-hooks/exhaustive-deps
 }, [workName]);
 
 useEffect(() => {
@@ -668,7 +672,7 @@ async function addPendingPhotoFiles(files: File[]) {
         setPhotoOcrMessage("사진이 저장 대기 목록에 추가되었습니다.");
       }
     }
-  } catch (error) {
+  } catch {
     setPhotoOcrMessage("사진이 저장 대기 목록에 추가되었습니다.");
   } finally {
     setPhotoOcrReading(false);
@@ -826,24 +830,6 @@ function handleDeletePendingPhoto(photoId: string) {
   });
 }
 
-async function handleDeletePhoto(photo: WorkPhoto) {
-  if (!confirm("이 사진을 삭제할까요?")) {
-    return;
-  }
-
-  const { error } = await supabase.storage
-    .from(workPhotoBucket)
-    .remove([photo.path]);
-
-  if (error) {
-    alert("사진 삭제 실패: " + error.message);
-    return;
-  }
-
-  setWorkPhotos((prev) => prev.filter((item) => item.path !== photo.path));
-  setSelectedPhotoPaths((prev) => prev.filter((path) => path !== photo.path));
-}
-
 function togglePhotoSelection(photo: WorkPhoto) {
   setSelectedPhotoPaths((prev) =>
     prev.includes(photo.path)
@@ -858,25 +844,6 @@ function selectAllPhotos() {
 
 function clearPhotoSelection() {
   setSelectedPhotoPaths([]);
-}
-
-function downloadSelectedPhotos() {
-  if (selectedWorkPhotos.length === 0) {
-    alert("다운로드할 사진을 선택하세요.");
-    return;
-  }
-
-  selectedWorkPhotos.forEach((photo, index) => {
-    setTimeout(() => {
-      const link = document.createElement("a");
-      link.href = photo.url;
-      link.download = photo.name;
-      link.target = "_blank";
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-    }, index * 200);
-  });
 }
 
 const safeFileName = (name: string) =>
@@ -1567,6 +1534,7 @@ function handleClearWorkRow(index: number) {
                         key={photo.id}
                         className="overflow-hidden rounded-lg border border-blue-200 bg-white"
                       >
+                        {/* eslint-disable-next-line @next/next/no-img-element -- Pending photos use local object URLs. */}
                         <img
                           src={photo.previewUrl}
                           alt="저장 대기 사진"
@@ -1651,6 +1619,7 @@ function handleClearWorkRow(index: number) {
                     className="h-4 w-4 accent-blue-600"
                   />
                 </span>
+                {/* eslint-disable-next-line @next/next/no-img-element -- Work photos use short-lived Supabase signed URLs. */}
                 <img
                   src={photo.url}
                   alt="작업사진"

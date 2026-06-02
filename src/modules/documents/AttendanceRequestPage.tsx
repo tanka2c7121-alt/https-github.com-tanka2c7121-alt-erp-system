@@ -524,7 +524,6 @@ export default function AttendanceRequestPage({
 
         <MobileAttendanceCards
           rows={visibleRows}
-          isAdmin={isAdmin}
           onApprove={approveRequest}
           onReject={rejectRequest}
           canApprove={canApproveRequest}
@@ -771,14 +770,12 @@ function ApprovalTrail({ row }: { row: AttendanceRequest }) {
 
 function MobileAttendanceCards({
   rows,
-  isAdmin,
   onApprove,
   onReject,
   canApprove,
   onPrint,
 }: {
   rows: AttendanceRequest[];
-  isAdmin: boolean;
   onApprove: (row: AttendanceRequest) => void;
   onReject: (row: AttendanceRequest) => void;
   canApprove: (row: AttendanceRequest) => boolean;

@@ -150,6 +150,7 @@ export default function ExpenseRequestPrintPage({
           </div>
           <div className="flex min-h-[360px] items-center justify-center border border-slate-900 p-4">
             {expenseRequest.receipt_url ? (
+              // eslint-disable-next-line @next/next/no-img-element -- Print preview uses a user-uploaded receipt URL.
               <img
                 src={expenseRequest.receipt_url}
                 alt="영수증"

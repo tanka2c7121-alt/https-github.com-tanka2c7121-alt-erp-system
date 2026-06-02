@@ -374,9 +374,20 @@ export default function DailyCashPage({ onSelectMenu }: DailyCashPageProps) {
                            }
                           className="rounded border border-blue-300 px-3 py-1 text-xs font-semibold text-blue-600 hover:bg-blue-50"
                            >
-                           수정
-                         </button>
-                         )}
+                            수정
+                          </button>
+                          )}
+                          {item.source_type !== "settlement_payment" && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                void handleDelete(item.id);
+                              }}
+                              className="rounded border border-red-300 px-3 py-1 text-xs font-semibold text-red-600 hover:bg-red-50"
+                            >
+                              삭제
+                            </button>
+                          )}
  
                       </div>
                     </td>

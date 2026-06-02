@@ -26,8 +26,6 @@ type LoginUser = {
   phone_number?: string | null;
 };
 
-const phoneDigits = (value?: string | null) => (value ?? "").replace(/\D/g, "");
-
 export default function Home() {
   const [user, setUser] = useState<LoginUser | null>(null);
 
@@ -84,8 +82,6 @@ function PasswordChangePage({
   async function handleChangePassword() {
     if (!isValidErpPassword(newPassword)) {
       alert(passwordRuleText);
-      return;
-      alert("새 비밀번호는 4자리 이상 입력하세요.");
       return;
     }
 

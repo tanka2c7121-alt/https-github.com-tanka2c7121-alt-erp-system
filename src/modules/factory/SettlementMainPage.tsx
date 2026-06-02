@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { MenuItem } from "../../data/menuData";
 import { localDateText } from "../../lib/date";
 import { supabase } from "../../lib/supabase";
@@ -15,20 +15,13 @@ export default function SettlementMainPage({
   const currentMonth = currentDate.slice(5, 7);
 
   const [dailyRows, setDailyRows] = useState<any[]>([]);
-  const [searchText, setSearchText] = useState("");
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [selectedMonth, setSelectedMonth] = useState(currentMonth);
   const [balanceRows, setBalanceRows] = useState<any[]>([]);
   const [paymentRows, setPaymentRows] = useState<any[]>([]);
   const [showReceivables, setShowReceivables] = useState(false);
 
-  useEffect(() => {
-  void fetchSettlementMain(selectedYear, selectedMonth);
-  void fetchBalanceRows();
-  void fetchReceivableRows();
-}, []);
-
-async function fetchReceivableRows() {
+const fetchReceivableRows = useCallback(async () => {
 
   const { data, error } = await supabase
     .from("settlement_payments")
@@ -44,9 +37,9 @@ async function fetchReceivableRows() {
   }
 
   setPaymentRows(data ?? []);
-}
+}, []);
 
-async function fetchBalanceRows() {
+const fetchBalanceRows = useCallback(async () => {
   const today = localDateText();
 
   const { data, error } = await supabase
@@ -60,40 +53,9 @@ async function fetchBalanceRows() {
   }
 
   setBalanceRows(data ?? []);
-}
+}, []);
 
-const filteredRows = dailyRows.filter((row) => {
-  const keyword = searchText.trim();
-
-  if (!keyword) return true;
-
-  return [
-    row.date,
-    row.account,
-    row.type,
-    row.category,
-    row.content,
-    row.memo,
-  ]
-    .join(" ")
-    .includes(keyword);
-});
-
-const totalIncome = filteredRows.reduce(
-  (sum, row) => sum + Number(row.income || 0),
-  0
-);
-
-const totalExpense = filteredRows.reduce(
-  (sum, row) => sum + Number(row.expense || 0),
-  0
-);
-
-const balance = totalIncome - totalExpense;
-
-const settlementIncome = filteredRows
-  .filter((row) => row.category === "차량정산")
-  .reduce((sum, row) => sum + Number(row.income || 0), 0);
+const filteredRows = dailyRows;
 
 const today = localDateText();
 
@@ -233,7 +195,7 @@ const yearOptions = useMemo(() => {
   ).sort((a, b) => b.localeCompare(a));
 }, [balanceRows, currentYear, dailyRows]);
 
-async function fetchSettlementMain(year: string, month: string) {
+const fetchSettlementMain = useCallback(async (year: string, month: string) => {
   let query = supabase
     .from("daily_cash")
     .select("*")
@@ -265,7 +227,19 @@ async function fetchSettlementMain(year: string, month: string) {
       ? rows.filter((row) => String(row.date ?? "").slice(5, 7) === month)
       : rows
   );
-}
+}, []);
+
+  useEffect(() => {
+    void fetchSettlementMain(selectedYear, selectedMonth);
+    void fetchBalanceRows();
+    void fetchReceivableRows();
+  }, [
+    fetchBalanceRows,
+    fetchReceivableRows,
+    fetchSettlementMain,
+    selectedMonth,
+    selectedYear,
+  ]);
 
   return (
     <div className="space-y-6 text-slate-900">

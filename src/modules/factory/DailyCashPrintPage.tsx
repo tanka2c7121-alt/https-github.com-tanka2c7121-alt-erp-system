@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { localDateText } from "../../lib/date";
 import { supabase } from "../../lib/supabase";
 
@@ -27,7 +27,7 @@ const [printDate, setPrintDate] =
 const [dailyCashList, setDailyCashList] =
   useState<DailyCashRow[]>([]);
 
-async function fetchRows(dateValue = printDate) {
+const fetchRows = useCallback(async (dateValue = printDate) => {
   const { data, error } = await supabase
     .from("daily_cash")
     .select("*")
@@ -40,11 +40,11 @@ async function fetchRows(dateValue = printDate) {
   }
 
   setDailyCashList(data ?? []);
-}
+}, [printDate]);
 
   useEffect(() => {
-    fetchRows();
-  }, []);
+    void fetchRows();
+  }, [fetchRows]);
   const totalIncome = dailyCashList.reduce((sum, item) => sum + Number(item.income || 0),0);
   const totalExpense = dailyCashList.reduce((sum, item) => sum + Number(item.expense || 0),0);
   const balance = totalIncome - totalExpense;

@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
 type WorkOrder = {
@@ -61,10 +61,10 @@ export default function WorkPrintPage({
   const [order, setOrder] = useState<WorkOrder | null>(null);
   const [details, setDetails] = useState<WorkDetail[]>([]);
 
-  async function handleLoadPrintData(
+  const handleLoadPrintData = useCallback(async (
     targetWorkName = searchWorkName,
     printAfterLoad = false
-  ) {
+  ) => {
     if (!targetWorkName) {
       alert("?묐챸???낅젰?섏꽭??");
       return;
@@ -102,7 +102,7 @@ export default function WorkPrintPage({
         window.print();
       }, 300);
     }
-  }
+  }, [searchWorkName]);
 
   useEffect(() => {
     if (!workName) return;
@@ -110,7 +110,7 @@ export default function WorkPrintPage({
     setSearchWorkName(workName);
 
     void handleLoadPrintData(workName, true);
-  }, [workName]);
+  }, [handleLoadPrintData, workName]);
 
   return (
     <div className="print-area flex min-h-screen items-center justify-center bg-slate-200 p-6 print:block print:bg-white print:p-0">
