@@ -33,6 +33,10 @@ const inputClass =
 const smallInputClass =
   "mt-1 w-full rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none";
 const labelClass = "text-sm font-semibold text-slate-800";
+const getInputStateClass = (value?: string | number | null) =>
+  String(value ?? "").trim()
+    ? "border-blue-200 bg-blue-50"
+    : "border-red-200 bg-red-50";
 
 const emptyPaymentRow = (): PaymentRow => ({
   paymentType: "",
@@ -776,7 +780,7 @@ export default function SettlementRegisterPage({
       <section className="rounded-xl border border-slate-200 bg-white p-4">
         <label className={labelClass}>비고</label>
         <textarea
-          className={`${inputClass} h-28 resize-none`}
+          className={`${getInputStateClass(form.memo)} ${inputClass} h-28 resize-none`}
           placeholder="정산 관련 메모를 입력하세요."
           value={form.memo}
           onChange={(event) => handleChange("memo", event.target.value)}
@@ -817,7 +821,7 @@ function Field({
       <label className={labelClass}>{label}</label>
       {options ? (
         <select
-          className={inputClass}
+          className={`${getInputStateClass(value)} ${inputClass}`}
           value={value}
           onChange={(event) => onChange?.(event.target.value)}
         >
@@ -830,7 +834,7 @@ function Field({
         </select>
       ) : (
         <input
-          className={inputClass}
+          className={`${getInputStateClass(value)} ${inputClass}`}
           placeholder={placeholder}
           type={type}
           value={value}
@@ -865,7 +869,7 @@ function StackedField({
               {row.label}
             </span>
             <input
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900"
+              className={`${getInputStateClass(row.value)} w-full rounded-lg border px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:outline-none`}
               type={type}
               value={row.value}
               readOnly={!row.onChange}
@@ -898,19 +902,19 @@ function CardInfoFields({
       <div className="mb-2 text-xs font-bold text-blue-700">카드정보</div>
       <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
         <input
-          className={smallInputClass}
+          className={`${getInputStateClass(approvalValue)} ${smallInputClass}`}
           placeholder="승인번호"
           value={approvalValue}
           onChange={(event) => onApprovalChange(event.target.value)}
         />
         <input
-          className={smallInputClass}
+          className={`${getInputStateClass(merchantValue)} ${smallInputClass}`}
           placeholder="가맹번호"
           value={merchantValue}
           onChange={(event) => onMerchantChange(event.target.value)}
         />
         <input
-          className={smallInputClass}
+          className={`${getInputStateClass(cardValue)} ${smallInputClass}`}
           placeholder="카드번호"
           value={cardValue}
           onChange={(event) => onCardChange(event.target.value)}
