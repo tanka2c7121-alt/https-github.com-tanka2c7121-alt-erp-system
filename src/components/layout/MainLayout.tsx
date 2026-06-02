@@ -63,6 +63,10 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
     employees: 0,
     expenses: 0,
     attendances: 0,
+    incidents: 0,
+    myExpenses: 0,
+    myAttendances: 0,
+    myIncidents: 0,
   });
 
   const selectedData = selectedMenu.data as
@@ -98,15 +102,6 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
     const canSeeApprovalNotice =
       isAdmin || ["부서장", "관리부", "관리자"].includes(approvalRole);
 
-    if (!canSeeApprovalNotice) {
-      setNotificationCounts({
-        employees: 0,
-        expenses: 0,
-        attendances: 0,
-      });
-      return;
-    }
-
     const attendanceStatus =
       approvalRole === "부서장"
         ? "부서장 승인대기"
@@ -114,41 +109,84 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
           ? "관리부 확인대기"
           : "관리자 승인대기";
 
-    let attendanceQuery = supabase
+    let attendanceQuery = canSeeApprovalNotice
+      ? supabase
       .from("attendance_requests")
       .select("id", { count: "exact", head: true })
-      .eq("status", attendanceStatus);
+          .eq("status", attendanceStatus)
+      : null;
 
-    if (approvalRole === "부서장") {
+    if (attendanceQuery && approvalRole === "부서장") {
       attendanceQuery = attendanceQuery.eq(
         "requested_department",
         user.department ?? ""
       );
     }
 
-    const [employeesResult, expensesResult, attendancesResult] =
+    const canCheckIncident = isAdmin || user.department === "관리부";
+    const notificationSince = new Date(
+      Date.now() - 7 * 24 * 60 * 60 * 1000
+    ).toISOString();
+
+    const [
+      employeesResult,
+      expensesResult,
+      attendancesResult,
+      incidentsResult,
+      myExpensesResult,
+      myAttendancesResult,
+      myIncidentsResult,
+    ] =
       await Promise.all([
-        isAdmin
+        canSeeApprovalNotice && isAdmin
           ? supabase
               .from("app_users")
               .select("id", { count: "exact", head: true })
               .eq("is_active", false)
           : Promise.resolve({ count: 0, error: null }),
-        isAdmin
+        canSeeApprovalNotice && isAdmin
           ? supabase
               .from("expense_requests")
               .select("id", { count: "exact", head: true })
               .eq("status", "승인대기")
           : Promise.resolve({ count: 0, error: null }),
-        attendanceQuery,
+        attendanceQuery ?? Promise.resolve({ count: 0, error: null }),
+        canCheckIncident
+          ? supabase
+              .from("incident_reports")
+              .select("id", { count: "exact", head: true })
+              .eq("status", "확인대기")
+          : Promise.resolve({ count: 0, error: null }),
+        supabase
+          .from("expense_requests")
+          .select("id", { count: "exact", head: true })
+          .eq("requested_by", user.user_id)
+          .in("status", ["승인완료", "반려"])
+          .gte("approved_at", notificationSince),
+        supabase
+          .from("attendance_requests")
+          .select("id", { count: "exact", head: true })
+          .eq("requested_by", user.user_id)
+          .in("status", ["승인완료", "반려"])
+          .gte("approved_at", notificationSince),
+        supabase
+          .from("incident_reports")
+          .select("id", { count: "exact", head: true })
+          .eq("requested_by", user.user_id)
+          .in("status", ["확인완료", "반려"])
+          .gte("checked_at", notificationSince),
       ]);
 
     setNotificationCounts({
       employees: employeesResult.error ? 0 : employeesResult.count ?? 0,
       expenses: expensesResult.error ? 0 : expensesResult.count ?? 0,
       attendances: attendancesResult.error ? 0 : attendancesResult.count ?? 0,
+      incidents: incidentsResult.error ? 0 : incidentsResult.count ?? 0,
+      myExpenses: myExpensesResult.error ? 0 : myExpensesResult.count ?? 0,
+      myAttendances: myAttendancesResult.error ? 0 : myAttendancesResult.count ?? 0,
+      myIncidents: myIncidentsResult.error ? 0 : myIncidentsResult.count ?? 0,
     });
-  }, [approvalRole, isAdmin, user.department]);
+  }, [approvalRole, isAdmin, user.department, user.user_id]);
 
   useEffect(() => {
     void loadNotificationCounts();
@@ -204,6 +242,46 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
           },
         ]
       : []),
+    ...(isAdmin || user.department === "관리부"
+      ? [
+          {
+            id: "incidents",
+            title: "경위서 확인대기",
+            count: notificationCounts.incidents,
+            menu: {
+              id: "documents-incident-report",
+              title: "경위서",
+            },
+          },
+        ]
+      : []),
+    {
+      id: "my-expenses",
+      title: "내 지출결의서 처리완료",
+      count: notificationCounts.myExpenses,
+      menu: {
+        id: "documents-expense-request",
+        title: "지출결의서",
+      },
+    },
+    {
+      id: "my-attendances",
+      title: "내 근태신청서 처리완료",
+      count: notificationCounts.myAttendances,
+      menu: {
+        id: "documents-attendance-request",
+        title: "근태신청서",
+      },
+    },
+    {
+      id: "my-incidents",
+      title: "내 경위서 처리완료",
+      count: notificationCounts.myIncidents,
+      menu: {
+        id: "documents-incident-report",
+        title: "경위서",
+      },
+    },
   ];
 
   return (
