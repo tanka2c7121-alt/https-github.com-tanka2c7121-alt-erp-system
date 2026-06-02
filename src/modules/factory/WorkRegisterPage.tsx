@@ -1143,9 +1143,15 @@ async function handleSave() {
   console.log("handleSave 시작");
   try {
     const targetWorkName = workName;
+    const normalizedCarNumber = carNumber.trim();
 
     if (!workName) {
       alert("작명을 입력하세요.");
+      return false;
+    }
+
+    if (!normalizedCarNumber) {
+      alert("차량번호를 입력해야 저장할 수 있습니다.");
       return false;
     }
 
@@ -1153,7 +1159,7 @@ async function handleSave() {
       work_name: workName,
       car_maker: carMaker,
       car_model: carModel,
-      car_number: carNumber,
+      car_number: normalizedCarNumber,
       phone_number: phoneNumber,
       car_year: carYear,
       vin,
