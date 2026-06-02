@@ -129,24 +129,6 @@ export default function SettlementRegisterPage({
     [expenseRows]
   );
   const totalAmount = paymentTotal - expenseTotal;
-  const receivableAmount = useMemo(
-    () =>
-      form.coverageType === "과실"
-        ? Math.max(
-            toNumber(form.ownClaimAmount) +
-              toNumber(form.otherClaimAmount) -
-              paymentRows.reduce((sum, row) => sum + toNumber(row.amount), 0),
-            0
-          )
-        : paymentRows
-            .filter((row) => row.invoiceIssued && row.paymentStatus === "청구")
-            .reduce(
-              (sum, row) =>
-                sum + Math.max(toNumber(row.claimAmount) - toNumber(row.amount), 0),
-              0
-            ),
-    [form.coverageType, form.otherClaimAmount, form.ownClaimAmount, paymentRows]
-  );
 
   const handleChange = (key: string, value: string) => {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -557,9 +539,25 @@ export default function SettlementRegisterPage({
 
       <section className="rounded-xl border border-slate-200 bg-white p-4">
         <h3 className="mb-4 text-lg font-bold text-slate-900">청구정보</h3>
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           {form.coverageType === "과실" ? (
             <>
+              <StackedField
+                label="청구일"
+                type="date"
+                rows={[
+                  {
+                    label: "자차",
+                    value: form.ownClaimDate,
+                    onChange: (value) => handleChange("ownClaimDate", value),
+                  },
+                  {
+                    label: "대물",
+                    value: form.otherClaimDate,
+                    onChange: (value) => handleChange("otherClaimDate", value),
+                  },
+                ]}
+              />
               <StackedField
                 label="청구금액"
                 rows={[
@@ -577,40 +575,23 @@ export default function SettlementRegisterPage({
                   },
                 ]}
               />
-              <StackedField
-                label="청구일"
-                type="date"
-                rows={[
-                  {
-                    label: "자차",
-                    value: form.ownClaimDate,
-                    onChange: (value) => handleChange("ownClaimDate", value),
-                  },
-                  {
-                    label: "대물",
-                    value: form.otherClaimDate,
-                    onChange: (value) => handleChange("otherClaimDate", value),
-                  },
-                ]}
-              />
             </>
           ) : (
             <>
-              <Field
-                label="청구금액"
-                placeholder="0"
-                value={form.claimAmount}
-                onChange={(value) => handleChange("claimAmount", formatAmount(value))}
-              />
               <Field
                 label="청구일"
                 type="date"
                 value={form.claimDate}
                 onChange={(value) => handleChange("claimDate", value)}
               />
+              <Field
+                label="청구금액"
+                placeholder="0"
+                value={form.claimAmount}
+                onChange={(value) => handleChange("claimAmount", formatAmount(value))}
+              />
             </>
           )}
-          <Field label="미수금" value={receivableAmount.toLocaleString()} />
         </div>
       </section>
 
@@ -646,6 +627,20 @@ export default function SettlementRegisterPage({
               className="grid grid-cols-1 gap-4 rounded-xl border border-slate-100 p-3 md:grid-cols-5"
             >
               <Field
+                label="입금일"
+                type="date"
+                value={row.date}
+                onChange={(value) => handlePaymentChange(index, "date", value)}
+              />
+              <Field
+                label="입금금액"
+                placeholder="0"
+                value={row.amount}
+                onChange={(value) =>
+                  handlePaymentChange(index, "amount", formatAmount(value))
+                }
+              />
+              <Field
                 label="입금구분"
                 value={row.paymentType}
                 onChange={(value) =>
@@ -660,20 +655,6 @@ export default function SettlementRegisterPage({
                   handlePaymentChange(index, "paymentDetail", value)
                 }
                 options={["보험", "자차", "대물", "캐피탈", "일반", "바디케어"]}
-              />
-              <Field
-                label="입금금액"
-                placeholder="0"
-                value={row.amount}
-                onChange={(value) =>
-                  handlePaymentChange(index, "amount", formatAmount(value))
-                }
-              />
-              <Field
-                label="입금일"
-                type="date"
-                value={row.date}
-                onChange={(value) => handlePaymentChange(index, "date", value)}
               />
               <Field
                 label="입금방법"
