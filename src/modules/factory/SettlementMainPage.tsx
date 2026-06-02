@@ -137,15 +137,10 @@ const totalBalance = accountSummary.reduce(
   0
   );
 
-const getReceivableAmount = (row: any) => {
-  const hasClaimAmount = row.claim_amount !== null && row.claim_amount !== undefined;
-  const claimAmount = Number(hasClaimAmount ? row.claim_amount : row.payment_amount || 0);
-  const paidAmount = row.payment_date ? Number(row.payment_amount || 0) : 0;
+const getReceivableAmount = (row: any) => Number(row.payment_amount || 0);
 
-  return Math.max(claimAmount - paidAmount, 0);
-};
-
-const isReceivableRow = (row: any) => getReceivableAmount(row) > 0;
+const isReceivableRow = (row: any) =>
+  getReceivableAmount(row) > 0 && !row.payment_date;
 
 const receivableAmount = paymentRows
   .filter(isReceivableRow)
