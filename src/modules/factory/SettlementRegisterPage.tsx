@@ -47,27 +47,53 @@ const emptyPaymentRow = (): PaymentRow => ({
   paymentStatus: "청구",
 });
 
+const defaultFaultPaymentRows = (): PaymentRow[] => [
+  {
+    ...emptyPaymentRow(),
+    paymentType: "수리비",
+    paymentDetail: "자차",
+    invoiceIssued: true,
+    paymentStatus: "청구",
+  },
+  {
+    ...emptyPaymentRow(),
+    paymentType: "수리비",
+    paymentDetail: "대물",
+    invoiceIssued: true,
+    paymentStatus: "청구",
+  },
+];
+
 const defaultPaymentRowsForWorkOrder = (workOrder: any): PaymentRow[] => {
   if (workOrder?.coverage_type !== "과실") {
     return [emptyPaymentRow()];
   }
 
-  return [
-    {
-      ...emptyPaymentRow(),
-      paymentType: "수리비",
-      paymentDetail: "자차",
-      invoiceIssued: true,
-      paymentStatus: "청구",
-    },
-    {
-      ...emptyPaymentRow(),
-      paymentType: "수리비",
-      paymentDetail: "대물",
-      invoiceIssued: true,
-      paymentStatus: "청구",
-    },
-  ];
+  return defaultFaultPaymentRows();
+};
+
+const normalizePaymentRowsForWorkOrder = (
+  workOrder: any,
+  rows: PaymentRow[]
+): PaymentRow[] => {
+  if (workOrder?.coverage_type !== "과실") {
+    return rows.length > 0 ? rows : [emptyPaymentRow()];
+  }
+
+  const defaults = defaultFaultPaymentRows();
+  const normalizedRows = rows.length > 0 ? [...rows] : [];
+
+  defaults.forEach((defaultRow) => {
+    const hasDetail = normalizedRows.some(
+      (row) => row.paymentDetail === defaultRow.paymentDetail
+    );
+
+    if (!hasDetail) {
+      normalizedRows.push(defaultRow);
+    }
+  });
+
+  return normalizedRows;
 };
 
 const emptyExpenseRow = (): ExpenseRow => ({
@@ -139,6 +165,16 @@ export default function SettlementRegisterPage({
         .reduce((sum, row) => sum + toNumber(row.amount), 0),
     [paymentRows]
   );
+  const ownPaymentIndex = paymentRows.findIndex(
+    (row) => row.paymentDetail === "자차"
+  );
+  const otherPaymentIndex = paymentRows.findIndex(
+    (row) => row.paymentDetail === "대물"
+  );
+  const ownPaymentRow =
+    ownPaymentIndex >= 0 ? paymentRows[ownPaymentIndex] : undefined;
+  const otherPaymentRow =
+    otherPaymentIndex >= 0 ? paymentRows[otherPaymentIndex] : undefined;
 
   const handleChange = (key: string, value: string) => {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -237,7 +273,7 @@ export default function SettlementRegisterPage({
       memo: settlement?.memo ?? "",
     });
 
-    setPaymentRows(
+    const loadedPaymentRows =
       payments && payments.length > 0
         ? payments.map((item: any) => ({
             paymentType: item.payment_type ?? "",
@@ -252,8 +288,9 @@ export default function SettlementRegisterPage({
             claimDate: item.claim_date ?? "",
             paymentStatus: item.payment_status ?? "청구",
           }))
-        : defaultPaymentRowsForWorkOrder(workOrder)
-    );
+        : defaultPaymentRowsForWorkOrder(workOrder);
+
+    setPaymentRows(normalizePaymentRowsForWorkOrder(workOrder, loadedPaymentRows));
 
     setExpenseRows(
       expenses && expenses.length > 0
@@ -448,25 +485,40 @@ export default function SettlementRegisterPage({
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           <Field label="차량번호" value={form.carNumber} />
           <Field label="차량명" value={form.carModel} />
+          {form.coverageType === "과실" ? (
+            <StackedField
+              label="보험사"
+              rows={[
+                { label: "자차", value: form.insuranceCompany },
+                { label: "대물", value: form.otherInsuranceCompany },
+              ]}
+            />
+          ) : (
+            <Field label="보험사" value={form.insuranceCompany} />
+          )}
           <Field label="구분" value={form.category} />
           <Field label="담보" value={form.coverageType} />
           {form.coverageType === "과실" ? (
-            <>
-              <Field label="자차 보험사" value={form.insuranceCompany} />
-              <Field label="대물 보험사" value={form.otherInsuranceCompany} />
-              <Field label="자차 접수번호" value={form.receiptNumber || form.ownReceiptNumber} />
-              <Field label="대물 접수번호" value={form.otherReceiptNumber} />
-              <Field label="자차 담당자" value={form.ownManagerName || form.managerName} />
-              <Field label="대물 담당자" value={form.otherManagerName} />
-              <Field label="과실" value={form.faultRate} />
-            </>
+            <StackedField
+              label="담당자"
+              rows={[
+                { label: "자차", value: form.ownManagerName || form.managerName },
+                { label: "대물", value: form.otherManagerName },
+              ]}
+            />
           ) : (
-            <>
-              <Field label="보험사" value={form.insuranceCompany} />
-              <Field label="접수번호" value={form.receiptNumber} />
-              <Field label="담당자" value={form.managerName} />
-              <Field label="과실" value={form.faultRate} />
-            </>
+            <Field label="담당자" value={form.managerName} />
+          )}
+          {form.coverageType === "과실" ? (
+            <StackedField
+              label="접수번호"
+              rows={[
+                { label: "자차", value: form.receiptNumber || form.ownReceiptNumber },
+                { label: "대물", value: form.otherReceiptNumber },
+              ]}
+            />
+          ) : (
+            <Field label="접수번호" value={form.receiptNumber} />
           )}
           <Field label="합계금액" value={totalAmount.toLocaleString()} />
           <Field
@@ -481,18 +533,80 @@ export default function SettlementRegisterPage({
       <section className="rounded-xl border border-slate-200 bg-white p-4">
         <h3 className="mb-4 text-lg font-bold text-slate-900">청구정보</h3>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-          <Field
-            label="청구금액"
-            placeholder="0"
-            value={form.claimAmount}
-            onChange={(value) => handleChange("claimAmount", formatAmount(value))}
-          />
-          <Field
-            label="청구일"
-            type="date"
-            value={form.claimDate}
-            onChange={(value) => handleChange("claimDate", value)}
-          />
+          {form.coverageType === "과실" ? (
+            <>
+              <StackedField
+                label="청구금액"
+                rows={[
+                  {
+                    label: "자차",
+                    value: ownPaymentRow?.amount ?? "",
+                    onChange:
+                      ownPaymentIndex >= 0
+                        ? (value) =>
+                            handlePaymentChange(
+                              ownPaymentIndex,
+                              "amount",
+                              formatAmount(value)
+                            )
+                        : undefined,
+                  },
+                  {
+                    label: "대물",
+                    value: otherPaymentRow?.amount ?? "",
+                    onChange:
+                      otherPaymentIndex >= 0
+                        ? (value) =>
+                            handlePaymentChange(
+                              otherPaymentIndex,
+                              "amount",
+                              formatAmount(value)
+                            )
+                        : undefined,
+                  },
+                ]}
+              />
+              <StackedField
+                label="청구일"
+                type="date"
+                rows={[
+                  {
+                    label: "자차",
+                    value: ownPaymentRow?.claimDate ?? "",
+                    onChange:
+                      ownPaymentIndex >= 0
+                        ? (value) =>
+                            handlePaymentChange(ownPaymentIndex, "claimDate", value)
+                        : undefined,
+                  },
+                  {
+                    label: "대물",
+                    value: otherPaymentRow?.claimDate ?? "",
+                    onChange:
+                      otherPaymentIndex >= 0
+                        ? (value) =>
+                            handlePaymentChange(otherPaymentIndex, "claimDate", value)
+                        : undefined,
+                  },
+                ]}
+              />
+            </>
+          ) : (
+            <>
+              <Field
+                label="청구금액"
+                placeholder="0"
+                value={form.claimAmount}
+                onChange={(value) => handleChange("claimAmount", formatAmount(value))}
+              />
+              <Field
+                label="청구일"
+                type="date"
+                value={form.claimDate}
+                onChange={(value) => handleChange("claimDate", value)}
+              />
+            </>
+          )}
           <Field label="미수금" value={receivableAmount.toLocaleString()} />
         </div>
       </section>
@@ -712,6 +826,42 @@ function Field({
           readOnly={!onChange}
         />
       )}
+    </div>
+  );
+}
+
+function StackedField({
+  label,
+  rows,
+  type = "text",
+}: {
+  label: string;
+  rows: Array<{
+    label: string;
+    value: string;
+    onChange?: (value: string) => void;
+  }>;
+  type?: string;
+}) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-4">
+      <label className={labelClass}>{label}</label>
+      <div className="mt-2 space-y-2">
+        {rows.map((row) => (
+          <div key={row.label} className="grid grid-cols-[44px_1fr] items-center gap-2">
+            <span className="text-xs font-semibold text-slate-500">
+              {row.label}
+            </span>
+            <input
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900"
+              type={type}
+              value={row.value}
+              readOnly={!row.onChange}
+              onChange={(event) => row.onChange?.(event.target.value)}
+            />
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
