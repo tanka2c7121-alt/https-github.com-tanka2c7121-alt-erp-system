@@ -539,7 +539,7 @@ export default function SettlementRegisterPage({
 
       <section className="rounded-xl border border-slate-200 bg-white p-4">
         <h3 className="mb-4 text-lg font-bold text-slate-900">청구정보</h3>
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           {form.coverageType === "과실" ? (
             <>
               <StackedField
@@ -592,6 +592,7 @@ export default function SettlementRegisterPage({
               />
             </>
           )}
+          <div />
         </div>
       </section>
 
@@ -734,18 +735,18 @@ export default function SettlementRegisterPage({
           {expenseRows.map((row, index) => (
             <div key={index} className="grid grid-cols-1 gap-4 md:grid-cols-3">
               <Field
+                label="지출일"
+                type="date"
+                value={row.date}
+                onChange={(value) => handleExpenseChange(index, "date", value)}
+              />
+              <Field
                 label="지출금액"
                 placeholder="0"
                 value={row.amount}
                 onChange={(value) =>
                   handleExpenseChange(index, "amount", formatAmount(value))
                 }
-              />
-              <Field
-                label="지출일"
-                type="date"
-                value={row.date}
-                onChange={(value) => handleExpenseChange(index, "date", value)}
               />
               <Field
                 label="지출내역"
