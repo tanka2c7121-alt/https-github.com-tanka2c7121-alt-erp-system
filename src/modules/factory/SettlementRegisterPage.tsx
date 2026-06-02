@@ -309,6 +309,8 @@ export default function SettlementRegisterPage({
           }))
         : [emptyExpenseRow()]
     );
+
+    alert("불러왔습니다.");
   };
 
   useEffect(() => {
