@@ -488,16 +488,16 @@ function SummaryCard({
       </p>
 
       {details && (
-        <div className="mt-4 space-y-1">
+        <div className="mt-4 space-y-2 border-t border-slate-100 pt-3">
 
           {details.map((item) => (
             <div
               key={item.name}
-              className="flex justify-between text-xs text-slate-500"
+              className="flex items-center justify-between rounded-lg bg-orange-50 px-2 py-1.5 text-xs"
             >
-              <span>{item.name}</span>
+              <span className="font-semibold text-slate-600">{item.name}</span>
 
-              <span>
+              <span className="font-bold text-orange-700">
                 ₩ {item.amount.toLocaleString()}
               </span>
             </div>
