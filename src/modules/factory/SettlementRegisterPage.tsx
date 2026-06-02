@@ -47,6 +47,29 @@ const emptyPaymentRow = (): PaymentRow => ({
   paymentStatus: "청구",
 });
 
+const defaultPaymentRowsForWorkOrder = (workOrder: any): PaymentRow[] => {
+  if (workOrder?.coverage_type !== "과실") {
+    return [emptyPaymentRow()];
+  }
+
+  return [
+    {
+      ...emptyPaymentRow(),
+      paymentType: "수리비",
+      paymentDetail: "자차",
+      invoiceIssued: true,
+      paymentStatus: "청구",
+    },
+    {
+      ...emptyPaymentRow(),
+      paymentType: "수리비",
+      paymentDetail: "대물",
+      invoiceIssued: true,
+      paymentStatus: "청구",
+    },
+  ];
+};
+
 const emptyExpenseRow = (): ExpenseRow => ({
   amount: "",
   date: "",
@@ -83,10 +106,16 @@ export default function SettlementRegisterPage({
     carNumber: "",
     carModel: "",
     insuranceCompany: "",
+    otherInsuranceCompany: "",
     category: "",
     coverageType: "",
     managerName: "",
+    ownManagerName: "",
+    otherManagerName: "",
     receiptNumber: "",
+    ownReceiptNumber: "",
+    otherReceiptNumber: "",
+    faultRate: "",
     totalAmount: "",
     progressStatus: "미결",
     claimAmount: "",
@@ -191,10 +220,16 @@ export default function SettlementRegisterPage({
       carNumber: workOrder.car_number ?? "",
       carModel: workOrder.car_model ?? "",
       insuranceCompany: workOrder.insurance_company ?? "",
+      otherInsuranceCompany: workOrder.other_insurance_company ?? "",
       category: workOrder.category ?? "",
       coverageType: workOrder.coverage_type ?? "",
       managerName: workOrder.manager_name ?? "",
+      ownManagerName: workOrder.own_manager_name ?? "",
+      otherManagerName: workOrder.other_manager_name ?? "",
       receiptNumber: workOrder.receipt_number ?? "",
+      ownReceiptNumber: workOrder.own_receipt_number ?? "",
+      otherReceiptNumber: workOrder.other_receipt_number ?? "",
+      faultRate: workOrder.fault_rate ?? "",
       totalAmount: settlement?.total_amount?.toLocaleString() ?? "",
       progressStatus: settlement?.progress_status ?? "미결",
       claimAmount: settlement?.claim_amount?.toLocaleString() ?? "",
@@ -217,7 +252,7 @@ export default function SettlementRegisterPage({
             claimDate: item.claim_date ?? "",
             paymentStatus: item.payment_status ?? "청구",
           }))
-        : [emptyPaymentRow()]
+        : defaultPaymentRowsForWorkOrder(workOrder)
     );
 
     setExpenseRows(
@@ -413,11 +448,26 @@ export default function SettlementRegisterPage({
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           <Field label="차량번호" value={form.carNumber} />
           <Field label="차량명" value={form.carModel} />
-          <Field label="보험사" value={form.insuranceCompany} />
           <Field label="구분" value={form.category} />
           <Field label="담보" value={form.coverageType} />
-          <Field label="담당자" value={form.managerName} />
-          <Field label="접수번호" value={form.receiptNumber} />
+          {form.coverageType === "과실" ? (
+            <>
+              <Field label="자차 보험사" value={form.insuranceCompany} />
+              <Field label="대물 보험사" value={form.otherInsuranceCompany} />
+              <Field label="자차 접수번호" value={form.receiptNumber || form.ownReceiptNumber} />
+              <Field label="대물 접수번호" value={form.otherReceiptNumber} />
+              <Field label="자차 담당자" value={form.ownManagerName || form.managerName} />
+              <Field label="대물 담당자" value={form.otherManagerName} />
+              <Field label="과실" value={form.faultRate} />
+            </>
+          ) : (
+            <>
+              <Field label="보험사" value={form.insuranceCompany} />
+              <Field label="접수번호" value={form.receiptNumber} />
+              <Field label="담당자" value={form.managerName} />
+              <Field label="과실" value={form.faultRate} />
+            </>
+          )}
           <Field label="합계금액" value={totalAmount.toLocaleString()} />
           <Field
             label="진행상황"
@@ -479,7 +529,7 @@ export default function SettlementRegisterPage({
                 onChange={(value) =>
                   handlePaymentChange(index, "paymentDetail", value)
                 }
-                options={["보험", "캐피탈", "일반", "바디케어"]}
+                options={["보험", "자차", "대물", "캐피탈", "일반", "바디케어"]}
               />
               <Field
                 label="입금금액"
