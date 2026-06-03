@@ -22,6 +22,18 @@ const inputClass =
 const textAreaClass =
   "min-h-[120px] w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100";
 const labelClass = "text-sm font-semibold text-slate-800";
+const faultRateOptions = [
+  "미정",
+  "1:9",
+  "2:8",
+  "3:7",
+  "4:6",
+  "5:5",
+  "6:4",
+  "7:3",
+  "8:2",
+  "9:1",
+];
 const workPhotoBucket = "work-photos";
 const photoBatchSize = 10;
 
@@ -448,6 +460,8 @@ export default function WorkRegisterPage({
   );
   const [vehicleCatalog, setVehicleCatalog] = useState<VehicleCatalogRow[]>([]);
   const [businessCatalog, setBusinessCatalog] = useState<BusinessCatalogRow[]>([]);
+  const currentFaultRateOptions =
+    coverageType === "과실" ? faultRateOptions : ["해당없음"];
   const pendingPhotoGroups = chunkArray(pendingWorkPhotos, photoBatchSize);
   const photoViewerItems: PhotoViewerItem[] = [
     ...pendingWorkPhotos.map((photo) => ({
@@ -470,6 +484,20 @@ export default function WorkRegisterPage({
   );
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const cameraStreamRef = useRef<MediaStream | null>(null);
+
+  useEffect(() => {
+    if (coverageType === "과실") {
+      setFaultRate((prev) => (prev && prev !== "해당없음" ? prev : "미정"));
+      return;
+    }
+
+    if (coverageType === "자차" || coverageType === "대물") {
+      setFaultRate("해당없음");
+      return;
+    }
+
+    setFaultRate("");
+  }, [coverageType]);
 
   const colorOptions: Record<string, string[]> = {
   "그랜저": ["A2B", "WC9", "T2G","TB7","V7S"],
@@ -2194,9 +2222,9 @@ function handleClearWorkRow(index: number) {
 
     <Field
       label="과실"
-      placeholder="0%"
       value={faultRate}
       onChange={(e) => setFaultRate(e.target.value)}
+      options={currentFaultRateOptions}
     />
 
     <div className="rounded-xl border border-slate-200 bg-white p-4">
@@ -2229,9 +2257,9 @@ function handleClearWorkRow(index: number) {
 
     <Field
       label="과실"
-      placeholder="0%"
       value={faultRate}
       onChange={(e) => setFaultRate(e.target.value)}
+      options={currentFaultRateOptions}
     />
 
     <Field
