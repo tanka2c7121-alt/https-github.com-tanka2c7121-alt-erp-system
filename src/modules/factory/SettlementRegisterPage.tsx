@@ -28,6 +28,12 @@ type ExpenseRow = {
   type: string;
 };
 
+type ClaimRow = {
+  date: string;
+  amount: string;
+  detail: string;
+};
+
 const inputClass =
   "mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none";
 const smallInputClass =
@@ -69,6 +75,12 @@ const emptyExpenseRow = (): ExpenseRow => ({
   type: "",
 });
 
+const emptyClaimRow = (): ClaimRow => ({
+  date: "",
+  amount: "",
+  detail: "",
+});
+
 const formatWorkName = (value: string) => {
   const numbers = value.replace(/\D/g, "").slice(0, 9);
 
@@ -90,6 +102,7 @@ export default function SettlementRegisterPage({
   const [paymentRows, setPaymentRows] = useState<PaymentRow[]>([
     emptyPaymentRow(),
   ]);
+  const [claimRows, setClaimRows] = useState<ClaimRow[]>([emptyClaimRow()]);
   const [expenseRows, setExpenseRows] = useState<ExpenseRow[]>([
     emptyExpenseRow(),
   ]);
@@ -158,6 +171,18 @@ export default function SettlementRegisterPage({
     );
   };
 
+  const handleClaimChange = (
+    index: number,
+    field: keyof ClaimRow,
+    value: string
+  ) => {
+    setClaimRows((prev) =>
+      prev.map((row, rowIndex) =>
+        rowIndex === index ? { ...row, [field]: value } : row
+      )
+    );
+  };
+
   const handleExpenseChange = (
     index: number,
     field: keyof ExpenseRow,
@@ -206,6 +231,14 @@ export default function SettlementRegisterPage({
       .order("id", { ascending: true });
 
     const paymentItems = payments ?? [];
+    const storedClaimRows = paymentItems.filter(
+      (item: any) =>
+        item.payment_type === "청구" &&
+        Number(item.payment_amount ?? 0) === 0 &&
+        !item.payment_date &&
+        !item.payment_method &&
+        (item.claim_amount || item.claim_date || item.payment_detail)
+    );
     const legacyOwnClaimRow = paymentItems.find(
       (item: any) =>
         workOrder.coverage_type === "과실" &&
@@ -225,7 +258,10 @@ export default function SettlementRegisterPage({
         !item.payment_method
     );
     const paymentItemsForInput = paymentItems.filter(
-      (item: any) => item !== legacyOwnClaimRow && item !== legacyOtherClaimRow
+      (item: any) =>
+        !storedClaimRows.includes(item) &&
+        item !== legacyOwnClaimRow &&
+        item !== legacyOtherClaimRow
     );
 
     setForm({
@@ -285,6 +321,45 @@ export default function SettlementRegisterPage({
 
     setPaymentRows(normalizePaymentRowsForWorkOrder(loadedPaymentRows));
 
+    const loadedClaimRows =
+      storedClaimRows.length > 0
+        ? storedClaimRows.map((item: any) => ({
+            date: item.claim_date ?? "",
+            amount: item.claim_amount?.toLocaleString() ?? "",
+            detail: item.payment_detail ?? "",
+          }))
+        : workOrder.coverage_type === "과실"
+          ? [
+              {
+                date: settlement?.own_claim_date ?? legacyOwnClaimRow?.claim_date ?? "",
+                amount:
+                  settlement?.own_claim_amount?.toLocaleString() ??
+                  legacyOwnClaimRow?.claim_amount?.toLocaleString() ??
+                  "",
+                detail: "자차",
+              },
+              {
+                date:
+                  settlement?.other_claim_date ??
+                  legacyOtherClaimRow?.claim_date ??
+                  "",
+                amount:
+                  settlement?.other_claim_amount?.toLocaleString() ??
+                  legacyOtherClaimRow?.claim_amount?.toLocaleString() ??
+                  "",
+                detail: "대물",
+              },
+            ]
+          : [
+              {
+                date: settlement?.claim_date ?? "",
+                amount: settlement?.claim_amount?.toLocaleString() ?? "",
+                detail: "",
+              },
+            ];
+
+    setClaimRows(loadedClaimRows);
+
     setExpenseRows(
       expenses && expenses.length > 0
         ? expenses.map((item: any) => ({
@@ -331,6 +406,31 @@ export default function SettlementRegisterPage({
         invoice_issued: row.invoiceIssued,
         claim_date: row.claimDate || null,
         payment_status: row.paymentStatus,
+      }));
+
+    if (rows.length === 0) return null;
+
+    const { error } = await supabase.from("settlement_payments").insert(rows);
+    return error;
+  };
+
+  const saveClaimRows = async () => {
+    const rows = claimRows
+      .filter((row) => row.date || row.amount || row.detail)
+      .map((row) => ({
+        work_name: form.workName,
+        payment_type: "청구",
+        payment_detail: row.detail,
+        claim_amount: toNumber(row.amount),
+        payment_amount: 0,
+        payment_date: null,
+        payment_method: "",
+        approval_number: "",
+        merchant_number: "",
+        card_number: "",
+        invoice_issued: true,
+        claim_date: row.date || null,
+        payment_status: "청구",
       }));
 
     if (rows.length === 0) return null;
@@ -395,6 +495,15 @@ export default function SettlementRegisterPage({
     await supabase.from("settlement_payments").delete().eq("work_name", form.workName);
     await supabase.from("settlement_expenses").delete().eq("work_name", form.workName);
 
+    const claimTotal = claimRows.reduce(
+      (sum, row) => sum + toNumber(row.amount),
+      0
+    );
+    const firstClaimDate =
+      claimRows.find((row) => row.date)?.date || form.claimDate || null;
+    const ownClaimRow = claimRows.find((row) => row.detail === "자차");
+    const otherClaimRow = claimRows.find((row) => row.detail === "대물");
+
     const { error: settlementError } = await supabase
       .from("repair_settlements")
       .insert({
@@ -408,18 +517,12 @@ export default function SettlementRegisterPage({
         receipt_number: form.receiptNumber,
         total_amount: totalAmount,
         progress_status: form.progressStatus,
-        claim_amount:
-          form.coverageType === "과실"
-            ? toNumber(form.ownClaimAmount) + toNumber(form.otherClaimAmount)
-            : toNumber(form.claimAmount),
-        claim_date:
-          form.coverageType === "과실"
-            ? form.ownClaimDate || form.otherClaimDate || null
-            : form.claimDate || null,
-        own_claim_amount: toNumber(form.ownClaimAmount),
-        other_claim_amount: toNumber(form.otherClaimAmount),
-        own_claim_date: form.ownClaimDate || null,
-        other_claim_date: form.otherClaimDate || null,
+        claim_amount: claimTotal,
+        claim_date: firstClaimDate,
+        own_claim_amount: toNumber(ownClaimRow?.amount ?? ""),
+        other_claim_amount: toNumber(otherClaimRow?.amount ?? ""),
+        own_claim_date: ownClaimRow?.date || null,
+        other_claim_date: otherClaimRow?.date || null,
         memo: form.memo,
       });
 
@@ -437,6 +540,13 @@ export default function SettlementRegisterPage({
     if (workOrderMemoError) {
       setSaving(false);
       alert("전달내용 저장 실패: " + workOrderMemoError.message);
+      return;
+    }
+
+    const claimError = await saveClaimRows();
+    if (claimError) {
+      setSaving(false);
+      alert("청구정보 저장 실패: " + claimError.message);
       return;
     }
 
@@ -549,61 +659,62 @@ export default function SettlementRegisterPage({
       </section>
 
       <section className="rounded-xl border border-slate-200 bg-white p-4">
-        <h3 className="mb-4 text-lg font-bold text-slate-900">청구정보</h3>
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-          {form.coverageType === "과실" ? (
-            <>
-              <StackedField
-                label="청구일"
-                type="date"
-                rows={[
-                  {
-                    label: "자차",
-                    value: form.ownClaimDate,
-                    onChange: (value) => handleChange("ownClaimDate", value),
-                  },
-                  {
-                    label: "대물",
-                    value: form.otherClaimDate,
-                    onChange: (value) => handleChange("otherClaimDate", value),
-                  },
-                ]}
-              />
-              <StackedField
-                label="청구금액"
-                rows={[
-                  {
-                    label: "자차",
-                    value: form.ownClaimAmount,
-                    onChange: (value) =>
-                      handleChange("ownClaimAmount", formatAmount(value)),
-                  },
-                  {
-                    label: "대물",
-                    value: form.otherClaimAmount,
-                    onChange: (value) =>
-                      handleChange("otherClaimAmount", formatAmount(value)),
-                  },
-                ]}
-              />
-            </>
-          ) : (
-            <>
+        <div className="mb-4 flex items-center justify-between">
+          <h3 className="text-lg font-bold text-slate-900">청구정보</h3>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setClaimRows((prev) => [...prev, emptyClaimRow()])}
+              className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700"
+            >
+              추가
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                setClaimRows((prev) =>
+                  prev.length > 1 ? prev.slice(0, -1) : [emptyClaimRow()]
+                )
+              }
+              className="rounded-lg border border-red-300 px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50"
+            >
+              삭제
+            </button>
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          {claimRows.map((row, index) => (
+            <div
+              key={index}
+              className="grid grid-cols-1 gap-4 rounded-xl border border-slate-100 p-3 md:grid-cols-3"
+            >
               <Field
                 label="청구일"
                 type="date"
-                value={form.claimDate}
-                onChange={(value) => handleChange("claimDate", value)}
+                value={row.date}
+                onChange={(value) => handleClaimChange(index, "date", value)}
               />
               <Field
                 label="청구금액"
                 placeholder="0"
-                value={form.claimAmount}
-                onChange={(value) => handleChange("claimAmount", formatAmount(value))}
+                value={row.amount}
+                onChange={(value) =>
+                  handleClaimChange(index, "amount", formatAmount(value))
+                }
               />
-            </>
-          )}
-          <div />
+              <Field
+                label="청구상세"
+                value={row.detail}
+                onChange={(value) => handleClaimChange(index, "detail", value)}
+                options={
+                  form.coverageType === "과실"
+                    ? ["자차", "대물", "보험", "캐피탈", "일반", "바디케어"]
+                    : ["보험", "캐피탈", "일반", "바디케어"]
+                }
+              />
+            </div>
+          ))}
         </div>
       </section>
 
@@ -733,13 +844,26 @@ export default function SettlementRegisterPage({
       <section className="rounded-xl border border-slate-200 bg-white p-5">
         <div className="mb-4 flex items-center justify-between">
           <h3 className="text-lg font-bold text-slate-900">지출내역</h3>
-          <button
-            type="button"
-            onClick={() => setExpenseRows((prev) => [...prev, emptyExpenseRow()])}
-            className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700"
-          >
-            추가
-          </button>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setExpenseRows((prev) => [...prev, emptyExpenseRow()])}
+              className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700"
+            >
+              추가
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                setExpenseRows((prev) =>
+                  prev.length > 1 ? prev.slice(0, -1) : [emptyExpenseRow()]
+                )
+              }
+              className="rounded-lg border border-red-300 px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50"
+            >
+              삭제
+            </button>
+          </div>
         </div>
 
         <div className="space-y-3">
