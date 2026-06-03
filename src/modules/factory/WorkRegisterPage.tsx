@@ -34,6 +34,7 @@ const faultRateOptions = [
   "8:2",
   "9:1",
 ];
+const managerOptions = ["이승현", "김종욱", "오동근"];
 const normalizeNoneText = (value?: string | null) =>
   value === "해당없음" ? "-" : value ?? "";
 const workPhotoBucket = "work-photos";
@@ -337,7 +338,7 @@ const companyOptions: Record<string, string[]> = {
     "배달서비스공제",
   ],
   캐피탈: ["KB캐피탈", "BNK캐피탈", "오릭스캐피탈", "오픈링크"],
-  일반: ["해당없음", "바디케어"],
+  일반: ["-", "바디케어"],
 };
 
 const formatPhoneNumber = (value: string) => {
@@ -493,13 +494,22 @@ export default function WorkRegisterPage({
       return;
     }
 
-    if (coverageType === "자차" || coverageType === "대물") {
+    if (coverageType === "자차" || coverageType === "대물" || coverageType === "-") {
       setFaultRate("-");
       return;
     }
 
     setFaultRate("");
   }, [coverageType]);
+
+  useEffect(() => {
+    if (category !== "일반") return;
+
+    setCompany((prev) => (prev && prev !== "해당없음" ? prev : "-"));
+    setCoverageType("-");
+    setReceiptNumber("-");
+    setFaultRate("-");
+  }, [category]);
 
   const colorOptions: Record<string, string[]> = {
   "그랜저": ["A2B", "WC9", "T2G","TB7","V7S"],
@@ -1257,18 +1267,22 @@ async function handleLoadWorkOrder(
   setReleaseDate(order.release_date ?? "");
 
   setRentalCompany(order.rental_company ?? "");
-  setRentalPhoneNumber(order.rental_phone_number ?? "");
+  setRentalPhoneNumber(
+    order.rental_company === "N"
+      ? normalizeNoneText(order.rental_phone_number) || "-"
+      : order.rental_phone_number ?? ""
+  );
   setTowYn(order.tow_yn ?? "");
   setDeliveryYn(order.delivery_yn ?? "");
   setPartnerCompany(order.partner_company ?? "");
 
   setCategory(order.category ?? "");
-  setCompany(order.insurance_company ?? "");
+  setCompany(normalizeNoneText(order.insurance_company));
   setOtherCompany(order.other_insurance_company ?? "");
-  setCoverageType(order.coverage_type ?? "");
+  setCoverageType(normalizeNoneText(order.coverage_type));
   
 
-  setReceiptNumber(order.receipt_number ?? "");
+  setReceiptNumber(normalizeNoneText(order.receipt_number));
   setOwnReceiptNumber(order.own_receipt_number ?? "");
   setOtherReceiptNumber(order.other_receipt_number ?? "");
 
@@ -2043,7 +2057,9 @@ function handleClearWorkRow(index: number) {
 
   setRentalCompany(value);
 
-  if (value === "타렌트사용") {
+  if (value === "N") {
+    setRentalPhoneNumber("-");
+  } else if (value === "타렌트사용") {
     setRentalPhoneNumber("");
   } else {
     setRentalPhoneNumber(activeRentalCompanies[value] ?? "");
@@ -2138,7 +2154,17 @@ function handleClearWorkRow(index: number) {
             className={`${getInputStateClass(category)} ${inputClass}`}
             value={category}
             onChange={(e) => {
-              setCategory(e.target.value);
+              const nextCategory = e.target.value;
+              setCategory(nextCategory);
+
+              if (nextCategory === "일반") {
+                setCompany("-");
+                setCoverageType("-");
+                setReceiptNumber("-");
+                setFaultRate("-");
+                return;
+              }
+
               setCompany("");
             }}
           >
@@ -2162,7 +2188,10 @@ function handleClearWorkRow(index: number) {
           {category ? "보험사 선택" : "구분 먼저 선택"}
          </option>
 
-         {(activeCompanyOptions[category] ?? []).map((item) => (
+         {(category === "일반"
+           ? ["-", "바디케어"]
+           : activeCompanyOptions[category] ?? []
+         ).map((item) => (
          <option key={item} value={item}>
            {item}
          </option>
@@ -2195,6 +2224,7 @@ function handleClearWorkRow(index: number) {
             onChange={(e) => setCoverageType(e.target.value)}
           >
             <option value="">담보 선택</option>
+            <option value="-">-</option>
             <option value="과실">과실</option>
             <option value="자차">자차</option>
             <option value="대물">대물</option>
@@ -2232,19 +2262,31 @@ function handleClearWorkRow(index: number) {
     <div className="rounded-xl border border-slate-200 bg-white p-4">
   <label className={labelClass}>담당자</label>
 
-    <input
+    <select
       className={`${getInputStateClass(ownManagerName)} ${inputClass}`}
-      placeholder="자차 담당자"
       value={ownManagerName}
       onChange={(e) => setOwnManagerName(e.target.value)}
-    />
+    >
+      <option value="">자차 담당자 선택</option>
+      {managerOptions.map((item) => (
+        <option key={item} value={item}>
+          {item}
+        </option>
+      ))}
+    </select>
 
-    <input
+    <select
       className={`${getInputStateClass(otherManagerName)} ${inputClass}`}
-      placeholder="대물 담당자"
       value={otherManagerName}
       onChange={(e) => setOtherManagerName(e.target.value)}
-    />
+    >
+      <option value="">대물 담당자 선택</option>
+      {managerOptions.map((item) => (
+        <option key={item} value={item}>
+          {item}
+        </option>
+      ))}
+    </select>
   </div>
  
   </>
@@ -2266,9 +2308,9 @@ function handleClearWorkRow(index: number) {
 
     <Field
       label="담당자"
-      placeholder="담당자명"
       value={managerName}
       onChange={(e) => setManagerName(e.target.value)}
+      options={managerOptions}
     />
   </>
 )}
