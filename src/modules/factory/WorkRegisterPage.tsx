@@ -2254,7 +2254,7 @@ function handleClearWorkRow(index: number) {
   label="면책금(최소)"
   value={deductibleAmount}
   onChange={(e) => setDeductibleAmount(e.target.value)}
-  options={["해당없음", "10만원", "20만원", "30만원", "33만원", "50만원", "55만원","60만원","66만원"]}
+  options={["해당없음", "10만원", "20만원", "30만원", "33만원", "50만원", "55만원","60만원","66만원","99만원"]}
 />
 
  </section> 
