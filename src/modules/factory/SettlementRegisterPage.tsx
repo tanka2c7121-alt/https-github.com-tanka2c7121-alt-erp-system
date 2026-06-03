@@ -259,7 +259,7 @@ export default function SettlementRegisterPage({
         settlement?.own_claim_date ?? legacyOwnClaimRow?.claim_date ?? "",
       otherClaimDate:
         settlement?.other_claim_date ?? legacyOtherClaimRow?.claim_date ?? "",
-      memo: settlement?.memo ?? "",
+      memo: workOrder.message ?? settlement?.memo ?? "",
     });
 
     const loadedPaymentRows =
@@ -426,6 +426,17 @@ export default function SettlementRegisterPage({
     if (settlementError) {
       setSaving(false);
       alert("정산 저장 실패: " + settlementError.message);
+      return;
+    }
+
+    const { error: workOrderMemoError } = await supabase
+      .from("work_orders")
+      .update({ message: form.memo })
+      .eq("work_name", form.workName);
+
+    if (workOrderMemoError) {
+      setSaving(false);
+      alert("전달내용 저장 실패: " + workOrderMemoError.message);
       return;
     }
 
