@@ -765,7 +765,7 @@ export default function SettlementRegisterPage({
                 onChange={(value) =>
                   handlePaymentChange(index, "paymentType", value)
                 }
-                options={["수리비", "면책금", "부가세"]}
+                options={["수리비", "면책금", "부가세", "견적비", "보관료"]}
               />
               <Field
                 label="입금상세"
