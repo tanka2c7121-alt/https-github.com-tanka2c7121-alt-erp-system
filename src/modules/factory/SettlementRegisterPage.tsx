@@ -107,6 +107,7 @@ export default function SettlementRegisterPage({
     emptyExpenseRow(),
   ]);
   const [saving, setSaving] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
   const [form, setForm] = useState({
     workName: "",
     carNumber: "",
@@ -370,6 +371,7 @@ export default function SettlementRegisterPage({
         : [emptyExpenseRow()]
     );
 
+    setIsEditMode(true);
     alert("불러왔습니다.");
   };
 
@@ -572,7 +574,8 @@ export default function SettlementRegisterPage({
     }
 
     setSaving(false);
-    alert("저장되었습니다.");
+    setIsEditMode(true);
+    alert(isEditMode ? "수정되었습니다." : "저장되었습니다.");
   };
 
   return (
@@ -595,9 +598,10 @@ export default function SettlementRegisterPage({
                 className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900"
                 placeholder="2026-05-001"
                 value={form.workName}
-                onChange={(event) =>
-                  handleChange("workName", formatWorkName(event.target.value))
-                }
+                onChange={(event) => {
+                  handleChange("workName", formatWorkName(event.target.value));
+                  setIsEditMode(false);
+                }}
               />
               <button
                 type="button"
@@ -907,7 +911,7 @@ export default function SettlementRegisterPage({
           disabled={saving}
           className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
         >
-          {saving ? "저장 중" : "저장"}
+          {saving ? (isEditMode ? "수정 중" : "저장 중") : isEditMode ? "수정 후 저장" : "저장"}
         </button>
       </div>
     </div>
