@@ -655,7 +655,7 @@ export default function SettlementRegisterPage({
                 onChange={(value) =>
                   handlePaymentChange(index, "paymentDetail", value)
                 }
-                options={["보험", "자차", "대물", "캐피탈", "일반", "바디케어"]}
+                options={["보험", "캐피탈", "일반", "바디케어"]}
               />
               <Field
                 label="입금방법"
