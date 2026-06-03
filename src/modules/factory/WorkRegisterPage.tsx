@@ -1685,7 +1685,7 @@ function handleClearWorkRow(index: number) {
         </div>
 
         {cameraOpen && (
-          <div className="fixed inset-0 z-50 flex flex-col bg-slate-950">
+          <div className="fixed inset-0 z-50 flex flex-col bg-slate-950 landscape:flex-row">
             <video
               ref={videoRef}
               playsInline
@@ -1700,22 +1700,22 @@ function handleClearWorkRow(index: number) {
                 촬영 완료 {cameraShotCount}장
               </div>
             )}
-            <div className="shrink-0 border-t border-slate-800 bg-white p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
-              <div className="mx-auto flex max-w-md gap-2">
+            <div className="shrink-0 border-t border-slate-800 bg-white p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] landscape:flex landscape:w-24 landscape:items-center landscape:justify-center landscape:border-l landscape:border-t-0 landscape:bg-slate-950 landscape:pb-3">
+              <div className="mx-auto flex max-w-md gap-2 landscape:mx-0 landscape:flex-col">
               <button
                 type="button"
                 onClick={() => {
                   void captureCameraPhoto();
                 }}
                 disabled={photoOcrReading}
-                className="min-h-12 flex-1 rounded-lg bg-blue-600 px-5 py-3 text-sm font-semibold text-white hover:bg-blue-700 disabled:bg-slate-400"
+                className="min-h-12 flex-1 rounded-lg bg-blue-600 px-5 py-3 text-sm font-semibold text-white hover:bg-blue-700 disabled:bg-slate-400 landscape:h-20 landscape:w-20 landscape:rounded-full landscape:px-3 landscape:py-3"
               >
                 촬영
               </button>
               <button
                 type="button"
                 onClick={closeCamera}
-                className="min-h-12 flex-1 rounded-lg border border-slate-300 px-5 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                className="min-h-12 flex-1 rounded-lg border border-slate-300 px-5 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 landscape:hidden"
               >
                 닫기
               </button>
