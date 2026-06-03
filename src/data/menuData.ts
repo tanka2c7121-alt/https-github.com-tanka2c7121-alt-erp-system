@@ -37,7 +37,14 @@ export const menuData: MenuItem[] = [
           { id: "factory-work-register", title: "작업등록" },
         ],
       },
-      { id: "factory-outbound", title: "출고현황" },
+      {
+        id: "factory-outbound",
+        title: "출고현황",
+        children: [
+          { id: "factory-outbound-list", title: "출고목록" },
+          { id: "factory-deductible-management", title: "면책금관리" },
+        ],
+      },
       {
         id: "factory-settlement",
         title: "정산관리",

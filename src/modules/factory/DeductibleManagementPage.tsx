@@ -1,0 +1,702 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useState } from "react";
+import type { MenuItem } from "../../data/menuData";
+import { localDateText } from "../../lib/date";
+import { supabase } from "../../lib/supabase";
+
+type DeductibleManagementPageProps = {
+  onSelectMenu: (menu: MenuItem) => void;
+};
+
+type WorkOrderRow = {
+  id: number;
+  work_name: string | null;
+  car_number: string | null;
+  car_model: string | null;
+  category: string | null;
+  insurance_company: string | null;
+  partner_company: string | null;
+  deductible_amount: string | null;
+  outbound_date: string | null;
+  release_date: string | null;
+};
+
+type PaymentRow = {
+  id: number;
+  work_name: string | null;
+  payment_type: string | null;
+  payment_amount: number | null;
+  payment_date: string | null;
+  payment_method: string | null;
+};
+
+type DeductibleItem = {
+  id: number;
+  workName: string;
+  carNumber: string;
+  carModel: string;
+  category: string;
+  company: string;
+  deductibleAmount: string;
+  outboundDate: string;
+  releaseDate: string;
+  paidAmount: number;
+  paymentDate: string;
+  paymentMethod: string;
+};
+
+type InputState = {
+  amount: string;
+  date: string;
+  method: string;
+};
+
+const pageSize = 30;
+const accountOptions = ["국민은행", "부산은행", "카드", "현금", "BLUE POINT", "법인1층"];
+
+const formatWon = (amount: number) => amount.toLocaleString();
+
+const formatAmount = (value: string) => {
+  const numbers = value.replace(/\D/g, "");
+  return numbers ? Number(numbers).toLocaleString() : "";
+};
+
+const toNumber = (value: string) => Number(value.replaceAll(",", "") || 0);
+
+const parseAmount = (value: string) => {
+  const numbers = value.replace(/\D/g, "");
+  return numbers ? Number(numbers) : 0;
+};
+
+const hasDeductibleValue = (value?: string | null) => {
+  const normalized = String(value ?? "").trim();
+
+  return Boolean(
+    normalized &&
+      normalized !== "-" &&
+      normalized !== "해당없음" &&
+      normalized !== "0"
+  );
+};
+
+export default function DeductibleManagementPage({
+  onSelectMenu,
+}: DeductibleManagementPageProps) {
+  const [items, setItems] = useState<DeductibleItem[]>([]);
+  const [inputs, setInputs] = useState<Record<string, InputState>>({});
+  const [searchText, setSearchText] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "complete">("pending");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [savingWorkName, setSavingWorkName] = useState<string | null>(null);
+
+  const loadItems = useCallback(async () => {
+    const { data: workOrders, error: workError } = await supabase
+      .from("work_orders")
+      .select(
+        "id, work_name, car_number, car_model, category, insurance_company, partner_company, deductible_amount, outbound_date, release_date"
+      )
+      .order("id", { ascending: false });
+
+    if (workError) {
+      alert("면책금 대상 조회 실패: " + workError.message);
+      return;
+    }
+
+    const deductibleWorkOrders = ((workOrders ?? []) as WorkOrderRow[]).filter(
+      (row) => hasDeductibleValue(row.deductible_amount)
+    );
+    const workNames = deductibleWorkOrders
+      .map((row) => row.work_name)
+      .filter(Boolean) as string[];
+
+    const { data: payments, error: paymentError } =
+      workNames.length > 0
+        ? await supabase
+            .from("settlement_payments")
+            .select("id, work_name, payment_type, payment_amount, payment_date, payment_method")
+            .in("work_name", workNames)
+            .eq("payment_type", "면책금")
+            .order("id", { ascending: false })
+        : { data: [], error: null };
+
+    if (paymentError) {
+      alert("면책금 입금내역 조회 실패: " + paymentError.message);
+      return;
+    }
+
+    const paymentMap = new Map<string, PaymentRow>();
+    ((payments ?? []) as PaymentRow[]).forEach((payment) => {
+      if (!payment.work_name || paymentMap.has(payment.work_name)) return;
+      paymentMap.set(payment.work_name, payment);
+    });
+
+    const nextItems = deductibleWorkOrders.map((row) => {
+      const payment = row.work_name ? paymentMap.get(row.work_name) : undefined;
+
+      return {
+        id: row.id,
+        workName: row.work_name ?? "",
+        carNumber: row.car_number ?? "",
+        carModel: row.car_model ?? "",
+        category: row.category ?? "",
+        company: row.insurance_company || row.partner_company || "",
+        deductibleAmount: row.deductible_amount ?? "",
+        outboundDate: row.outbound_date ?? "",
+        releaseDate: row.release_date ?? "",
+        paidAmount: Number(payment?.payment_amount ?? 0),
+        paymentDate: payment?.payment_date ?? "",
+        paymentMethod: payment?.payment_method ?? "",
+      };
+    });
+
+    setItems(nextItems);
+    setInputs((prev) => {
+      const next: Record<string, InputState> = {};
+
+      nextItems.forEach((item) => {
+        next[item.workName] = prev[item.workName] ?? {
+          amount: formatWon(parseAmount(item.deductibleAmount)),
+          date: localDateText(),
+          method: "국민은행",
+        };
+      });
+
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    void loadItems();
+  }, [loadItems]);
+
+  const filteredItems = useMemo(() => {
+    const keyword = searchText.trim().toLowerCase();
+
+    return items
+      .filter((item) => {
+        const isComplete = item.paidAmount > 0;
+
+        if (statusFilter === "pending") return !isComplete;
+        if (statusFilter === "complete") return isComplete;
+        return true;
+      })
+      .filter((item) => {
+        if (!keyword) return true;
+
+        return [
+          item.workName,
+          item.carNumber,
+          item.carModel,
+          item.category,
+          item.company,
+          item.deductibleAmount,
+        ]
+          .join(" ")
+          .toLowerCase()
+          .includes(keyword);
+      });
+  }, [items, searchText, statusFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredItems.length / pageSize));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const pagedItems = filteredItems.slice(
+    (safeCurrentPage - 1) * pageSize,
+    safeCurrentPage * pageSize
+  );
+
+  const pendingCount = items.filter((item) => item.paidAmount <= 0).length;
+  const completeCount = items.filter((item) => item.paidAmount > 0).length;
+  const pendingAmount = items
+    .filter((item) => item.paidAmount <= 0)
+    .reduce((sum, item) => sum + parseAmount(item.deductibleAmount), 0);
+  const paidAmount = items.reduce((sum, item) => sum + item.paidAmount, 0);
+
+  const updateInput = (workName: string, field: keyof InputState, value: string) => {
+    setInputs((prev) => ({
+      ...prev,
+      [workName]: {
+        amount: prev[workName]?.amount ?? "",
+        date: prev[workName]?.date ?? localDateText(),
+        method: prev[workName]?.method ?? "국민은행",
+        [field]: value,
+      },
+    }));
+  };
+
+  const handleSaveDeductible = async (item: DeductibleItem) => {
+    const input = inputs[item.workName];
+    const amount = toNumber(input?.amount ?? "");
+
+    if (!amount) {
+      alert("면책금 금액을 입력하세요.");
+      return;
+    }
+
+    if (!input?.date) {
+      alert("입금일자를 입력하세요.");
+      return;
+    }
+
+    if (!input?.method) {
+      alert("입금계정을 선택하세요.");
+      return;
+    }
+
+    setSavingWorkName(item.workName);
+
+    const paymentPayload = {
+      work_name: item.workName,
+      payment_type: "면책금",
+      payment_detail: "면책금관리",
+      claim_amount: 0,
+      payment_amount: amount,
+      payment_date: input.date,
+      payment_method: input.method,
+      approval_number: "",
+      merchant_number: "",
+      card_number: "",
+      invoice_issued: false,
+      claim_date: null,
+      payment_status: "수금",
+    };
+
+    const { error: paymentError } = await supabase
+      .from("settlement_payments")
+      .insert(paymentPayload);
+
+    if (paymentError) {
+      setSavingWorkName(null);
+      alert("면책금 입금내역 저장 실패: " + paymentError.message);
+      return;
+    }
+
+    const { error: dailyCashError } = await supabase.from("daily_cash").insert({
+      date: input.date,
+      account: input.method,
+      type: "수입",
+      category: "면책금",
+      content: `${item.carNumber || item.workName} 면책금`,
+      income: amount,
+      expense: 0,
+      memo: item.workName,
+      source_type: "settlement_payment",
+      source_work_name: item.workName,
+    });
+
+    setSavingWorkName(null);
+
+    if (dailyCashError) {
+      alert("일일입출금 연동 실패: " + dailyCashError.message);
+      return;
+    }
+
+    alert("면책금 입금내역을 저장했습니다.");
+    await loadItems();
+  };
+
+  return (
+    <div className="space-y-5 text-slate-900">
+      <div>
+        <h3 className="text-xl font-bold md:text-2xl">면책금관리</h3>
+        <p className="text-sm text-slate-700">
+          면책금(최소)이 있는 작명을 기준으로 입금 완료 여부를 확인합니다.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+        <SummaryCard title="전체" value={`${items.length.toLocaleString()}건`} />
+        <SummaryCard title="미수" value={`${pendingCount.toLocaleString()}건`} tone="red" />
+        <SummaryCard title="완료" value={`${completeCount.toLocaleString()}건`} tone="green" />
+        <SummaryCard
+          title="미수 예정액"
+          value={`${formatWon(pendingAmount)}원`}
+          tone="blue"
+        />
+      </div>
+
+      <div className="rounded-xl border border-slate-200 bg-white p-3 md:p-4">
+        <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-900"
+              value={statusFilter}
+              onChange={(event) => {
+                setStatusFilter(event.target.value as "all" | "pending" | "complete");
+                setCurrentPage(1);
+              }}
+            >
+              <option value="pending">미수</option>
+              <option value="complete">완료</option>
+              <option value="all">전체</option>
+            </select>
+
+            <div className="text-sm font-semibold text-slate-700">
+              조회 {filteredItems.length.toLocaleString()}건 / 입금 {formatWon(paidAmount)}원
+            </div>
+          </div>
+
+          <input
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 lg:w-80"
+            placeholder="작명 / 차량번호 / 차량명 / 보험사 검색"
+            value={searchText}
+            onChange={(event) => {
+              setSearchText(event.target.value);
+              setCurrentPage(1);
+            }}
+          />
+        </div>
+
+        <div className="hidden overflow-x-auto md:block">
+          <table className="w-full border-collapse text-center text-sm">
+            <thead>
+              <tr className="bg-slate-100">
+                <th className="border border-slate-300 px-2 py-2">번호</th>
+                <th className="border border-slate-300 px-2 py-2">작명</th>
+                <th className="border border-slate-300 px-2 py-2">차량번호</th>
+                <th className="border border-slate-300 px-2 py-2">차량명</th>
+                <th className="border border-slate-300 px-2 py-2">구분</th>
+                <th className="border border-slate-300 px-2 py-2">보험사</th>
+                <th className="border border-slate-300 px-2 py-2">출고일</th>
+                <th className="border border-slate-300 px-2 py-2">면책금(최소)</th>
+                <th className="border border-slate-300 px-2 py-2">상태</th>
+                <th className="border border-slate-300 px-2 py-2">면책금 입력</th>
+                <th className="border border-slate-300 px-2 py-2">관리</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pagedItems.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={11}
+                    className="border border-slate-200 px-3 py-10 text-center text-slate-500"
+                  >
+                    표시할 면책금 대상이 없습니다.
+                  </td>
+                </tr>
+              ) : (
+                pagedItems.map((item, index) => {
+                  const input = inputs[item.workName] ?? {
+                    amount: "",
+                    date: localDateText(),
+                    method: "국민은행",
+                  };
+                  const isComplete = item.paidAmount > 0;
+
+                  return (
+                    <tr key={item.id} className="hover:bg-slate-50">
+                      <td className="border border-slate-200 px-2 py-2">
+                        {(safeCurrentPage - 1) * pageSize + index + 1}
+                      </td>
+                      <td className="border border-slate-200 px-2 py-2 font-semibold">
+                        {item.workName}
+                      </td>
+                      <td className="border border-slate-200 px-2 py-2">{item.carNumber}</td>
+                      <td className="border border-slate-200 px-2 py-2">{item.carModel}</td>
+                      <td className="border border-slate-200 px-2 py-2">{item.category}</td>
+                      <td className="border border-slate-200 px-2 py-2">{item.company}</td>
+                      <td className="border border-slate-200 px-2 py-2">
+                        {item.releaseDate || "-"}
+                      </td>
+                      <td className="border border-slate-200 px-2 py-2 text-right font-semibold text-blue-700">
+                        {item.deductibleAmount}
+                      </td>
+                      <td className="border border-slate-200 px-2 py-2">
+                        <StatusBadge
+                          isComplete={isComplete}
+                          paidAmount={item.paidAmount}
+                          paymentDate={item.paymentDate}
+                          paymentMethod={item.paymentMethod}
+                        />
+                      </td>
+                      <td className="border border-slate-200 px-2 py-2">
+                        {isComplete ? (
+                          <span className="text-xs font-semibold text-slate-500">
+                            입력완료
+                          </span>
+                        ) : (
+                          <div className="grid min-w-[430px] grid-cols-[1fr_130px_130px_80px] gap-2">
+                            <input
+                              className="rounded-lg border border-blue-200 bg-blue-50 px-2 py-1 text-right text-sm"
+                              value={input.amount}
+                              onChange={(event) =>
+                                updateInput(
+                                  item.workName,
+                                  "amount",
+                                  formatAmount(event.target.value)
+                                )
+                              }
+                            />
+                            <input
+                              type="date"
+                              className="rounded-lg border border-slate-300 px-2 py-1 text-sm"
+                              value={input.date}
+                              onChange={(event) =>
+                                updateInput(item.workName, "date", event.target.value)
+                              }
+                            />
+                            <select
+                              className="rounded-lg border border-slate-300 px-2 py-1 text-sm"
+                              value={input.method}
+                              onChange={(event) =>
+                                updateInput(item.workName, "method", event.target.value)
+                              }
+                            >
+                              {accountOptions.map((option) => (
+                                <option key={option}>{option}</option>
+                              ))}
+                            </select>
+                            <button
+                              type="button"
+                              onClick={() => handleSaveDeductible(item)}
+                              disabled={savingWorkName === item.workName}
+                              className="rounded-lg bg-blue-600 px-3 py-1 text-sm font-semibold text-white disabled:opacity-50"
+                            >
+                              {savingWorkName === item.workName ? "저장중" : "저장"}
+                            </button>
+                          </div>
+                        )}
+                      </td>
+                      <td className="border border-slate-200 px-2 py-2">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            onSelectMenu({
+                              id: "factory-settlement-repair-register",
+                              title: "정산등록",
+                              data: { workName: item.workName },
+                            })
+                          }
+                          className="rounded border border-slate-300 px-3 py-1 text-xs font-semibold hover:bg-slate-50"
+                        >
+                          정산열기
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="space-y-3 md:hidden">
+          {pagedItems.length === 0 ? (
+            <div className="rounded-xl border border-slate-200 p-6 text-center text-sm text-slate-500">
+              표시할 면책금 대상이 없습니다.
+            </div>
+          ) : (
+            pagedItems.map((item) => {
+              const input = inputs[item.workName] ?? {
+                amount: "",
+                date: localDateText(),
+                method: "국민은행",
+              };
+              const isComplete = item.paidAmount > 0;
+
+              return (
+                <div key={item.id} className="rounded-xl border border-slate-200 p-4">
+                  <div className="mb-3 flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="truncate text-lg font-bold text-slate-900">
+                        {item.carNumber || "-"}
+                      </div>
+                      <div className="text-sm text-slate-600">
+                        {item.workName} / {item.carModel || "-"}
+                      </div>
+                    </div>
+                    <StatusBadge
+                      isComplete={isComplete}
+                      paidAmount={item.paidAmount}
+                      paymentDate={item.paymentDate}
+                      paymentMethod={item.paymentMethod}
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <MobileField label="구분" value={item.category} />
+                    <MobileField label="보험사" value={item.company} />
+                    <MobileField label="출고일" value={item.releaseDate} />
+                    <MobileField label="면책금(최소)" value={item.deductibleAmount} />
+                  </div>
+
+                  {!isComplete && (
+                    <div className="mt-3 grid grid-cols-1 gap-2">
+                      <input
+                        className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-right text-sm"
+                        value={input.amount}
+                        onChange={(event) =>
+                          updateInput(
+                            item.workName,
+                            "amount",
+                            formatAmount(event.target.value)
+                          )
+                        }
+                      />
+                      <input
+                        type="date"
+                        className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                        value={input.date}
+                        onChange={(event) =>
+                          updateInput(item.workName, "date", event.target.value)
+                        }
+                      />
+                      <select
+                        className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                        value={input.method}
+                        onChange={(event) =>
+                          updateInput(item.workName, "method", event.target.value)
+                        }
+                      >
+                        {accountOptions.map((option) => (
+                          <option key={option}>{option}</option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => handleSaveDeductible(item)}
+                        disabled={savingWorkName === item.workName}
+                        className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                      >
+                        {savingWorkName === item.workName ? "저장중" : "면책금 저장"}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        <div className="mt-4 flex justify-center">
+          <div className="flex items-center gap-2">
+            <PageButton disabled={safeCurrentPage === 1} onClick={() => setCurrentPage(1)}>
+              {"<<"}
+            </PageButton>
+            <PageButton
+              disabled={safeCurrentPage === 1}
+              onClick={() => setCurrentPage(Math.max(safeCurrentPage - 1, 1))}
+            >
+              {"<"}
+            </PageButton>
+
+            {Array.from({ length: totalPages }, (_, index) => index + 1).map((page) => (
+              <button
+                key={page}
+                type="button"
+                onClick={() => setCurrentPage(page)}
+                className={
+                  safeCurrentPage === page
+                    ? "rounded bg-blue-600 px-3 py-1 text-white"
+                    : "rounded px-3 py-1"
+                }
+              >
+                {page}
+              </button>
+            ))}
+
+            <PageButton
+              disabled={safeCurrentPage === totalPages}
+              onClick={() => setCurrentPage(Math.min(safeCurrentPage + 1, totalPages))}
+            >
+              {">"}
+            </PageButton>
+            <PageButton
+              disabled={safeCurrentPage === totalPages}
+              onClick={() => setCurrentPage(totalPages)}
+            >
+              {">>"}
+            </PageButton>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SummaryCard({
+  title,
+  value,
+  tone = "slate",
+}: {
+  title: string;
+  value: string;
+  tone?: "slate" | "red" | "green" | "blue";
+}) {
+  const colorClass =
+    tone === "red"
+      ? "text-red-600"
+      : tone === "green"
+        ? "text-green-600"
+        : tone === "blue"
+          ? "text-blue-600"
+          : "text-slate-900";
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-4">
+      <p className="text-sm font-semibold text-slate-600">{title}</p>
+      <p className={`mt-2 text-2xl font-bold ${colorClass}`}>{value}</p>
+    </div>
+  );
+}
+
+function StatusBadge({
+  isComplete,
+  paidAmount,
+  paymentDate,
+  paymentMethod,
+}: {
+  isComplete: boolean;
+  paidAmount: number;
+  paymentDate: string;
+  paymentMethod: string;
+}) {
+  if (!isComplete) {
+    return (
+      <span className="inline-flex rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-700">
+        미수
+      </span>
+    );
+  }
+
+  return (
+    <span className="inline-flex flex-col rounded-lg bg-green-100 px-3 py-1 text-xs font-semibold text-green-700">
+      <span>완료 {formatWon(paidAmount)}원</span>
+      <span className="font-medium text-green-600">
+        {paymentDate || "-"} / {paymentMethod || "-"}
+      </span>
+    </span>
+  );
+}
+
+function MobileField({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg bg-slate-50 p-2">
+      <div className="text-[11px] font-semibold text-slate-400">{label}</div>
+      <div className="mt-1 break-words text-sm font-semibold text-slate-800">
+        {value || "-"}
+      </div>
+    </div>
+  );
+}
+
+function PageButton({
+  children,
+  disabled,
+  onClick,
+}: {
+  children: React.ReactNode;
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="rounded px-3 py-1 disabled:opacity-40"
+    >
+      {children}
+    </button>
+  );
+}

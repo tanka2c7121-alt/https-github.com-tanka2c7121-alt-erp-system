@@ -20,6 +20,7 @@ import DailyCashPage from "../../modules/factory/DailyCashPage";
 import DailyCashPrintPage from "../../modules/factory/DailyCashPrintPage";
 import DailyCashRegisterPage from "../../modules/factory/DailyCashRegisterPage";
 import SettlementMainPage from "../../modules/factory/SettlementMainPage";
+import DeductibleManagementPage from "../../modules/factory/DeductibleManagementPage";
 import EmployeeManagePage from "../../modules/admin/EmployeeManagePage";
 import VehicleCatalogPage from "../../modules/admin/VehicleCatalogPage";
 import EmployeeStatusPage from "../../modules/employee/EmployeeStatusPage";
@@ -412,8 +413,11 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
               <InboundStatusPage onSelectMenu={handleSelectMenu} />
             ) : selectedMenu.id === "factory-release-list" ? (
               <ReleaseListPage onSelectMenu={handleSelectMenu} />
-            ) : selectedMenu.id === "factory-outbound" ? (
+            ) : selectedMenu.id === "factory-outbound" ||
+              selectedMenu.id === "factory-outbound-list" ? (
               <OutboundStatusPage onSelectMenu={handleSelectMenu} />
+            ) : selectedMenu.id === "factory-deductible-management" ? (
+              <DeductibleManagementPage onSelectMenu={handleSelectMenu} />
             ) : selectedMenu.id === "factory-work-register" ? (
               <WorkRegisterPage
                 onSelectMenu={handleSelectMenu}

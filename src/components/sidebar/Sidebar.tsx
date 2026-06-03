@@ -22,6 +22,7 @@ export default function Sidebar({
   const [openMenus, setOpenMenus] = useState<Record<string, boolean>>({
     employee: true,
     factory: true,
+    "factory-outbound": true,
     sales: true,
   });
 
