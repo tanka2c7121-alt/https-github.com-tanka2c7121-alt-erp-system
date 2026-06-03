@@ -336,7 +336,7 @@ export default function SettlementRegisterPage({
                   settlement?.own_claim_amount?.toLocaleString() ??
                   legacyOwnClaimRow?.claim_amount?.toLocaleString() ??
                   "",
-                detail: "자차",
+                detail: "",
               },
               {
                 date:
@@ -347,7 +347,7 @@ export default function SettlementRegisterPage({
                   settlement?.other_claim_amount?.toLocaleString() ??
                   legacyOtherClaimRow?.claim_amount?.toLocaleString() ??
                   "",
-                detail: "대물",
+                detail: "",
               },
             ]
           : [
@@ -707,11 +707,7 @@ export default function SettlementRegisterPage({
                 label="청구상세"
                 value={row.detail}
                 onChange={(value) => handleClaimChange(index, "detail", value)}
-                options={
-                  form.coverageType === "과실"
-                    ? ["자차", "대물", "보험", "캐피탈", "일반", "바디케어"]
-                    : ["보험", "캐피탈", "일반", "바디케어"]
-                }
+                options={["보험", "캐피탈", "일반", "바디케어"]}
               />
             </div>
           ))}
