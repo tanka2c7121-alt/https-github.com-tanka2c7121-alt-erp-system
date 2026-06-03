@@ -371,7 +371,7 @@ export default function SettlementRegisterPage({
         : [emptyExpenseRow()]
     );
 
-    setIsEditMode(true);
+    setIsEditMode(Boolean(settlement) || paymentItems.length > 0 || Boolean(expenses?.length));
     alert("불러왔습니다.");
   };
 
