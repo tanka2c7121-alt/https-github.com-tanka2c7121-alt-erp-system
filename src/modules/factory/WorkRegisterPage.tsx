@@ -34,6 +34,8 @@ const faultRateOptions = [
   "8:2",
   "9:1",
 ];
+const normalizeNoneText = (value?: string | null) =>
+  value === "해당없음" ? "-" : value ?? "";
 const workPhotoBucket = "work-photos";
 const photoBatchSize = 10;
 
@@ -440,7 +442,7 @@ export default function WorkRegisterPage({
   const [otherManagerName, setOtherManagerName] = useState("");
 
   const [vatYn, setVatYn] = useState("N");
-  const [deductibleAmount, setDeductibleAmount] = useState("해당없음");
+  const [deductibleAmount, setDeductibleAmount] = useState("-");
   const [message, setMessage] = useState("");
   const [isEditMode, setIsEditMode] = useState(false);
   const [releaseDate, setReleaseDate] = useState("");
@@ -461,7 +463,7 @@ export default function WorkRegisterPage({
   const [vehicleCatalog, setVehicleCatalog] = useState<VehicleCatalogRow[]>([]);
   const [businessCatalog, setBusinessCatalog] = useState<BusinessCatalogRow[]>([]);
   const currentFaultRateOptions =
-    coverageType === "과실" ? faultRateOptions : ["해당없음"];
+    coverageType === "과실" ? faultRateOptions : ["-"];
   const pendingPhotoGroups = chunkArray(pendingWorkPhotos, photoBatchSize);
   const photoViewerItems: PhotoViewerItem[] = [
     ...pendingWorkPhotos.map((photo) => ({
@@ -487,12 +489,12 @@ export default function WorkRegisterPage({
 
   useEffect(() => {
     if (coverageType === "과실") {
-      setFaultRate((prev) => (prev && prev !== "해당없음" ? prev : "미정"));
+      setFaultRate((prev) => (prev && prev !== "-" && prev !== "해당없음" ? prev : "미정"));
       return;
     }
 
     if (coverageType === "자차" || coverageType === "대물") {
-      setFaultRate("해당없음");
+      setFaultRate("-");
       return;
     }
 
@@ -1157,7 +1159,7 @@ async function deleteSelectedPhotos() {
   setOtherManagerName("");
 
   setVatYn("N");
-  setDeductibleAmount("해당없음");
+  setDeductibleAmount("-");
 
   setMessage("");
   setWorkPhotos([]);
@@ -1270,14 +1272,14 @@ async function handleLoadWorkOrder(
   setOwnReceiptNumber(order.own_receipt_number ?? "");
   setOtherReceiptNumber(order.other_receipt_number ?? "");
 
-  setFaultRate(order.fault_rate ?? "");
+  setFaultRate(normalizeNoneText(order.fault_rate));
 
   setManagerName(order.manager_name ?? "");
   setOwnManagerName(order.own_manager_name ?? "");
   setOtherManagerName(order.other_manager_name ?? "");
 
   setVatYn(order.vat_yn ?? "");
-  setDeductibleAmount(order.deductible_amount ?? "");
+  setDeductibleAmount(normalizeNoneText(order.deductible_amount));
 
   setMessage(order.message ?? "");
   
@@ -2282,7 +2284,7 @@ function handleClearWorkRow(index: number) {
   label="면책금(최소)"
   value={deductibleAmount}
   onChange={(e) => setDeductibleAmount(e.target.value)}
-  options={["해당없음", "10만원", "20만원", "30만원", "33만원", "50만원", "55만원","60만원","66만원","99만원"]}
+  options={["-", "10만원", "20만원", "30만원", "33만원", "50만원", "55만원","60만원","66만원","99만원"]}
 />
 
  </section> 
