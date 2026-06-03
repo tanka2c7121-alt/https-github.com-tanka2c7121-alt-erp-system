@@ -690,6 +690,21 @@ useEffect(() => {
   void videoRef.current.play();
 }, [cameraOpen]);
 
+useEffect(() => {
+  if (!cameraOpen) return;
+
+  const previousOverflow = document.body.style.overflow;
+  const previousTouchAction = document.body.style.touchAction;
+
+  document.body.style.overflow = "hidden";
+  document.body.style.touchAction = "none";
+
+  return () => {
+    document.body.style.overflow = previousOverflow;
+    document.body.style.touchAction = previousTouchAction;
+  };
+}, [cameraOpen]);
+
 function getWorkPhotoFolder(targetWorkName = workName) {
   return targetWorkName.trim().replace(/[^0-9A-Za-z가-힣_-]/g, "_");
 }
@@ -1670,12 +1685,12 @@ function handleClearWorkRow(index: number) {
         </div>
 
         {cameraOpen && (
-          <div className="relative mt-4 overflow-hidden rounded-xl border border-slate-200 bg-slate-950">
+          <div className="fixed inset-0 z-50 flex flex-col bg-slate-950">
             <video
               ref={videoRef}
               playsInline
               muted
-              className="max-h-[65vh] w-full bg-black object-contain"
+              className="min-h-0 flex-1 bg-black object-contain"
             />
             {cameraFlash && (
               <div className="pointer-events-none absolute inset-0 z-10 animate-pulse bg-white/85" />
@@ -1685,24 +1700,26 @@ function handleClearWorkRow(index: number) {
                 촬영 완료 {cameraShotCount}장
               </div>
             )}
-            <div className="flex flex-col gap-2 bg-white p-3 sm:flex-row sm:justify-end">
+            <div className="shrink-0 border-t border-slate-800 bg-white p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
+              <div className="mx-auto flex max-w-md gap-2">
               <button
                 type="button"
                 onClick={() => {
                   void captureCameraPhoto();
                 }}
                 disabled={photoOcrReading}
-                className="rounded-lg bg-blue-600 px-5 py-3 text-sm font-semibold text-white hover:bg-blue-700 disabled:bg-slate-400"
+                className="min-h-12 flex-1 rounded-lg bg-blue-600 px-5 py-3 text-sm font-semibold text-white hover:bg-blue-700 disabled:bg-slate-400"
               >
                 촬영
               </button>
               <button
                 type="button"
                 onClick={closeCamera}
-                className="rounded-lg border border-slate-300 px-5 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                className="min-h-12 flex-1 rounded-lg border border-slate-300 px-5 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
               >
                 닫기
               </button>
+              </div>
             </div>
           </div>
         )}
