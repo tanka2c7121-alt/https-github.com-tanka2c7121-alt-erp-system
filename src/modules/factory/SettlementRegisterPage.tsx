@@ -96,6 +96,12 @@ const formatAmount = (value: string) => {
 
 const toNumber = (value: string) => Number(value.replaceAll(",", "") || 0);
 
+const hasPaymentInputValue = (row: Partial<PaymentRow>) =>
+  toNumber(row.amount ?? "") > 0 || Boolean(row.date);
+
+const hasStoredPaymentInputValue = (item: any) =>
+  Number(item.payment_amount ?? 0) > 0 || Boolean(item.payment_date);
+
 export default function SettlementRegisterPage({
   initialWorkName,
 }: SettlementRegisterPageProps) {
@@ -262,7 +268,8 @@ export default function SettlementRegisterPage({
       (item: any) =>
         !storedClaimRows.includes(item) &&
         item !== legacyOwnClaimRow &&
-        item !== legacyOtherClaimRow
+        item !== legacyOtherClaimRow &&
+        hasStoredPaymentInputValue(item)
     );
 
     setForm({
@@ -385,15 +392,7 @@ export default function SettlementRegisterPage({
 
   const savePaymentRows = async () => {
     const rows = paymentRows
-      .filter(
-        (row) =>
-          row.paymentType ||
-          row.paymentDetail ||
-          row.claimAmount ||
-          row.amount ||
-          row.date ||
-          row.method
-      )
+      .filter(hasPaymentInputValue)
       .map((row) => ({
         work_name: form.workName,
         payment_type: row.paymentType,
