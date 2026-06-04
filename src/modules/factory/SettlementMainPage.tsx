@@ -143,19 +143,32 @@ const receivableAccountNames = [
   "BLUE POINT",
 ];
 
-const getReceivableAmount = (row: any) => Number(row.payment_amount || 0);
+const normalizeText = (value: unknown) => String(value ?? "").trim();
+
+const normalizeAccountName = (value: unknown) => {
+  const accountName = normalizeText(value).replace(/\s+/g, " ").toUpperCase();
+
+  if (accountName === "BLUEPOINT" || accountName === "BLUE POINT") {
+    return "BLUE POINT";
+  }
+
+  return normalizeText(value);
+};
+
+const getReceivableAmount = (row: any) =>
+  Number(String(row.payment_amount ?? 0).replaceAll(",", "")) || 0;
 
 const isReceivableRow = (row: any) =>
   getReceivableAmount(row) > 0 &&
-  !row.payment_date &&
-  receivableAccountNames.includes(row.payment_method);
+  !normalizeText(row.payment_date) &&
+  receivableAccountNames.includes(normalizeAccountName(row.payment_method));
 
 const receivableRows = paymentRows.filter(isReceivableRow);
 
 const receivableSummary = receivableAccountNames.map((accountName) => {
 
   const rows = receivableRows.filter(
-    (row) => row.payment_method === accountName
+    (row) => normalizeAccountName(row.payment_method) === accountName
   );
 
   const amount = rows
