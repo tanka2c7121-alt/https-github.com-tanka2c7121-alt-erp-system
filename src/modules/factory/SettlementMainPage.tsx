@@ -137,29 +137,28 @@ const totalBalance = accountSummary.reduce(
   0
   );
 
-const getReceivableAmount = (row: any) => Number(row.payment_amount || 0);
-
-const isReceivableRow = (row: any) =>
-  getReceivableAmount(row) > 0 && !row.payment_date;
-
-const receivableAmount = paymentRows
-  .filter(isReceivableRow)
-  .reduce(
-    (sum, row) =>
-      sum + getReceivableAmount(row),
-    0
-  );
-
-const receivableRows = paymentRows.filter(isReceivableRow);
-
-const receivableSummary = [
+const receivableAccountNames = [
   "국민은행",
   "부산은행",
   "BLUE POINT",
-].map((accountName) => {
+];
 
-  const amount = paymentRows
-    .filter((row) => isReceivableRow(row) && row.payment_method === accountName)
+const getReceivableAmount = (row: any) => Number(row.payment_amount || 0);
+
+const isReceivableRow = (row: any) =>
+  getReceivableAmount(row) > 0 &&
+  !row.payment_date &&
+  receivableAccountNames.includes(row.payment_method);
+
+const receivableRows = paymentRows.filter(isReceivableRow);
+
+const receivableSummary = receivableAccountNames.map((accountName) => {
+
+  const rows = receivableRows.filter(
+    (row) => row.payment_method === accountName
+  );
+
+  const amount = rows
     .reduce(
       (sum, row) =>
         sum + getReceivableAmount(row),
@@ -171,6 +170,11 @@ const receivableSummary = [
     amount,
   };
 });  
+
+const receivableAmount = receivableSummary.reduce(
+  (sum, account) => sum + account.amount,
+  0
+);
 
 const yearOptions = useMemo(() => {
   return Array.from(
@@ -312,7 +316,7 @@ const fetchSettlementMain = useCallback(async (year: string, month: string) => {
             <div>
               <h4 className="text-lg font-bold text-slate-900">미수금 차량 목록</h4>
               <p className="text-sm text-slate-500">
-                청구 상태이거나 입금일이 없는 정산 내역입니다.
+                입금금액은 있고 입금일이 없는 국민은행, 부산은행, BLUE POINT 정산 내역입니다.
               </p>
             </div>
             <button
