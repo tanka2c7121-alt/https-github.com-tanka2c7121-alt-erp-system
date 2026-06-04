@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import MainLayout from "../src/components/layout/MainLayout";
 import LoginPage from "../src/components/login/LoginPage";
@@ -12,6 +12,16 @@ import {
 } from "../src/lib/passwordPolicy";
 import { supabase } from "../src/lib/supabase";
 import type { UserRole } from "../src/types/roles";
+
+const autoLogoutMs = 10 * 60 * 1000;
+const activityEvents = [
+  "click",
+  "keydown",
+  "mousedown",
+  "mousemove",
+  "scroll",
+  "touchstart",
+] as const;
 
 type LoginUser = {
   id: string | number;
@@ -29,10 +39,38 @@ type LoginUser = {
 export default function Home() {
   const [user, setUser] = useState<LoginUser | null>(null);
 
-  const handleLogout = async () => {
+  const handleLogout = useCallback(async () => {
     await supabase.auth.signOut();
     setUser(null);
-  };
+  }, []);
+
+  useEffect(() => {
+    if (!user) return;
+
+    let timeoutId = window.setTimeout(() => {
+      alert("10분 동안 사용이 없어 자동 로그아웃됩니다.");
+      void handleLogout();
+    }, autoLogoutMs);
+
+    const resetAutoLogoutTimer = () => {
+      window.clearTimeout(timeoutId);
+      timeoutId = window.setTimeout(() => {
+        alert("10분 동안 사용이 없어 자동 로그아웃됩니다.");
+        void handleLogout();
+      }, autoLogoutMs);
+    };
+
+    activityEvents.forEach((eventName) => {
+      window.addEventListener(eventName, resetAutoLogoutTimer, { passive: true });
+    });
+
+    return () => {
+      window.clearTimeout(timeoutId);
+      activityEvents.forEach((eventName) => {
+        window.removeEventListener(eventName, resetAutoLogoutTimer);
+      });
+    };
+  }, [handleLogout, user]);
 
   const needsPasswordChange = useMemo(() => {
     if (!user?.phone_number || !user.password) {
