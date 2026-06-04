@@ -97,10 +97,14 @@ const formatAmount = (value: string) => {
 const toNumber = (value: string) => Number(value.replaceAll(",", "") || 0);
 
 const hasPaymentInputValue = (row: Partial<PaymentRow>) =>
-  toNumber(row.amount ?? "") > 0 || Boolean(row.date);
+  toNumber(row.amount ?? "") > 0 ||
+  toNumber(row.claimAmount ?? "") > 0 ||
+  Boolean(row.date);
 
 const hasStoredPaymentInputValue = (item: any) =>
-  Number(item.payment_amount ?? 0) > 0 || Boolean(item.payment_date);
+  Number(item.payment_amount ?? 0) > 0 ||
+  Number(item.claim_amount ?? 0) > 0 ||
+  Boolean(item.payment_date);
 
 export default function SettlementRegisterPage({
   initialWorkName,
@@ -308,23 +312,26 @@ export default function SettlementRegisterPage({
 
     const loadedPaymentRows =
       paymentItemsForInput.length > 0
-        ? paymentItemsForInput.map((item: any) => ({
-            paymentType: item.payment_type ?? "",
-            paymentDetail: item.payment_detail ?? "",
-            claimAmount:
-              item.claim_amount?.toLocaleString() ??
-              item.payment_amount?.toLocaleString() ??
-              "",
-            amount: item.payment_amount?.toLocaleString() ?? "",
-            date: item.payment_date ?? "",
-            method: item.payment_method ?? "",
-            approvalNumber: item.approval_number ?? "",
-            merchantNumber: item.merchant_number ?? "",
-            cardNumber: item.card_number ?? "",
-            invoiceIssued: item.invoice_issued ?? false,
-            claimDate: item.claim_date ?? "",
-            paymentStatus: item.payment_status ?? "청구",
-          }))
+        ? paymentItemsForInput.map((item: any) => {
+            const paymentAmount = Number(item.payment_amount ?? 0);
+            const claimAmount = Number(item.claim_amount ?? 0);
+            const displayAmount = paymentAmount || claimAmount;
+
+            return {
+              paymentType: item.payment_type ?? "",
+              paymentDetail: item.payment_detail ?? "",
+              claimAmount: claimAmount ? claimAmount.toLocaleString() : "",
+              amount: displayAmount ? displayAmount.toLocaleString() : "",
+              date: item.payment_date ?? "",
+              method: item.payment_method ?? "",
+              approvalNumber: item.approval_number ?? "",
+              merchantNumber: item.merchant_number ?? "",
+              cardNumber: item.card_number ?? "",
+              invoiceIssued: item.invoice_issued ?? false,
+              claimDate: item.claim_date ?? "",
+              paymentStatus: item.payment_status ?? "청구",
+            };
+          })
         : defaultPaymentRows();
 
     setPaymentRows(normalizePaymentRowsForWorkOrder(loadedPaymentRows));
@@ -393,21 +400,27 @@ export default function SettlementRegisterPage({
   const savePaymentRows = async () => {
     const rows = paymentRows
       .filter(hasPaymentInputValue)
-      .map((row) => ({
-        work_name: form.workName,
-        payment_type: row.paymentType,
-        payment_detail: row.paymentDetail,
-        claim_amount: toNumber(row.claimAmount),
-        payment_amount: toNumber(row.amount),
-        payment_date: row.date || null,
-        payment_method: row.method,
-        approval_number: row.approvalNumber,
-        merchant_number: row.merchantNumber,
-        card_number: row.cardNumber,
-        invoice_issued: row.invoiceIssued,
-        claim_date: row.claimDate || null,
-        payment_status: row.paymentStatus,
-      }));
+      .map((row) => {
+        const inputAmount = toNumber(row.amount) || toNumber(row.claimAmount);
+        const claimAmount =
+          toNumber(row.claimAmount) || (row.invoiceIssued ? inputAmount : 0);
+
+        return {
+          work_name: form.workName,
+          payment_type: row.paymentType,
+          payment_detail: row.paymentDetail,
+          claim_amount: claimAmount,
+          payment_amount: inputAmount,
+          payment_date: row.date || null,
+          payment_method: row.method,
+          approval_number: row.approvalNumber,
+          merchant_number: row.merchantNumber,
+          card_number: row.cardNumber,
+          invoice_issued: row.invoiceIssued,
+          claim_date: row.claimDate || null,
+          payment_status: row.paymentStatus,
+        };
+      });
 
     if (rows.length === 0) return null;
 
