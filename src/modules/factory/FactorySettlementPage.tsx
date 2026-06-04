@@ -18,6 +18,7 @@ type SettlementItem = {
   car_number: string;
   car_model: string;
   category: string;
+  coverage_type: string;
   company: string;
   deductible_amount: string;
   status: "완결" | "미결";
@@ -32,6 +33,7 @@ export default function FactorySettlementPage({
   onSelectMenu,
 }: FactorySettlementPageProps) {
   const [settlementList, setSettlementList] = useState<SettlementItem[]>([]);
+  const [deductiblePaidWorkNames, setDeductiblePaidWorkNames] = useState<Set<string>>(new Set());
   const [searchText, setSearchText] = useState("");
 
   const [sortField, setSortField] = useState<keyof SettlementItem>("work_name");
@@ -55,6 +57,7 @@ const handleSort = (field: keyof SettlementItem) => {
         car_number,
         car_model,
         category,
+        coverage_type,
         insurance_company,
         partner_company,
         deductible_amount,
@@ -70,12 +73,26 @@ const handleSort = (field: keyof SettlementItem) => {
   .from("repair_settlements")
   .select("work_name, progress_status");
 
+    const { data: deductiblePaymentRows } = await supabase
+      .from("settlement_payments")
+      .select("work_name")
+      .eq("payment_type", "면책금")
+      .not("payment_date", "is", null);
+
   const settlementMap = new Map(
   (settlementRows ?? []).map((row) => [
     row.work_name,
     row.progress_status,
   ])
 );
+
+    setDeductiblePaidWorkNames(
+      new Set(
+        (deductiblePaymentRows ?? [])
+          .map((row) => row.work_name)
+          .filter(Boolean)
+      )
+    );
 
     setSettlementList(
       (data ?? []).map((item) => ({
@@ -84,6 +101,7 @@ const handleSort = (field: keyof SettlementItem) => {
         car_number: item.car_number ?? "",
         car_model: item.car_model ?? "",
         category: item.category ?? "",
+        coverage_type: item.coverage_type ?? "",
         company: item.insurance_company || item.partner_company || "",
         deductible_amount: item.deductible_amount ?? "",
         status: settlementMap.get(item.work_name) ?? "미결",
@@ -129,7 +147,13 @@ const handleSort = (field: keyof SettlementItem) => {
   const totalCount = settlementList.length;
   const pendingCount = settlementList.filter((item) => item.status === "미결").length;
   const completeCount = settlementList.filter((item) => item.status === "완결").length;
-  const deductibleCount = settlementList.filter((item) => item.deductible_amount).length;
+  const deductibleTargetItems = settlementList.filter((item) =>
+    ["자차", "과실"].includes(item.coverage_type)
+  );
+  const deductibleTargetCount = deductibleTargetItems.length;
+  const deductibleCompleteCount = deductibleTargetItems.filter((item) =>
+    deductiblePaidWorkNames.has(item.work_name)
+  ).length;
 
   const pageTitle =
     view === "complete"
@@ -177,7 +201,9 @@ const pagedList = filteredList.slice(
 
         <div className="rounded-xl border bg-white p-4">
           <p className="text-sm font-semibold text-slate-700">면책금</p>
-          <p className="mt-2 text-2xl font-bold text-blue-600">{deductibleCount}건</p>
+          <p className="mt-2 text-2xl font-bold text-blue-600">
+            {deductibleCompleteCount} / {deductibleTargetCount}건
+          </p>
         </div>
       </div>
 
