@@ -19,7 +19,7 @@ export default function SettlementMainPage({
   const [selectedMonth, setSelectedMonth] = useState(currentMonth);
   const [balanceRows, setBalanceRows] = useState<any[]>([]);
   const [paymentRows, setPaymentRows] = useState<any[]>([]);
-  const [showReceivables, setShowReceivables] = useState(false);
+  const [showReceivables, setShowReceivables] = useState(true);
   const [showReceivableDebug, setShowReceivableDebug] = useState(false);
   const [receivablePaymentDates, setReceivablePaymentDates] = useState<Record<string, string>>({});
   const [savingReceivableId, setSavingReceivableId] = useState<number | null>(null);
@@ -28,7 +28,8 @@ const fetchReceivableRows = useCallback(async () => {
 
   const { data, error } = await supabase
     .from("settlement_payments")
-    .select("*");
+    .select("id, work_name, payment_type, payment_detail, payment_amount, payment_date, payment_method, claim_date")
+    .order("id", { ascending: true });
 
   if (error) {
     alert(
@@ -181,7 +182,7 @@ const toAmountNumber = (value: unknown) =>
   Number(String(value ?? 0).replaceAll(",", "")) || 0;
 
 const getReceivableAmount = (row: any) =>
-  toAmountNumber(row.payment_amount) || toAmountNumber(row.claim_amount);
+  toAmountNumber(row.payment_amount);
 
 const getReceivableAccountName = (row: any) =>
   normalizeAccountName(row.payment_method);
@@ -252,6 +253,12 @@ const receivableAmount = receivableSummary.reduce(
   (sum, account) => sum + account.amount,
   0
 );
+
+const receivableSourceCount = paymentRows.filter(
+  (row) =>
+    getReceivableAmount(row) > 0 &&
+    receivableAccountNames.includes(getReceivableAccountName(row))
+).length;
 
 const handleReceivableDateSave = async (row: any) => {
   const paymentDate = receivablePaymentDates[String(row.id)] ?? "";
@@ -449,6 +456,9 @@ const fetchSettlementMain = useCallback(async (year: string, month: string) => {
               <h4 className="text-lg font-bold text-slate-900">미수금 차량 목록</h4>
               <p className="text-sm text-slate-500">
                 입금금액은 있고 입금일이 없는 국민은행, 부산은행, BLUE POINT 정산 내역입니다.
+              </p>
+              <p className="mt-1 text-xs font-semibold text-orange-700">
+                저장목록 {paymentRows.length}건 / 계정 금액행 {receivableSourceCount}건 / 미수조건 {receivableRows.length}건
               </p>
             </div>
             <div className="flex gap-2">
@@ -714,6 +724,9 @@ function SummaryCard({
     </div>
   );
 }
+
+
+
 
 
 
