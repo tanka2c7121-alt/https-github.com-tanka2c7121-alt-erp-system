@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { MenuItem } from "../../data/menuData";
@@ -20,6 +20,8 @@ export default function SettlementMainPage({
   const [balanceRows, setBalanceRows] = useState<any[]>([]);
   const [paymentRows, setPaymentRows] = useState<any[]>([]);
   const [showReceivables, setShowReceivables] = useState(false);
+  const [receivablePaymentDates, setReceivablePaymentDates] = useState<Record<string, string>>({});
+  const [savingReceivableId, setSavingReceivableId] = useState<number | null>(null);
 
 const fetchReceivableRows = useCallback(async () => {
 
@@ -145,27 +147,37 @@ const receivableAccountNames = [
 
 const normalizeText = (value: unknown) => String(value ?? "").trim();
 
+const isEmptyDateValue = (value: unknown) => {
+  const text = normalizeText(value).toLowerCase();
+
+  return !text || text === "null" || text === "undefined" || text === "0000-00-00";
+};
+
 const normalizeAccountName = (value: unknown) => {
-  const accountName = normalizeText(value).replace(/\s+/g, " ").toUpperCase();
+  const rawText = normalizeText(value);
+  const accountName = rawText
+    .replace(/\s+/g, " ")
+    .replaceAll("-", "")
+    .replaceAll("_", "")
+    .toUpperCase();
 
   if (
     accountName === "BLUEPOINT" ||
-    accountName === "BLUE POINT" ||
     accountName === "BLUE포인트" ||
     accountName === "블루포인트"
   ) {
     return "BLUE POINT";
   }
 
-  if (accountName === "국민" || accountName === "국민 BANK") {
+  if (accountName === "국민" || accountName === "국민BANK") {
     return "국민은행";
   }
 
-  if (accountName === "부산" || accountName === "부산 BANK") {
+  if (accountName === "부산" || accountName === "부산BANK") {
     return "부산은행";
   }
 
-  return normalizeText(value);
+  return rawText;
 };
 
 const toAmountNumber = (value: unknown) =>
@@ -174,22 +186,46 @@ const toAmountNumber = (value: unknown) =>
 const getReceivableAmount = (row: any) =>
   toAmountNumber(row.payment_amount) || toAmountNumber(row.claim_amount);
 
-const isReceivableRow = (row: any) =>
-  getReceivableAmount(row) > 0 &&
-  !normalizeText(row.payment_date);
+const getReceivableAccountName = (row: any) =>
+  normalizeAccountName(row.payment_method);
 
-const receivableRows = paymentRows.filter(isReceivableRow);
+const isReceivableAccountRow = (row: any) => {
+  const accountName = getReceivableAccountName(row);
+
+  return (
+    getReceivableAmount(row) > 0 &&
+    isEmptyDateValue(row.payment_date) &&
+    receivableAccountNames.includes(accountName)
+  );
+};
+
+const receivableRows = paymentRows
+  .filter(isReceivableAccountRow)
+  .map((row) => ({
+    ...row,
+    receivable_amount: getReceivableAmount(row),
+    normalized_payment_method: getReceivableAccountName(row),
+  }))
+  .sort((a, b) => {
+    const accountCompare = a.normalized_payment_method.localeCompare(
+      b.normalized_payment_method,
+      "ko"
+    );
+
+    if (accountCompare !== 0) return accountCompare;
+    return String(a.work_name ?? "").localeCompare(String(b.work_name ?? ""), "ko");
+  });
 
 const receivableSummary = receivableAccountNames.map((accountName) => {
 
   const rows = receivableRows.filter(
-    (row) => normalizeAccountName(row.payment_method) === accountName
+    (row) => row.normalized_payment_method === accountName
   );
 
   const amount = rows
     .reduce(
       (sum, row) =>
-        sum + getReceivableAmount(row),
+        sum + row.receivable_amount,
       0
     );
 
@@ -203,6 +239,61 @@ const receivableAmount = receivableSummary.reduce(
   (sum, account) => sum + account.amount,
   0
 );
+
+const handleReceivableDateSave = async (row: any) => {
+  const paymentDate = receivablePaymentDates[String(row.id)] ?? "";
+
+  if (!paymentDate) {
+    alert("입금일자를 입력하세요.");
+    return;
+  }
+
+  setSavingReceivableId(row.id);
+
+  const { error: paymentError } = await supabase
+    .from("settlement_payments")
+    .update({
+      payment_date: paymentDate,
+      payment_status: "수금",
+    })
+    .eq("id", row.id);
+
+  if (paymentError) {
+    setSavingReceivableId(null);
+    alert("입금일자 저장 실패: " + paymentError.message);
+    return;
+  }
+
+  const { error: cashError } = await supabase.from("daily_cash").insert({
+    date: paymentDate,
+    account: row.normalized_payment_method,
+    type: "수입",
+    category: "차량정산",
+    content: `${row.payment_type ?? ""} / ${row.payment_detail ?? ""} / ${row.work_name ?? ""}`,
+    income: row.receivable_amount,
+    expense: 0,
+    memo: row.work_name ?? "",
+    source_type: "settlement_payment",
+    source_work_name: row.work_name ?? "",
+  });
+
+  setSavingReceivableId(null);
+
+  if (cashError) {
+    alert("입출금 연동 실패: " + cashError.message);
+    return;
+  }
+
+  setReceivablePaymentDates((prev) => {
+    const next = { ...prev };
+    delete next[String(row.id)];
+    return next;
+  });
+  await fetchReceivableRows();
+  await fetchSettlementMain(selectedYear, selectedMonth);
+  await fetchBalanceRows();
+  alert("입금일자를 저장했습니다.");
+};
 
 const yearOptions = useMemo(() => {
   return Array.from(
@@ -393,31 +484,51 @@ const fetchSettlementMain = useCallback(async (year: string, month: string) => {
                         {row.payment_detail}
                       </td>
                       <td className="border border-orange-100 px-3 py-2">
-                        {row.payment_method}
+                        {row.normalized_payment_method}
                       </td>
                       <td className="border border-orange-100 px-3 py-2">
                         {row.claim_date ?? ""}
                       </td>
-                      <td className="border border-orange-100 px-3 py-2">
-                        {row.payment_date ?? ""}
+                      <td className="border border-orange-100 px-3 py-2 min-w-[150px]">
+                        <input
+                          type="date"
+                          className="w-full rounded border border-orange-200 px-2 py-1 text-sm text-slate-900"
+                          value={receivablePaymentDates[String(row.id)] ?? ""}
+                          onChange={(event) =>
+                            setReceivablePaymentDates((prev) => ({
+                              ...prev,
+                              [String(row.id)]: event.target.value,
+                            }))
+                          }
+                        />
                       </td>
                       <td className="border border-orange-100 px-3 py-2 text-right font-semibold text-orange-700">
-                        ₩ {getReceivableAmount(row).toLocaleString()}
+                        ₩ {row.receivable_amount.toLocaleString()}
                       </td>
                       <td className="border border-orange-100 px-3 py-2 text-center">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            onSelectMenu({
-                              id: "factory-settlement-repair-register",
-                              title: "정산등록",
-                              data: { workName: row.work_name },
-                            })
-                          }
-                          className="rounded bg-blue-600 px-3 py-1 text-xs font-semibold text-white hover:bg-blue-700"
-                        >
-                          정산수정
-                        </button>
+                        <div className="flex justify-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => void handleReceivableDateSave(row)}
+                            disabled={savingReceivableId === row.id}
+                            className="rounded bg-orange-600 px-3 py-1 text-xs font-semibold text-white hover:bg-orange-700 disabled:opacity-50"
+                          >
+                            {savingReceivableId === row.id ? "저장중" : "입금처리"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              onSelectMenu({
+                                id: "factory-settlement-repair-register",
+                                title: "정산등록",
+                                data: { workName: row.work_name },
+                              })
+                            }
+                            className="rounded bg-blue-600 px-3 py-1 text-xs font-semibold text-white hover:bg-blue-700"
+                          >
+                            정산수정
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -541,3 +652,4 @@ function SummaryCard({
     </div>
   );
 }
+
