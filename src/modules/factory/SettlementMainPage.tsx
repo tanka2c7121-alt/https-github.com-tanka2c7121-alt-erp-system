@@ -184,7 +184,7 @@ const toAmountNumber = (value: unknown) =>
   Number(String(value ?? 0).replaceAll(",", "")) || 0;
 
 const getReceivableAmount = (row: any) =>
-  toAmountNumber(row.payment_amount);
+  toAmountNumber(row.payment_amount) || toAmountNumber(row.claim_amount);
 
 const getReceivableAccountName = (row: any) =>
   normalizeAccountName(row.payment_method);
@@ -652,6 +652,7 @@ function SummaryCard({
     </div>
   );
 }
+
 
 
 
