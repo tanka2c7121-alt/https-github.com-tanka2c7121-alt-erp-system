@@ -20,6 +20,7 @@ export default function SettlementMainPage({
   const [balanceRows, setBalanceRows] = useState<any[]>([]);
   const [paymentRows, setPaymentRows] = useState<any[]>([]);
   const [showReceivables, setShowReceivables] = useState(false);
+  const [showReceivableDebug, setShowReceivableDebug] = useState(false);
   const [receivablePaymentDates, setReceivablePaymentDates] = useState<Record<string, string>>({});
   const [savingReceivableId, setSavingReceivableId] = useState<number | null>(null);
 
@@ -194,6 +195,22 @@ const isReceivableAccountRow = (row: any) => {
     receivableAccountNames.includes(accountName)
   );
 };
+
+const receivableDebugRows = paymentRows
+  .map((row) => ({
+    id: row.id,
+    work_name: row.work_name ?? "",
+    payment_type: row.payment_type ?? "",
+    payment_detail: row.payment_detail ?? "",
+    payment_amount: toAmountNumber(row.payment_amount),
+    claim_amount: toAmountNumber(row.claim_amount),
+    payment_date: normalizeText(row.payment_date),
+    payment_method: normalizeText(row.payment_method),
+    normalized_payment_method: getReceivableAccountName(row),
+    is_empty_date: isEmptyDateValue(row.payment_date),
+  }))
+  .filter((row) => row.payment_amount > 0 || row.claim_amount > 0)
+  .sort((a, b) => String(a.work_name).localeCompare(String(b.work_name), "ko"));
 
 const receivableRows = paymentRows
   .filter(isReceivableAccountRow)
@@ -434,14 +451,63 @@ const fetchSettlementMain = useCallback(async (year: string, month: string) => {
                 입금금액은 있고 입금일이 없는 국민은행, 부산은행, BLUE POINT 정산 내역입니다.
               </p>
             </div>
-            <button
-              type="button"
-              onClick={() => setShowReceivables(false)}
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-            >
-              닫기
-            </button>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setShowReceivableDebug((value) => !value)}
+                className="rounded-lg border border-orange-300 px-3 py-2 text-sm font-semibold text-orange-700 hover:bg-orange-50"
+              >
+                원본확인
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowReceivables(false)}
+                className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                닫기
+              </button>
+            </div>
           </div>
+
+          {showReceivableDebug && (
+            <div className="mb-4 overflow-x-auto rounded-xl border border-dashed border-orange-300 bg-orange-50 p-3">
+              <div className="mb-2 text-sm font-bold text-orange-800">미수금 원본 확인</div>
+              <table className="w-full border-collapse text-xs">
+                <thead>
+                  <tr className="text-left text-orange-900">
+                    <th className="border border-orange-200 px-2 py-1">작명</th>
+                    <th className="border border-orange-200 px-2 py-1">입금방법 원본</th>
+                    <th className="border border-orange-200 px-2 py-1">인식계정</th>
+                    <th className="border border-orange-200 px-2 py-1">입금일 원본</th>
+                    <th className="border border-orange-200 px-2 py-1">입금일 없음</th>
+                    <th className="border border-orange-200 px-2 py-1 text-right">입금금액</th>
+                    <th className="border border-orange-200 px-2 py-1 text-right">청구금액</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {receivableDebugRows.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="border border-orange-200 px-2 py-4 text-center text-orange-700">
+                        settlement_payments에 금액 있는 행이 없습니다.
+                      </td>
+                    </tr>
+                  ) : (
+                    receivableDebugRows.map((row) => (
+                      <tr key={row.id}>
+                        <td className="border border-orange-200 px-2 py-1">{row.work_name}</td>
+                        <td className="border border-orange-200 px-2 py-1">{row.payment_method || "(빈값)"}</td>
+                        <td className="border border-orange-200 px-2 py-1">{row.normalized_payment_method || "(미인식)"}</td>
+                        <td className="border border-orange-200 px-2 py-1">{row.payment_date || "(빈값)"}</td>
+                        <td className="border border-orange-200 px-2 py-1">{row.is_empty_date ? "Y" : "N"}</td>
+                        <td className="border border-orange-200 px-2 py-1 text-right">{row.payment_amount.toLocaleString()}</td>
+                        <td className="border border-orange-200 px-2 py-1 text-right">{row.claim_amount.toLocaleString()}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
 
           <div className="overflow-x-auto">
             <table className="w-full border-collapse text-sm">
@@ -648,6 +714,9 @@ function SummaryCard({
     </div>
   );
 }
+
+
+
 
 
 
