@@ -53,6 +53,9 @@ type InputState = {
 };
 
 const pageSize = 30;
+const currentDateText = localDateText();
+const currentYear = currentDateText.slice(0, 4);
+const currentMonth = currentDateText.slice(5, 7);
 const accountOptions = ["국민은행", "부산은행", "카드", "현금", "BLUE POINT", "법인1층"];
 
 const formatWon = (amount: number) => amount.toLocaleString();
@@ -87,6 +90,10 @@ export default function DeductibleManagementPage({
   const [inputs, setInputs] = useState<Record<string, InputState>>({});
   const [searchText, setSearchText] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "complete">("pending");
+  const [selectedYear, setSelectedYear] = useState(currentYear);
+  const [selectedMonth, setSelectedMonth] = useState(currentMonth);
+  const [sortField, setSortField] = useState<keyof DeductibleItem>("releaseDate");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [currentPage, setCurrentPage] = useState(1);
   const [savingWorkName, setSavingWorkName] = useState<string | null>(null);
 
@@ -170,10 +177,32 @@ export default function DeductibleManagementPage({
     void loadItems();
   }, [loadItems]);
 
+  const handleSort = (field: keyof DeductibleItem) => {
+    if (sortField === field) {
+      setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"));
+      return;
+    }
+
+    setSortField(field);
+    setSortOrder("asc");
+  };
+
   const filteredItems = useMemo(() => {
     const keyword = searchText.trim().toLowerCase();
 
     return items
+      .filter((item) => {
+        const baseDate = item.releaseDate || item.outboundDate;
+
+        if (!selectedYear) return true;
+        return baseDate.startsWith(selectedYear);
+      })
+      .filter((item) => {
+        const baseDate = item.releaseDate || item.outboundDate;
+
+        if (!selectedMonth) return true;
+        return baseDate.slice(5, 7) === selectedMonth;
+      })
       .filter((item) => {
         const isComplete = item.paidAmount > 0;
 
@@ -195,8 +224,40 @@ export default function DeductibleManagementPage({
           .join(" ")
           .toLowerCase()
           .includes(keyword);
+      })
+      .sort((a, b) => {
+        const getValue = (item: DeductibleItem) => {
+          if (sortField === "deductibleAmount") {
+            return parseAmount(item.deductibleAmount);
+          }
+
+          return item[sortField];
+        };
+        const aValue = getValue(a);
+        const bValue = getValue(b);
+
+        if (typeof aValue === "number" && typeof bValue === "number") {
+          return sortOrder === "asc" ? aValue - bValue : bValue - aValue;
+        }
+
+        const aText = String(aValue ?? "");
+        const bText = String(bValue ?? "");
+
+        if (aText < bText) return sortOrder === "asc" ? -1 : 1;
+        if (aText > bText) return sortOrder === "asc" ? 1 : -1;
+        return 0;
       });
-  }, [items, searchText, statusFilter]);
+  }, [items, searchText, selectedMonth, selectedYear, sortField, sortOrder, statusFilter]);
+
+  const yearOptions = useMemo(() => {
+    return Array.from(
+      new Set(
+        items
+          .map((item) => (item.releaseDate || item.outboundDate).slice(0, 4))
+          .filter(Boolean)
+      )
+    ).sort((a, b) => b.localeCompare(a));
+  }, [items]);
 
   const totalPages = Math.max(1, Math.ceil(filteredItems.length / pageSize));
   const safeCurrentPage = Math.min(currentPage, totalPages);
@@ -211,6 +272,22 @@ export default function DeductibleManagementPage({
     .filter((item) => item.paidAmount <= 0)
     .reduce((sum, item) => sum + parseAmount(item.deductibleAmount), 0);
   const paidAmount = items.reduce((sum, item) => sum + item.paidAmount, 0);
+
+  const headers: Array<{
+    key: keyof DeductibleItem;
+    label: string;
+    className?: string;
+  }> = [
+    { key: "id", label: "번호", className: "w-12" },
+    { key: "workName", label: "작명" },
+    { key: "carNumber", label: "차량번호" },
+    { key: "carModel", label: "차량명" },
+    { key: "category", label: "구분" },
+    { key: "company", label: "보험사" },
+    { key: "releaseDate", label: "출고일" },
+    { key: "deductibleAmount", label: "면책금(최소)" },
+    { key: "paidAmount", label: "상태" },
+  ];
 
   const updateInput = (workName: string, field: keyof InputState, value: string) => {
     setInputs((prev) => ({
@@ -319,6 +396,42 @@ export default function DeductibleManagementPage({
         <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex flex-wrap items-center gap-2">
             <select
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900"
+              value={selectedYear}
+              onChange={(event) => {
+                setSelectedYear(event.target.value);
+                setCurrentPage(1);
+              }}
+            >
+              <option value="">전체 년도</option>
+              {yearOptions.map((year) => (
+                <option key={year} value={year}>
+                  {year}년
+                </option>
+              ))}
+            </select>
+
+            <select
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900"
+              value={selectedMonth}
+              onChange={(event) => {
+                setSelectedMonth(event.target.value);
+                setCurrentPage(1);
+              }}
+            >
+              <option value="">전체 월</option>
+              {Array.from({ length: 12 }, (_, index) => {
+                const month = String(index + 1).padStart(2, "0");
+
+                return (
+                  <option key={month} value={month}>
+                    {index + 1}월
+                  </option>
+                );
+              })}
+            </select>
+
+            <select
               className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-900"
               value={statusFilter}
               onChange={(event) => {
@@ -351,15 +464,24 @@ export default function DeductibleManagementPage({
           <table className="w-full border-collapse text-center text-sm">
             <thead>
               <tr className="bg-slate-100">
-                <th className="border border-slate-300 px-2 py-2">번호</th>
-                <th className="border border-slate-300 px-2 py-2">작명</th>
-                <th className="border border-slate-300 px-2 py-2">차량번호</th>
-                <th className="border border-slate-300 px-2 py-2">차량명</th>
-                <th className="border border-slate-300 px-2 py-2">구분</th>
-                <th className="border border-slate-300 px-2 py-2">보험사</th>
-                <th className="border border-slate-300 px-2 py-2">출고일</th>
-                <th className="border border-slate-300 px-2 py-2">면책금(최소)</th>
-                <th className="border border-slate-300 px-2 py-2">상태</th>
+                {headers.map((header) => (
+                  <th
+                    key={header.key}
+                    onClick={() => handleSort(header.key)}
+                    className={[
+                      "cursor-pointer select-none border border-slate-300 px-2 py-2",
+                      header.className ?? "",
+                      sortField === header.key ? "text-blue-700" : "",
+                    ].join(" ")}
+                  >
+                    {header.label}
+                    {sortField === header.key && (
+                      <span className="ml-1 text-[11px]">
+                        {sortOrder === "asc" ? "▲" : "▼"}
+                      </span>
+                    )}
+                  </th>
+                ))}
                 <th className="border border-slate-300 px-2 py-2">면책금 입력</th>
                 <th className="border border-slate-300 px-2 py-2">관리</th>
               </tr>
