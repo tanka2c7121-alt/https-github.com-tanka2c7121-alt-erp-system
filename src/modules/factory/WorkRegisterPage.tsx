@@ -2279,31 +2279,19 @@ function handleClearWorkRow(index: number) {
     <div className="rounded-xl border border-slate-200 bg-white p-4">
   <label className={labelClass}>담당자</label>
 
-    <select
+    <input
       className={`${getInputStateClass(ownManagerName)} ${inputClass}`}
+      placeholder="자차 담당자"
       value={ownManagerName}
       onChange={(e) => setOwnManagerName(e.target.value)}
-    >
-      <option value="">자차 담당자 선택</option>
-      {managerOptions.map((item) => (
-        <option key={item} value={item}>
-          {item}
-        </option>
-      ))}
-    </select>
+    />
 
-    <select
+    <input
       className={`${getInputStateClass(otherManagerName)} ${inputClass}`}
+      placeholder="대물 담당자"
       value={otherManagerName}
       onChange={(e) => setOtherManagerName(e.target.value)}
-    >
-      <option value="">대물 담당자 선택</option>
-      {managerOptions.map((item) => (
-        <option key={item} value={item}>
-          {item}
-        </option>
-      ))}
-    </select>
+    />
   </div>
  
   </>
@@ -2327,7 +2315,8 @@ function handleClearWorkRow(index: number) {
       label="담당자"
       value={managerName}
       onChange={(e) => setManagerName(e.target.value)}
-      options={managerOptions}
+      placeholder="담당자"
+      options={category === "일반" ? managerOptions : undefined}
     />
   </>
 )}
