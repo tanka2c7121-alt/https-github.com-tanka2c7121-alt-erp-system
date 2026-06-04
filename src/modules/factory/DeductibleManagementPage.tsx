@@ -192,16 +192,12 @@ export default function DeductibleManagementPage({
 
     return items
       .filter((item) => {
-        const baseDate = item.releaseDate || item.outboundDate;
-
         if (!selectedYear) return true;
-        return baseDate.startsWith(selectedYear);
+        return item.workName.startsWith(selectedYear);
       })
       .filter((item) => {
-        const baseDate = item.releaseDate || item.outboundDate;
-
         if (!selectedMonth) return true;
-        return baseDate.slice(5, 7) === selectedMonth;
+        return item.workName.slice(5, 7) === selectedMonth;
       })
       .filter((item) => {
         const isComplete = item.paidAmount > 0;
@@ -253,7 +249,7 @@ export default function DeductibleManagementPage({
     return Array.from(
       new Set(
         items
-          .map((item) => (item.releaseDate || item.outboundDate).slice(0, 4))
+          .map((item) => item.workName.slice(0, 4))
           .filter(Boolean)
       )
     ).sort((a, b) => b.localeCompare(a));
