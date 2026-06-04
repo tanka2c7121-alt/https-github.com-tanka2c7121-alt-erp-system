@@ -155,26 +155,22 @@ const isEmptyDateValue = (value: unknown) => {
 
 const normalizeAccountName = (value: unknown) => {
   const rawText = normalizeText(value);
-  const accountName = rawText
-    .replace(/\s+/g, " ")
+  const accountKey = rawText
+    .replace(/\s+/g, "")
     .replaceAll("-", "")
     .replaceAll("_", "")
     .toUpperCase();
 
-  if (
-    accountName === "BLUEPOINT" ||
-    accountName === "BLUE포인트" ||
-    accountName === "블루포인트"
-  ) {
-    return "BLUE POINT";
-  }
-
-  if (accountName === "국민" || accountName === "국민BANK") {
+  if (accountKey.includes("국민") || accountKey.includes("KB")) {
     return "국민은행";
   }
 
-  if (accountName === "부산" || accountName === "부산BANK") {
+  if (accountKey.includes("부산") || accountKey.includes("BNK")) {
     return "부산은행";
+  }
+
+  if (accountKey.includes("BLUE") || accountKey.includes("블루")) {
+    return "BLUE POINT";
   }
 
   return rawText;
@@ -652,6 +648,9 @@ function SummaryCard({
     </div>
   );
 }
+
+
+
 
 
 
