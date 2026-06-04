@@ -155,8 +155,11 @@ const normalizeAccountName = (value: unknown) => {
   return normalizeText(value);
 };
 
+const toAmountNumber = (value: unknown) =>
+  Number(String(value ?? 0).replaceAll(",", "")) || 0;
+
 const getReceivableAmount = (row: any) =>
-  Number(String(row.payment_amount ?? 0).replaceAll(",", "")) || 0;
+  toAmountNumber(row.payment_amount) || toAmountNumber(row.claim_amount);
 
 const isReceivableRow = (row: any) =>
   getReceivableAmount(row) > 0 &&
