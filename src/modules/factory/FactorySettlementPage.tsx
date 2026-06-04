@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { MenuItem } from "../../data/menuData";
+import { localDateText } from "../../lib/date";
 import { supabase } from "../../lib/supabase";
 
 
@@ -27,6 +28,9 @@ type SettlementItem = {
 };
 
 const formatWon = (amount: number) => amount.toLocaleString();
+const currentDateText = localDateText();
+const currentYear = currentDateText.slice(0, 4);
+const currentMonth = currentDateText.slice(5, 7);
 
 export default function FactorySettlementPage({
   view = "all",
@@ -35,6 +39,8 @@ export default function FactorySettlementPage({
   const [settlementList, setSettlementList] = useState<SettlementItem[]>([]);
   const [deductiblePaidWorkNames, setDeductiblePaidWorkNames] = useState<Set<string>>(new Set());
   const [searchText, setSearchText] = useState("");
+  const [selectedYear, setSelectedYear] = useState(currentYear);
+  const [selectedMonth, setSelectedMonth] = useState(currentMonth);
 
   const [sortField, setSortField] = useState<keyof SettlementItem>("work_name");
 const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
@@ -129,6 +135,14 @@ const handleSort = (field: keyof SettlementItem) => {
       return 0;
     })
     .filter((item) => {
+      if (!selectedYear) return true;
+      return item.work_name.startsWith(selectedYear);
+    })
+    .filter((item) => {
+      if (!selectedMonth) return true;
+      return item.work_name.slice(5, 7) === selectedMonth;
+    })
+    .filter((item) => {
       if (view === "all" && item.status === "완결") return false;
       if (view === "complete" && item.status !== "완결") return false;
       if (view === "pending" && item.status !== "미결") return false;
@@ -142,7 +156,18 @@ const handleSort = (field: keyof SettlementItem) => {
         item.company.toLowerCase().includes(keyword)
       );
     });
-}, [settlementList, searchText, view, sortField, sortOrder]);
+}, [settlementList, searchText, selectedMonth, selectedYear, view, sortField, sortOrder]);
+
+  const yearOptions = useMemo(() => {
+    return Array.from(
+      new Set([
+        currentYear,
+        ...settlementList
+          .map((item) => item.work_name.slice(0, 4))
+          .filter(Boolean),
+      ])
+    ).sort((a, b) => b.localeCompare(a));
+  }, [settlementList]);
 
   const totalCount = settlementList.length;
   const pendingCount = settlementList.filter((item) => item.status === "미결").length;
@@ -208,13 +233,54 @@ const pagedList = filteredList.slice(
       </div>
 
       <div className="rounded-xl border border-slate-200 bg-white p-4">
-        <div className="mb-4 flex items-center justify-between">
-          <input
-            className="w-80 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900"
-            placeholder="작명 / 차량번호 / 보험사 검색"
-            value={searchText}
-            onChange={(e) => setSearchText(e.target.value)}
-          />
+        <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between">
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900"
+              value={selectedYear}
+              onChange={(event) => {
+                setSelectedYear(event.target.value);
+                setCurrentPage(1);
+              }}
+            >
+              <option value="">전체 년도</option>
+              {yearOptions.map((year) => (
+                <option key={year} value={year}>
+                  {year}년
+                </option>
+              ))}
+            </select>
+
+            <select
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900"
+              value={selectedMonth}
+              onChange={(event) => {
+                setSelectedMonth(event.target.value);
+                setCurrentPage(1);
+              }}
+            >
+              <option value="">전체 월</option>
+              {Array.from({ length: 12 }, (_, index) => {
+                const month = String(index + 1).padStart(2, "0");
+
+                return (
+                  <option key={month} value={month}>
+                    {index + 1}월
+                  </option>
+                );
+              })}
+            </select>
+
+            <input
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 lg:w-80"
+              placeholder="작명 / 차량번호 / 보험사 검색"
+              value={searchText}
+              onChange={(e) => {
+                setSearchText(e.target.value);
+                setCurrentPage(1);
+              }}
+            />
+          </div>
 
           <button
             type="button"
