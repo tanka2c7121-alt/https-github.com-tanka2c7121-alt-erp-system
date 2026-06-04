@@ -148,8 +148,21 @@ const normalizeText = (value: unknown) => String(value ?? "").trim();
 const normalizeAccountName = (value: unknown) => {
   const accountName = normalizeText(value).replace(/\s+/g, " ").toUpperCase();
 
-  if (accountName === "BLUEPOINT" || accountName === "BLUE POINT") {
+  if (
+    accountName === "BLUEPOINT" ||
+    accountName === "BLUE POINT" ||
+    accountName === "BLUE포인트" ||
+    accountName === "블루포인트"
+  ) {
     return "BLUE POINT";
+  }
+
+  if (accountName === "국민" || accountName === "국민 BANK") {
+    return "국민은행";
+  }
+
+  if (accountName === "부산" || accountName === "부산 BANK") {
+    return "부산은행";
   }
 
   return normalizeText(value);
@@ -163,8 +176,7 @@ const getReceivableAmount = (row: any) =>
 
 const isReceivableRow = (row: any) =>
   getReceivableAmount(row) > 0 &&
-  !normalizeText(row.payment_date) &&
-  receivableAccountNames.includes(normalizeAccountName(row.payment_method));
+  !normalizeText(row.payment_date);
 
 const receivableRows = paymentRows.filter(isReceivableRow);
 
