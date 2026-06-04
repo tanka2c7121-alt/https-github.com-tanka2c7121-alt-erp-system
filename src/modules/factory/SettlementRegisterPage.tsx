@@ -691,7 +691,7 @@ export default function SettlementRegisterPage({
           {claimRows.map((row, index) => (
             <div
               key={index}
-              className="grid grid-cols-1 gap-4 rounded-xl border border-slate-100 p-3 md:grid-cols-3"
+              className="grid grid-cols-1 gap-4 rounded-xl border border-slate-100 p-3 md:grid-cols-5"
             >
               <Field
                 label="청구일"
@@ -713,6 +713,8 @@ export default function SettlementRegisterPage({
                 onChange={(value) => handleClaimChange(index, "detail", value)}
                 options={["보험", "캐피탈", "일반", "바디케어"]}
               />
+              <div className="hidden md:block" aria-hidden="true" />
+              <div className="hidden md:block" aria-hidden="true" />
             </div>
           ))}
         </div>
@@ -868,7 +870,10 @@ export default function SettlementRegisterPage({
 
         <div className="space-y-3">
           {expenseRows.map((row, index) => (
-            <div key={index} className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <div
+              key={index}
+              className="grid grid-cols-1 gap-4 rounded-xl border border-slate-100 p-3 md:grid-cols-5"
+            >
               <Field
                 label="지출일"
                 type="date"
@@ -889,6 +894,8 @@ export default function SettlementRegisterPage({
                 onChange={(value) => handleExpenseChange(index, "type", value)}
                 options={["입고지원", "교통비", "견인비", "탁송비", "대차비", "기타"]}
               />
+              <div className="hidden md:block" aria-hidden="true" />
+              <div className="hidden md:block" aria-hidden="true" />
             </div>
           ))}
         </div>
