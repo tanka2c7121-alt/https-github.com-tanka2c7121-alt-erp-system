@@ -4,6 +4,38 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { MenuItem } from "../../data/menuData";
 import { localDateText } from "../../lib/date";
 import { supabase } from "../../lib/supabase";
+type QueryBuilder = any;
+
+async function fetchAllRows<T>(
+  tableName: string,
+  selectQuery: string,
+  configure?: (query: QueryBuilder) => QueryBuilder
+): Promise<{ data: T[]; error: any }> {
+  const pageSize = 1000;
+  const rows: T[] = [];
+
+  for (let from = 0; ; from += pageSize) {
+    let query = supabase.from(tableName).select(selectQuery);
+
+    if (configure) {
+      query = configure(query);
+    }
+
+    const { data, error } = await query.range(from, from + pageSize - 1);
+
+    if (error) {
+      return { data: rows, error };
+    }
+
+    rows.push(...((data ?? []) as T[]));
+
+    if (!data || data.length < pageSize) {
+      break;
+    }
+  }
+
+  return { data: rows, error: null };
+}
 
 export default function SettlementMainPage({
   onSelectMenu,
@@ -57,10 +89,11 @@ const fetchReceivableRows = useCallback(async () => {
 const fetchBalanceRows = useCallback(async () => {
   const today = localDateText();
 
-  const { data, error } = await supabase
-    .from("daily_cash")
-    .select("*")
-    .lte("date", today);
+  const { data, error } = await fetchAllRows<any>(
+    "daily_cash",
+    "*",
+    (query) => query.lte("date", today)
+  );
 
   if (error) {
     alert("잔고 조회 실패: " + error.message);
@@ -343,24 +376,34 @@ const yearOptions = useMemo(() => {
 }, [balanceRows, currentYear, dailyRows]);
 
 const fetchSettlementMain = useCallback(async (year: string, month: string) => {
-  let query = supabase
-    .from("daily_cash")
-    .select("*")
-    .order("date", { ascending: false });
+  let startDate = "";
+  let endDate = "";
 
   if (year && month) {
     const yearNumber = Number(year);
     const monthNumber = Number(month);
-    const startDate = `${year}-${month}-01`;
     const lastDay = new Date(yearNumber, monthNumber, 0).getDate();
-    const endDate = `${year}-${month}-${String(lastDay).padStart(2, "0")}`;
 
-    query = query.gte("date", startDate).lte("date", endDate);
+    startDate = `${year}-${month}-01`;
+    endDate = `${year}-${month}-${String(lastDay).padStart(2, "0")}`;
   } else if (year) {
-    query = query.gte("date", `${year}-01-01`).lte("date", `${year}-12-31`);
+    startDate = `${year}-01-01`;
+    endDate = `${year}-12-31`;
   }
 
-  const { data, error } = await query;
+  const { data, error } = await fetchAllRows<any>(
+    "daily_cash",
+    "*",
+    (query) => {
+      let nextQuery = query.order("date", { ascending: false });
+
+      if (startDate && endDate) {
+        nextQuery = nextQuery.gte("date", startDate).lte("date", endDate);
+      }
+
+      return nextQuery;
+    }
+  );
 
   if (error) {
     alert("정산관리 조회 실패: " + error.message);
@@ -735,6 +778,7 @@ function SummaryCard({
     </div>
   );
 }
+
 
 
 

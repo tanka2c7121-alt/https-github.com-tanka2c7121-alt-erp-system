@@ -103,6 +103,39 @@ const hasDeductibleCoverage = (value?: string | null) => {
   return normalized === "자차" || normalized === "과실";
 };
 
+
+type QueryBuilder = any;
+
+async function fetchAllRows<T>(
+  tableName: string,
+  selectQuery: string,
+  configure?: (query: QueryBuilder) => QueryBuilder
+): Promise<{ data: T[]; error: any }> {
+  const pageSize = 1000;
+  const rows: T[] = [];
+
+  for (let from = 0; ; from += pageSize) {
+    let query = supabase.from(tableName).select(selectQuery);
+
+    if (configure) {
+      query = configure(query);
+    }
+
+    const { data, error } = await query.range(from, from + pageSize - 1);
+
+    if (error) {
+      return { data: rows, error };
+    }
+
+    rows.push(...((data ?? []) as T[]));
+
+    if (!data || data.length < pageSize) {
+      break;
+    }
+  }
+
+  return { data: rows, error: null };
+}
 export default function DeductibleManagementPage({
   onSelectMenu,
 }: DeductibleManagementPageProps) {
@@ -118,12 +151,11 @@ export default function DeductibleManagementPage({
   const [savingWorkName, setSavingWorkName] = useState<string | null>(null);
 
   const loadItems = useCallback(async () => {
-    const { data: workOrders, error: workError } = await supabase
-      .from("work_orders")
-      .select(
-        "id, work_name, car_number, car_model, category, coverage_type, insurance_company, partner_company, deductible_amount, outbound_date, release_date"
-      )
-      .order("id", { ascending: false });
+    const { data: workOrders, error: workError } = await fetchAllRows<WorkOrderRow>(
+      "work_orders",
+      "id, work_name, car_number, car_model, category, coverage_type, insurance_company, partner_company, deductible_amount, outbound_date, release_date",
+      (query) => query.order("id", { ascending: false })
+    );
 
     if (workError) {
       alert("면책금 대상 조회 실패: " + workError.message);
@@ -139,12 +171,11 @@ export default function DeductibleManagementPage({
 
     const { data: payments, error: paymentError } =
       workNames.length > 0
-        ? await supabase
-            .from("settlement_payments")
-            .select("id, work_name, payment_type, payment_detail, payment_amount, payment_date, payment_method, approval_number, merchant_number, card_number")
-            .in("work_name", workNames)
-            .eq("payment_type", "면책금")
-            .order("id", { ascending: false })
+        ? await fetchAllRows<PaymentRow>(
+            "settlement_payments",
+            "id, work_name, payment_type, payment_detail, payment_amount, payment_date, payment_method, approval_number, merchant_number, card_number",
+            (query) => query.eq("payment_type", "면책금").order("id", { ascending: false })
+          )
         : { data: [], error: null };
 
     if (paymentError) {
@@ -932,6 +963,9 @@ function PageButton({
     </button>
   );
 }
+
+
+
 
 
 
