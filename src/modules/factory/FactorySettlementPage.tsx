@@ -52,6 +52,46 @@ const isDeductibleTarget = (
   item: Pick<SettlementItem, "coverage_type" | "deductible_amount">
 ) => hasDeductibleCoverage(item.coverage_type) && hasDeductibleValue(item.deductible_amount);
 
+
+async function fetchAllRows<T>(
+  tableName: string,
+  selectQuery: string,
+  options?: {
+    order?: { column: string; ascending: boolean };
+    eq?: { column: string; value: string };
+  }
+): Promise<{ data: T[]; error: any }> {
+  const pageSize = 1000;
+  const rows: T[] = [];
+
+  for (let from = 0; ; from += pageSize) {
+    let query = supabase.from(tableName).select(selectQuery);
+
+    if (options?.eq) {
+      query = query.eq(options.eq.column, options.eq.value);
+    }
+
+    if (options?.order) {
+      query = query.order(options.order.column, {
+        ascending: options.order.ascending,
+      });
+    }
+
+    const { data, error } = await query.range(from, from + pageSize - 1);
+
+    if (error) {
+      return { data: rows, error };
+    }
+
+    rows.push(...((data ?? []) as T[]));
+
+    if (!data || data.length < pageSize) {
+      break;
+    }
+  }
+
+  return { data: rows, error: null };
+}
 export default function FactorySettlementPage({
   view = "all",
   onSelectMenu,
@@ -75,9 +115,9 @@ const handleSort = (field: keyof SettlementItem) => {
 };
 
   const loadSettlementList = useCallback(async () => {
-    const { data, error } = await supabase
-      .from("work_orders")
-      .select(`
+    const { data, error } = await fetchAllRows<any>(
+      "work_orders",
+      `
         id,
         work_name,
         car_number,
@@ -88,21 +128,35 @@ const handleSort = (field: keyof SettlementItem) => {
         partner_company,
         deductible_amount,
         release_date
-      `)
-      .order("id", { ascending: false });
+      `,
+      { order: { column: "id", ascending: false } }
+    );
 
     if (error) {
       alert("차량정산 조회 실패: " + error.message);
       return;
     }
-    const { data: settlementRows } = await supabase
-  .from("repair_settlements")
-  .select("work_name, progress_status");
 
-    const { data: deductiblePaymentRows } = await supabase
-      .from("settlement_payments")
-      .select("work_name")
-      .eq("payment_type", "면책금");
+    const { data: settlementRows, error: settlementError } = await fetchAllRows<any>(
+      "repair_settlements",
+      "work_name, progress_status"
+    );
+
+    if (settlementError) {
+      alert("정산상태 조회 실패: " + settlementError.message);
+      return;
+    }
+
+    const { data: deductiblePaymentRows, error: deductiblePaymentError } = await fetchAllRows<any>(
+      "settlement_payments",
+      "work_name",
+      { eq: { column: "payment_type", value: "면책금" } }
+    );
+
+    if (deductiblePaymentError) {
+      alert("면책금 입금 조회 실패: " + deductiblePaymentError.message);
+      return;
+    }
 
   const settlementMap = new Map(
   (settlementRows ?? []).map((row) => [
@@ -495,6 +549,8 @@ const pagedList = filteredList.slice(
     </div>
   );
 }
+
+
 
 
 
