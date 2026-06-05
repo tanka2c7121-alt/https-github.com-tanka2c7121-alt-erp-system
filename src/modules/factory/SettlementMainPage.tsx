@@ -51,7 +51,7 @@ export default function SettlementMainPage({
   const [selectedMonth, setSelectedMonth] = useState(currentMonth);
   const [balanceRows, setBalanceRows] = useState<any[]>([]);
   const [paymentRows, setPaymentRows] = useState<any[]>([]);
-  const [showReceivables, setShowReceivables] = useState(true);
+  const [showReceivables, setShowReceivables] = useState(false);
   const [showReceivableDebug, setShowReceivableDebug] = useState(false);
   const [receivablePaymentDates, setReceivablePaymentDates] = useState<Record<string, string>>({});
   const [savingReceivableId, setSavingReceivableId] = useState<number | null>(null);
@@ -778,6 +778,7 @@ function SummaryCard({
     </div>
   );
 }
+
 
 
 

@@ -26,6 +26,38 @@ type DailyCashRow = {
 };
 
 const formatWon = (amount: number) => amount.toLocaleString();
+type QueryBuilder = any;
+
+async function fetchAllRows<T>(
+  tableName: string,
+  selectQuery: string,
+  configure?: (query: QueryBuilder) => QueryBuilder
+): Promise<{ data: T[]; error: any }> {
+  const pageSize = 1000;
+  const rows: T[] = [];
+
+  for (let from = 0; ; from += pageSize) {
+    let query = supabase.from(tableName).select(selectQuery);
+
+    if (configure) {
+      query = configure(query);
+    }
+
+    const { data, error } = await query.range(from, from + pageSize - 1);
+
+    if (error) {
+      return { data: rows, error };
+    }
+
+    rows.push(...((data ?? []) as T[]));
+
+    if (!data || data.length < pageSize) {
+      break;
+    }
+  }
+
+  return { data: rows, error: null };
+}
 
 export default function DailyCashPage({ onSelectMenu }: DailyCashPageProps) {
   const [rows, setRows] = useState<DailyCashRow[]>([]);
@@ -39,10 +71,11 @@ export default function DailyCashPage({ onSelectMenu }: DailyCashPageProps) {
   async function fetchBalanceRows() {
     const today = localDateText();
 
-    const { data, error } = await supabase
-      .from("daily_cash")
-      .select("*")
-      .lte("date", today);
+    const { data, error } = await fetchAllRows<DailyCashRow>(
+      "daily_cash",
+      "*",
+      (query) => query.lte("date", today)
+    );
 
     if (error) {
       alert("잔고 조회 실패: " + error.message);
@@ -53,21 +86,23 @@ export default function DailyCashPage({ onSelectMenu }: DailyCashPageProps) {
   }
 
   async function fetchRows(selectedPeriod: PeriodValue = period) {
-    let query = supabase
-      .from("daily_cash")
-      .select("*")
-      .order("date", { ascending: false })
-      .order("id", { ascending: false });
+    const { data, error } = await fetchAllRows<DailyCashRow>(
+      "daily_cash",
+      "*",
+      (query) => {
+        let nextQuery = query
+          .order("date", { ascending: false })
+          .order("id", { ascending: false });
 
-    if (selectedPeriod !== "all") {
-      const startDate = new Date();
-      startDate.setMonth(startDate.getMonth() - selectedPeriod);
+        if (selectedPeriod !== "all") {
+          const startDate = new Date();
+          startDate.setMonth(startDate.getMonth() - selectedPeriod);
+          nextQuery = nextQuery.gte("date", localDateText(startDate));
+        }
 
-      const startDateText = localDateText(startDate);
-      query = query.gte("date", startDateText);
-    }
-
-    const { data, error } = await query;
+        return nextQuery;
+      }
+    );
 
     if (error) {
       alert("조회 실패: " + error.message);
@@ -87,13 +122,15 @@ export default function DailyCashPage({ onSelectMenu }: DailyCashPageProps) {
     return;
   }
 
-  const { data, error } = await supabase
-    .from("daily_cash")
-    .select("*")
-    .gte("date", startDate)
-    .lte("date", endDate)
-    .order("date", { ascending: false })
-    .order("id", { ascending: false });
+  const { data, error } = await fetchAllRows<DailyCashRow>(
+    "daily_cash",
+    "*",
+    (query) => query
+      .gte("date", startDate)
+      .lte("date", endDate)
+      .order("date", { ascending: false })
+      .order("id", { ascending: false })
+  );
 
   if (error) {
     alert("조회 실패: " + error.message);
@@ -124,11 +161,13 @@ export default function DailyCashPage({ onSelectMenu }: DailyCashPageProps) {
   async function fetchTodayRows() {
     const today = localDateText();
 
-    const { data, error } = await supabase
-      .from("daily_cash")
-      .select("*")
-      .eq("date", today)
-      .order("id", { ascending: false });
+    const { data, error } = await fetchAllRows<DailyCashRow>(
+      "daily_cash",
+      "*",
+      (query) => query
+        .eq("date", today)
+        .order("id", { ascending: false })
+    );
 
     if (error) {
       alert("조회 실패: " + error.message);
@@ -484,5 +523,6 @@ export default function DailyCashPage({ onSelectMenu }: DailyCashPageProps) {
     </div>  
    );
 }
+
 
 
