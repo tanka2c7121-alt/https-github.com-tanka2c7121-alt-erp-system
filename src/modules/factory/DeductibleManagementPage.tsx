@@ -30,6 +30,10 @@ type PaymentRow = {
   payment_amount: number | null;
   payment_date: string | null;
   payment_method: string | null;
+  payment_detail: string | null;
+  approval_number: string | null;
+  merchant_number: string | null;
+  card_number: string | null;
 };
 
 type DeductibleItem = {
@@ -46,12 +50,20 @@ type DeductibleItem = {
   hasDeductiblePayment: boolean;
   paymentDate: string;
   paymentMethod: string;
+  paymentDetail: string;
+  approvalNumber: string;
+  merchantNumber: string;
+  cardNumber: string;
 };
 
 type InputState = {
   amount: string;
   date: string;
   method: string;
+  detail: string;
+  approvalNumber: string;
+  merchantNumber: string;
+  cardNumber: string;
 };
 
 const pageSize = 30;
@@ -59,6 +71,7 @@ const currentDateText = localDateText();
 const currentYear = currentDateText.slice(0, 4);
 const currentMonth = currentDateText.slice(5, 7);
 const accountOptions = ["국민은행", "부산은행", "카드", "현금", "BLUE POINT", "법인1층"];
+const paymentDetailOptions = ["보험", "캐피탈", "일반", "바디케어"];
 
 const formatWon = (amount: number) => amount.toLocaleString();
 
@@ -128,7 +141,7 @@ export default function DeductibleManagementPage({
       workNames.length > 0
         ? await supabase
             .from("settlement_payments")
-            .select("id, work_name, payment_type, payment_amount, payment_date, payment_method")
+            .select("id, work_name, payment_type, payment_detail, payment_amount, payment_date, payment_method, approval_number, merchant_number, card_number")
             .in("work_name", workNames)
             .eq("payment_type", "면책금")
             .order("id", { ascending: false })
@@ -162,6 +175,10 @@ export default function DeductibleManagementPage({
         hasDeductiblePayment: Boolean(payment),
         paymentDate: payment?.payment_date ?? "",
         paymentMethod: payment?.payment_method ?? "",
+        paymentDetail: payment?.payment_detail ?? "",
+        approvalNumber: payment?.approval_number ?? "",
+        merchantNumber: payment?.merchant_number ?? "",
+        cardNumber: payment?.card_number ?? "",
       };
     });
 
@@ -174,6 +191,10 @@ export default function DeductibleManagementPage({
           amount: formatWon(parseAmount(item.deductibleAmount)),
           date: localDateText(),
           method: "국민은행",
+          detail: "보험",
+          approvalNumber: "",
+          merchantNumber: "",
+          cardNumber: "",
         };
       });
 
@@ -297,6 +318,10 @@ export default function DeductibleManagementPage({
         amount: prev[workName]?.amount ?? "",
         date: prev[workName]?.date ?? localDateText(),
         method: prev[workName]?.method ?? "국민은행",
+        detail: prev[workName]?.detail ?? "보험",
+        approvalNumber: prev[workName]?.approvalNumber ?? "",
+        merchantNumber: prev[workName]?.merchantNumber ?? "",
+        cardNumber: prev[workName]?.cardNumber ?? "",
         [field]: value,
       },
     }));
@@ -326,14 +351,14 @@ export default function DeductibleManagementPage({
     const paymentPayload = {
       work_name: item.workName,
       payment_type: "면책금",
-      payment_detail: "면책금관리",
+      payment_detail: input.detail || "보험",
       claim_amount: 0,
       payment_amount: amount,
       payment_date: input.date,
       payment_method: input.method,
-      approval_number: "",
-      merchant_number: "",
-      card_number: "",
+      approval_number: input.method === "카드" ? input.approvalNumber : "",
+      merchant_number: input.method === "카드" ? input.merchantNumber : "",
+      card_number: input.method === "카드" ? input.cardNumber : "",
       invoice_issued: false,
       claim_date: null,
       payment_status: "수금",
@@ -498,6 +523,10 @@ export default function DeductibleManagementPage({
                     amount: "",
                     date: localDateText(),
                     method: "국민은행",
+                    detail: "보험",
+                    approvalNumber: "",
+                    merchantNumber: "",
+                    cardNumber: "",
                   };
                   const isComplete = item.hasDeductiblePayment;
 
@@ -533,45 +562,87 @@ export default function DeductibleManagementPage({
                             입력완료
                           </span>
                         ) : (
-                          <div className="grid min-w-[430px] grid-cols-[1fr_130px_130px_80px] gap-2">
-                            <input
-                              className="rounded-lg border border-blue-200 bg-blue-50 px-2 py-1 text-right text-sm"
-                              value={input.amount}
-                              onChange={(event) =>
-                                updateInput(
-                                  item.workName,
-                                  "amount",
-                                  formatAmount(event.target.value)
-                                )
-                              }
-                            />
-                            <input
-                              type="date"
-                              className="rounded-lg border border-slate-300 px-2 py-1 text-sm"
-                              value={input.date}
-                              onChange={(event) =>
-                                updateInput(item.workName, "date", event.target.value)
-                              }
-                            />
-                            <select
-                              className="rounded-lg border border-slate-300 px-2 py-1 text-sm"
-                              value={input.method}
-                              onChange={(event) =>
-                                updateInput(item.workName, "method", event.target.value)
-                              }
-                            >
-                              {accountOptions.map((option) => (
-                                <option key={option}>{option}</option>
-                              ))}
-                            </select>
-                            <button
-                              type="button"
-                              onClick={() => handleSaveDeductible(item)}
-                              disabled={savingWorkName === item.workName}
-                              className="rounded-lg bg-blue-600 px-3 py-1 text-sm font-semibold text-white disabled:opacity-50"
-                            >
-                              {savingWorkName === item.workName ? "저장중" : "저장"}
-                            </button>
+                          <div className="min-w-[720px] space-y-2">
+                            <div className="grid grid-cols-[1fr_120px_120px_120px_80px] gap-2">
+                              <input
+                                className="rounded-lg border border-blue-200 bg-blue-50 px-2 py-1 text-right text-sm"
+                                placeholder="입금금액"
+                                value={input.amount}
+                                onChange={(event) =>
+                                  updateInput(
+                                    item.workName,
+                                    "amount",
+                                    formatAmount(event.target.value)
+                                  )
+                                }
+                              />
+                              <input
+                                type="date"
+                                className="rounded-lg border border-slate-300 px-2 py-1 text-sm"
+                                value={input.date}
+                                onChange={(event) =>
+                                  updateInput(item.workName, "date", event.target.value)
+                                }
+                              />
+                              <select
+                                className="rounded-lg border border-slate-300 px-2 py-1 text-sm"
+                                value={input.method}
+                                onChange={(event) =>
+                                  updateInput(item.workName, "method", event.target.value)
+                                }
+                              >
+                                {accountOptions.map((option) => (
+                                  <option key={option}>{option}</option>
+                                ))}
+                              </select>
+                              <select
+                                className="rounded-lg border border-slate-300 px-2 py-1 text-sm"
+                                value={input.detail}
+                                onChange={(event) =>
+                                  updateInput(item.workName, "detail", event.target.value)
+                                }
+                              >
+                                {paymentDetailOptions.map((option) => (
+                                  <option key={option}>{option}</option>
+                                ))}
+                              </select>
+                              <button
+                                type="button"
+                                onClick={() => handleSaveDeductible(item)}
+                                disabled={savingWorkName === item.workName}
+                                className="rounded-lg bg-blue-600 px-3 py-1 text-sm font-semibold text-white disabled:opacity-50"
+                              >
+                                {savingWorkName === item.workName ? "저장중" : "저장"}
+                              </button>
+                            </div>
+                            {input.method === "카드" && (
+                              <div className="grid grid-cols-3 gap-2 rounded-lg bg-blue-50 p-2">
+                                <input
+                                  className="rounded-lg border border-blue-200 px-2 py-1 text-sm"
+                                  placeholder="승인번호"
+                                  value={input.approvalNumber}
+                                  onChange={(event) =>
+                                    updateInput(item.workName, "approvalNumber", event.target.value)
+                                  }
+                                />
+                                <input
+                                  className="rounded-lg border border-blue-200 px-2 py-1 text-sm"
+                                  placeholder="가맹번호"
+                                  value={input.merchantNumber}
+                                  onChange={(event) =>
+                                    updateInput(item.workName, "merchantNumber", event.target.value)
+                                  }
+                                />
+                                <input
+                                  className="rounded-lg border border-blue-200 px-2 py-1 text-sm"
+                                  placeholder="카드번호"
+                                  value={input.cardNumber}
+                                  onChange={(event) =>
+                                    updateInput(item.workName, "cardNumber", event.target.value)
+                                  }
+                                />
+                              </div>
+                            )}
                           </div>
                         )}
                       </td>
@@ -609,6 +680,10 @@ export default function DeductibleManagementPage({
                 amount: "",
                 date: localDateText(),
                 method: "국민은행",
+                detail: "보험",
+                approvalNumber: "",
+                merchantNumber: "",
+                cardNumber: "",
               };
               const isComplete = item.hasDeductiblePayment;
 
@@ -670,6 +745,45 @@ export default function DeductibleManagementPage({
                           <option key={option}>{option}</option>
                         ))}
                       </select>
+                      <select
+                        className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                        value={input.detail}
+                        onChange={(event) =>
+                          updateInput(item.workName, "detail", event.target.value)
+                        }
+                      >
+                        {paymentDetailOptions.map((option) => (
+                          <option key={option}>{option}</option>
+                        ))}
+                      </select>
+                      {input.method === "카드" && (
+                        <div className="grid grid-cols-1 gap-2 rounded-lg bg-blue-50 p-2">
+                          <input
+                            className="rounded-lg border border-blue-200 px-3 py-2 text-sm"
+                            placeholder="승인번호"
+                            value={input.approvalNumber}
+                            onChange={(event) =>
+                              updateInput(item.workName, "approvalNumber", event.target.value)
+                            }
+                          />
+                          <input
+                            className="rounded-lg border border-blue-200 px-3 py-2 text-sm"
+                            placeholder="가맹번호"
+                            value={input.merchantNumber}
+                            onChange={(event) =>
+                              updateInput(item.workName, "merchantNumber", event.target.value)
+                            }
+                          />
+                          <input
+                            className="rounded-lg border border-blue-200 px-3 py-2 text-sm"
+                            placeholder="카드번호"
+                            value={input.cardNumber}
+                            onChange={(event) =>
+                              updateInput(item.workName, "cardNumber", event.target.value)
+                            }
+                          />
+                        </div>
+                      )}
                       <button
                         type="button"
                         onClick={() => handleSaveDeductible(item)}
@@ -818,6 +932,11 @@ function PageButton({
     </button>
   );
 }
+
+
+
+
+
 
 
 
