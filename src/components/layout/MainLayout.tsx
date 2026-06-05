@@ -117,15 +117,6 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
   )
     ? mobileMenus
     : [selectedMenu, ...mobileMenus];
-
-  const handleMobileMenuChange = (menuId: string) => {
-    const nextMenu = displayedMobileMenus.find((menu) => menu.id === menuId);
-
-    if (nextMenu) {
-      handleSelectMenu(nextMenu);
-    }
-  };
-
   const handleSelectMenu = (menu: MenuItem) => {
     const myDocumentType = getMyDocumentNotificationType(menu.id);
 
@@ -330,7 +321,7 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
   ];
 
   return (
-    <div className="flex h-screen flex-col bg-slate-100">
+    <div className="flex h-screen w-full flex-col overflow-x-hidden bg-slate-100">
       <Topbar
         user={user}
         onLogout={onLogout}
@@ -338,7 +329,7 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
         onSelectMenu={handleSelectMenu}
       />
 
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex min-w-0 flex-1 overflow-hidden">
         <div
           className={[
             "group/sidebar relative hidden h-full shrink-0 overflow-hidden bg-slate-900 transition-[width] duration-200 ease-out md:block",
@@ -371,25 +362,39 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
           </div>
         </div>
 
-        <main className="flex-1 overflow-y-auto p-3 md:p-6">
+        <main className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto p-3 md:p-6">
           <div className="mb-3 rounded-xl border border-slate-200 bg-white p-3 md:hidden">
-            <label className="mb-1 block text-xs font-semibold text-slate-500">
-              메뉴 선택
-            </label>
-            <select
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-900"
-              value={selectedMenu.id}
-              onChange={(event) => handleMobileMenuChange(event.target.value)}
-            >
-              {displayedMobileMenus.map((menu) => (
-                <option key={menu.id} value={menu.id}>
-                  {menu.title}
-                </option>
-              ))}
-            </select>
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <div className="text-xs font-semibold text-slate-500">메뉴</div>
+              <div className="min-w-0 truncate text-xs font-bold text-blue-700">
+                {selectedMenu.title}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              {displayedMobileMenus.map((menu) => {
+                const isSelected = selectedMenu.id === menu.id;
+
+                return (
+                  <button
+                    key={menu.id}
+                    type="button"
+                    onClick={() => handleSelectMenu(menu)}
+                    className={[
+                      "min-h-12 min-w-0 rounded-xl border px-3 py-2 text-left text-xs font-bold leading-snug shadow-sm transition",
+                      isSelected
+                        ? "border-blue-600 bg-blue-600 text-white"
+                        : "border-slate-200 bg-slate-50 text-slate-800 hover:border-blue-200 hover:bg-blue-50",
+                    ].join(" ")}
+                  >
+                    <span className="block break-keep">{menu.title}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
-          <section className="min-h-[500px] rounded-xl border bg-white p-3 shadow-sm md:rounded-2xl md:p-6">
+          <section className="min-h-[500px] min-w-0 overflow-x-hidden rounded-xl border bg-white p-3 shadow-sm md:rounded-2xl md:p-6">
             {selectedMenu.id === "dashboard" ? (
               <HomeDashboardPage
                 isAdmin={isAdmin}
@@ -570,6 +575,8 @@ function flattenMenus(
 
   return result;
 }
+
+
 
 
 
