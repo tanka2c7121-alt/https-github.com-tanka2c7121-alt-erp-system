@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { MenuItem } from "../../data/menuData";
@@ -31,6 +31,26 @@ const formatWon = (amount: number) => amount.toLocaleString();
 const currentDateText = localDateText();
 const currentYear = currentDateText.slice(0, 4);
 const currentMonth = currentDateText.slice(5, 7);
+const hasDeductibleValue = (value?: string | null) => {
+  const normalized = String(value ?? "").trim();
+
+  return Boolean(
+    normalized &&
+      normalized !== "-" &&
+      normalized !== "해당없음" &&
+      normalized !== "0"
+  );
+};
+
+const hasDeductibleCoverage = (value?: string | null) => {
+  const normalized = String(value ?? "").trim();
+
+  return normalized === "자차" || normalized === "과실";
+};
+
+const isDeductibleTarget = (
+  item: Pick<SettlementItem, "coverage_type" | "deductible_amount">
+) => hasDeductibleCoverage(item.coverage_type) && hasDeductibleValue(item.deductible_amount);
 
 export default function FactorySettlementPage({
   view = "all",
@@ -82,8 +102,7 @@ const handleSort = (field: keyof SettlementItem) => {
     const { data: deductiblePaymentRows } = await supabase
       .from("settlement_payments")
       .select("work_name")
-      .eq("payment_type", "면책금")
-      .not("payment_date", "is", null);
+      .eq("payment_type", "면책금");
 
   const settlementMap = new Map(
   (settlementRows ?? []).map((row) => [
@@ -146,6 +165,7 @@ const handleSort = (field: keyof SettlementItem) => {
       if (view === "all" && item.status === "완결") return false;
       if (view === "complete" && item.status !== "완결") return false;
       if (view === "pending" && item.status !== "미결") return false;
+      if (view === "deductible" && !isDeductibleTarget(item)) return false;
 
       if (!keyword) return true;
 
@@ -172,9 +192,7 @@ const handleSort = (field: keyof SettlementItem) => {
   const totalCount = settlementList.length;
   const pendingCount = settlementList.filter((item) => item.status === "미결").length;
   const completeCount = settlementList.filter((item) => item.status === "완결").length;
-  const deductibleTargetItems = settlementList.filter((item) =>
-    ["자차", "과실"].includes(item.coverage_type)
-  );
+  const deductibleTargetItems = settlementList.filter(isDeductibleTarget);
   const deductibleTargetCount = deductibleTargetItems.length;
   const deductibleCompleteCount = deductibleTargetItems.filter((item) =>
     deductiblePaidWorkNames.has(item.work_name)
@@ -477,3 +495,6 @@ const pagedList = filteredList.slice(
     </div>
   );
 }
+
+
+
