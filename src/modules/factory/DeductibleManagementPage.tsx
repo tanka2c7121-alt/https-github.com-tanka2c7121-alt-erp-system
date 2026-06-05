@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { MenuItem } from "../../data/menuData";
@@ -15,6 +15,7 @@ type WorkOrderRow = {
   car_number: string | null;
   car_model: string | null;
   category: string | null;
+  coverage_type: string | null;
   insurance_company: string | null;
   partner_company: string | null;
   deductible_amount: string | null;
@@ -42,6 +43,7 @@ type DeductibleItem = {
   outboundDate: string;
   releaseDate: string;
   paidAmount: number;
+  hasDeductiblePayment: boolean;
   paymentDate: string;
   paymentMethod: string;
 };
@@ -82,6 +84,11 @@ const hasDeductibleValue = (value?: string | null) => {
       normalized !== "0"
   );
 };
+const hasDeductibleCoverage = (value?: string | null) => {
+  const normalized = String(value ?? "").trim();
+
+  return normalized === "자차" || normalized === "과실";
+};
 
 export default function DeductibleManagementPage({
   onSelectMenu,
@@ -101,7 +108,7 @@ export default function DeductibleManagementPage({
     const { data: workOrders, error: workError } = await supabase
       .from("work_orders")
       .select(
-        "id, work_name, car_number, car_model, category, insurance_company, partner_company, deductible_amount, outbound_date, release_date"
+        "id, work_name, car_number, car_model, category, coverage_type, insurance_company, partner_company, deductible_amount, outbound_date, release_date"
       )
       .order("id", { ascending: false });
 
@@ -111,7 +118,7 @@ export default function DeductibleManagementPage({
     }
 
     const deductibleWorkOrders = ((workOrders ?? []) as WorkOrderRow[]).filter(
-      (row) => hasDeductibleValue(row.deductible_amount)
+      (row) => hasDeductibleCoverage(row.coverage_type) && hasDeductibleValue(row.deductible_amount)
     );
     const workNames = deductibleWorkOrders
       .map((row) => row.work_name)
@@ -146,12 +153,13 @@ export default function DeductibleManagementPage({
         workName: row.work_name ?? "",
         carNumber: row.car_number ?? "",
         carModel: row.car_model ?? "",
-        category: row.category ?? "",
+        category: row.coverage_type ?? "",
         company: row.insurance_company || row.partner_company || "",
         deductibleAmount: row.deductible_amount ?? "",
         outboundDate: row.outbound_date ?? "",
         releaseDate: row.release_date ?? "",
         paidAmount: Number(payment?.payment_amount ?? 0),
+        hasDeductiblePayment: Boolean(payment),
         paymentDate: payment?.payment_date ?? "",
         paymentMethod: payment?.payment_method ?? "",
       };
@@ -200,7 +208,7 @@ export default function DeductibleManagementPage({
         return item.workName.slice(5, 7) === selectedMonth;
       })
       .filter((item) => {
-        const isComplete = item.paidAmount > 0;
+        const isComplete = item.hasDeductiblePayment;
 
         if (statusFilter === "pending") return !isComplete;
         if (statusFilter === "complete") return isComplete;
@@ -262,11 +270,8 @@ export default function DeductibleManagementPage({
     safeCurrentPage * pageSize
   );
 
-  const pendingCount = items.filter((item) => item.paidAmount <= 0).length;
-  const completeCount = items.filter((item) => item.paidAmount > 0).length;
-  const pendingAmount = items
-    .filter((item) => item.paidAmount <= 0)
-    .reduce((sum, item) => sum + parseAmount(item.deductibleAmount), 0);
+  const pendingCount = items.filter((item) => !item.hasDeductiblePayment).length;
+  const completeCount = items.filter((item) => item.hasDeductiblePayment).length;
   const paidAmount = items.reduce((sum, item) => sum + item.paidAmount, 0);
 
   const headers: Array<{
@@ -278,7 +283,7 @@ export default function DeductibleManagementPage({
     { key: "workName", label: "작명" },
     { key: "carNumber", label: "차량번호" },
     { key: "carModel", label: "차량명" },
-    { key: "category", label: "구분" },
+    { key: "category", label: "담보" },
     { key: "company", label: "보험사" },
     { key: "releaseDate", label: "출고일" },
     { key: "deductibleAmount", label: "면책금(최소)" },
@@ -373,19 +378,14 @@ export default function DeductibleManagementPage({
       <div>
         <h3 className="text-xl font-bold md:text-2xl">면책금관리</h3>
         <p className="text-sm text-slate-700">
-          면책금(최소)이 있는 작명을 기준으로 입금 완료 여부를 확인합니다.
+          담보가 자차 또는 과실이고 면책금(최소)이 있는 작명을 기준으로 면책금 입금 여부를 확인합니다.
         </p>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
         <SummaryCard title="전체" value={`${items.length.toLocaleString()}건`} />
         <SummaryCard title="미수" value={`${pendingCount.toLocaleString()}건`} tone="red" />
         <SummaryCard title="완료" value={`${completeCount.toLocaleString()}건`} tone="green" />
-        <SummaryCard
-          title="미수 예정액"
-          value={`${formatWon(pendingAmount)}원`}
-          tone="blue"
-        />
       </div>
 
       <div className="rounded-xl border border-slate-200 bg-white p-3 md:p-4">
@@ -499,7 +499,7 @@ export default function DeductibleManagementPage({
                     date: localDateText(),
                     method: "국민은행",
                   };
-                  const isComplete = item.paidAmount > 0;
+                  const isComplete = item.hasDeductiblePayment;
 
                   return (
                     <tr key={item.id} className="hover:bg-slate-50">
@@ -610,7 +610,7 @@ export default function DeductibleManagementPage({
                 date: localDateText(),
                 method: "국민은행",
               };
-              const isComplete = item.paidAmount > 0;
+              const isComplete = item.hasDeductiblePayment;
 
               return (
                 <div key={item.id} className="rounded-xl border border-slate-200 p-4">
@@ -632,7 +632,7 @@ export default function DeductibleManagementPage({
                   </div>
 
                   <div className="grid grid-cols-2 gap-2 text-sm">
-                    <MobileField label="구분" value={item.category} />
+                    <MobileField label="담보" value={item.category} />
                     <MobileField label="보험사" value={item.company} />
                     <MobileField label="출고일" value={item.releaseDate} />
                     <MobileField label="면책금(최소)" value={item.deductibleAmount} />
@@ -818,3 +818,8 @@ function PageButton({
     </button>
   );
 }
+
+
+
+
+
