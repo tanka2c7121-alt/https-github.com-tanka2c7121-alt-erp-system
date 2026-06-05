@@ -219,7 +219,7 @@ export default function DeductibleManagementPage({
 
       nextItems.forEach((item) => {
         next[item.workName] = prev[item.workName] ?? {
-          amount: formatWon(parseAmount(item.deductibleAmount)),
+          amount: "",
           date: localDateText(),
           method: "국민은행",
           detail: "보험",
@@ -963,6 +963,7 @@ function PageButton({
     </button>
   );
 }
+
 
 
 
