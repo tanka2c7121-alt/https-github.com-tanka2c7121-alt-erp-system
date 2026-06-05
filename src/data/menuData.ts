@@ -1,4 +1,4 @@
-import type { UserRole } from "../types/roles";
+﻿import type { UserRole } from "../types/roles";
 
 export type MenuItem = {
   id: string;
@@ -33,8 +33,8 @@ export const menuData: MenuItem[] = [
         id: "factory-inbound",
         title: "입고현황",
         children: [
-          { id: "factory-release-list", title: "출고리스트" },
           { id: "factory-work-register", title: "작업등록" },
+          { id: "factory-release-list", title: "출고리스트" },
         ],
       },
       {
@@ -108,3 +108,4 @@ export const menuData: MenuItem[] = [
     ],
   },
 ];
+
