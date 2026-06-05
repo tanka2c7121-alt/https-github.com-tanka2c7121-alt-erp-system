@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 
 import { supabase } from "../../lib/supabase";
@@ -1223,6 +1223,24 @@ async function handlePrint() {
     alert("출력 처리 중 오류가 발생했습니다.");
   }
 }
+
+function handleOpenSettlementRegister() {
+  const targetWorkName = workName.trim();
+
+  if (!targetWorkName) {
+    alert("작명을 입력하세요.");
+    return;
+  }
+
+  onSelectMenu({
+    id: "factory-settlement-repair-register",
+    title: "정산등록",
+    data: {
+      workName: targetWorkName,
+    },
+  });
+}
+
 function formatWorkName(value: string) {
   const numbers = value.replace(/\D/g, "");
 
@@ -1636,6 +1654,14 @@ function handleClearWorkRow(index: number) {
     className="rounded-lg bg-slate-900 px-5 py-2 text-sm font-semibold text-white hover:bg-slate-800"
   >
     불러오기
+  </button>
+
+  <button
+    type="button"
+    onClick={handleOpenSettlementRegister}
+    className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+  >
+    정산등록
   </button>
 </div>
 
@@ -2510,3 +2536,4 @@ function handleClearWorkRow(index: number) {
     
   )
 }
+
