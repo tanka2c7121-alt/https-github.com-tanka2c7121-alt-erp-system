@@ -519,7 +519,19 @@ const pagedList = filteredList.slice(
                 return (
                   <tr key={item.id} className="hover:bg-blue-50">
                     <td className="border border-slate-300 px-3 py-2 font-semibold">
-                      {item.work_name}
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onSelectMenu({
+                            id: "factory-work-register",
+                            title: "작업등록",
+                            data: { workName: item.work_name },
+                          })
+                        }
+                        className="font-semibold text-blue-700 underline-offset-2 hover:underline"
+                      >
+                        {item.work_name}
+                      </button>
                     </td>
                     <td className="border border-slate-300 px-3 py-2">{item.car_number}</td>
                     <td className="border border-slate-300 px-3 py-2">{item.car_model}</td>
@@ -635,6 +647,7 @@ const pagedList = filteredList.slice(
     </div>
   );
 }
+
 
 
 
