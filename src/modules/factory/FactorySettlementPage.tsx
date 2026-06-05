@@ -58,6 +58,36 @@ const isEmptyDateValue = (value: unknown) => {
 const toAmountNumber = (value: unknown) =>
   Number(String(value ?? 0).replaceAll(",", "")) || 0;
 
+const receivableAccountNames = ["국민은행", "부산은행", "BLUE POINT"];
+
+const normalizeAccountName = (value: unknown) => {
+  const rawText = String(value ?? "").trim();
+  const accountKey = rawText
+    .replace(/\s+/g, "")
+    .replaceAll("-", "")
+    .replaceAll("_", "")
+    .toUpperCase();
+
+  if (accountKey.includes("국민") || accountKey.includes("KB")) {
+    return "국민은행";
+  }
+
+  if (accountKey.includes("부산") || accountKey.includes("BNK")) {
+    return "부산은행";
+  }
+
+  if (accountKey.includes("BLUE") || accountKey.includes("블루")) {
+    return "BLUE POINT";
+  }
+
+  return rawText;
+};
+
+const isReceivablePaymentRow = (row: any) =>
+  toAmountNumber(row.payment_amount) > 0 &&
+  isEmptyDateValue(row.payment_date) &&
+  receivableAccountNames.includes(normalizeAccountName(row.payment_method));
+
 const isDeductibleTarget = (
   item: Pick<SettlementItem, "coverage_type" | "deductible_amount">
 ) => hasDeductibleCoverage(item.coverage_type) && hasDeductibleValue(item.deductible_amount);
@@ -160,7 +190,7 @@ const handleSort = (field: keyof SettlementItem) => {
 
     const { data: paymentRows, error: paymentError } = await fetchAllRows<any>(
       "settlement_payments",
-      "work_name, payment_type, payment_amount, payment_date"
+      "work_name, payment_type, payment_amount, payment_date, payment_method"
     );
 
     if (paymentError) {
@@ -180,7 +210,7 @@ const handleSort = (field: keyof SettlementItem) => {
 
     const receivableWorkNames = new Set(
       paymentRows
-        .filter((row) => toAmountNumber(row.payment_amount) > 0 && isEmptyDateValue(row.payment_date))
+        .filter(isReceivablePaymentRow)
         .map((row) => row.work_name)
         .filter(Boolean)
     );
@@ -647,6 +677,7 @@ const pagedList = filteredList.slice(
     </div>
   );
 }
+
 
 
 
