@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
@@ -133,6 +133,8 @@ export default function SettlementRegisterPage({
     ownReceiptNumber: "",
     otherReceiptNumber: "",
     faultRate: "",
+    releaseDate: "",
+    partnerCompany: "",
     totalAmount: "",
     progressStatus: "미결",
     claimAmount: "",
@@ -291,6 +293,8 @@ export default function SettlementRegisterPage({
       ownReceiptNumber: workOrder.own_receipt_number ?? "",
       otherReceiptNumber: workOrder.other_receipt_number ?? "",
       faultRate: workOrder.fault_rate ?? "",
+      releaseDate: workOrder.release_date ?? "",
+      partnerCompany: workOrder.partner_company ?? "",
       totalAmount: settlement?.total_amount?.toLocaleString() ?? "",
       progressStatus: settlement?.progress_status ?? "미결",
       claimAmount: settlement?.claim_amount?.toLocaleString() ?? "",
@@ -626,10 +630,11 @@ export default function SettlementRegisterPage({
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
           <Field label="차량번호" value={form.carNumber} />
           <Field label="차량명" value={form.carModel} />
           <Field label="구분" value={form.category} />
+          <Field label="담보" value={form.coverageType} />
           {form.coverageType === "과실" ? (
             <StackedField
               label="보험사"
@@ -663,7 +668,9 @@ export default function SettlementRegisterPage({
           ) : (
             <Field label="담당자" value={form.managerName} />
           )}
-          <Field label="담보" value={form.coverageType} />
+          <Field label="출고일" type="date" value={form.releaseDate} />
+
+          <Field label="과실" value={form.faultRate} />
           <Field label="합계금액" value={totalAmount.toLocaleString()} />
           <Field
             label="진행상황"
@@ -671,6 +678,7 @@ export default function SettlementRegisterPage({
             onChange={(value) => handleChange("progressStatus", value)}
             options={["미결", "완결"]}
           />
+          <Field label="거래처" value={form.partnerCompany} />
         </div>
       </section>
 
@@ -1059,3 +1067,7 @@ function CardInfoFields({
     </div>
   );
 }
+
+
+
+

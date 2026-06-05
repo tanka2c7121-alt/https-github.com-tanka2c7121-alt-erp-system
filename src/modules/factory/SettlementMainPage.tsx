@@ -25,22 +25,33 @@ export default function SettlementMainPage({
   const [savingReceivableId, setSavingReceivableId] = useState<number | null>(null);
 
 const fetchReceivableRows = useCallback(async () => {
+  const pageSize = 1000;
+  const rows: any[] = [];
 
-  const { data, error } = await supabase
-    .from("settlement_payments")
-    .select("id, work_name, payment_type, payment_detail, payment_amount, payment_date, payment_method, claim_date")
-    .order("id", { ascending: true });
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await supabase
+      .from("settlement_payments")
+      .select("id, work_name, payment_type, payment_detail, payment_amount, payment_date, payment_method, claim_date, claim_amount")
+      .order("id", { ascending: true })
+      .range(from, from + pageSize - 1);
 
-  if (error) {
-    alert(
-      "미수금 조회 실패: " +
-      error.message
-    );
+    if (error) {
+      alert(
+        "미수금 조회 실패: " +
+        error.message
+      );
 
-    return;
+      return;
+    }
+
+    rows.push(...(data ?? []));
+
+    if (!data || data.length < pageSize) {
+      break;
+    }
   }
 
-  setPaymentRows(data ?? []);
+  setPaymentRows(rows);
 }, []);
 
 const fetchBalanceRows = useCallback(async () => {
@@ -724,6 +735,7 @@ function SummaryCard({
     </div>
   );
 }
+
 
 
 
