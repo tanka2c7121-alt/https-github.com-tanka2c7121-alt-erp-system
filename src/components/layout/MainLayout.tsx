@@ -91,6 +91,7 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
     title: "업무홈",
   });
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [mobileMenuPath, setMobileMenuPath] = useState<MenuItem[]>([]);
   const isSalesMenu = selectedMenu.id === "sales" || selectedMenu.id.startsWith("sales-");
   const [notificationCounts, setNotificationCounts] = useState({
     employees: 0,
@@ -110,13 +111,33 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
         attendanceRequest?: any;
         incidentReport?: any;
       }
-    | undefined;
-  const mobileMenus = flattenMenus(menuData, userRole, user.department);
-  const displayedMobileMenus = mobileMenus.some(
-    (menu) => menu.id === selectedMenu.id
-  )
-    ? mobileMenus
-    : [selectedMenu, ...mobileMenus];
+    | undefined;  const mobileMenuParent = mobileMenuPath[mobileMenuPath.length - 1];
+  const displayedMobileMenus = getVisibleMenuItems(
+    mobileMenuParent?.children ?? menuData,
+    userRole,
+    user.department
+  );
+  const mobileMenuTitle = mobileMenuParent?.title ?? "메뉴";
+
+  const handleMobileMenuClick = (menu: MenuItem) => {
+    const visibleChildren = getVisibleMenuItems(
+      menu.children ?? [],
+      userRole,
+      user.department
+    );
+
+    if (visibleChildren.length > 0) {
+      setMobileMenuPath((prev) => [...prev, menu]);
+      return;
+    }
+
+    handleSelectMenu(menu);
+  };
+
+  const handleMobileMenuBack = () => {
+    setMobileMenuPath((prev) => prev.slice(0, -1));
+  };
+
   const handleSelectMenu = (menu: MenuItem) => {
     const myDocumentType = getMyDocumentNotificationType(menu.id);
 
@@ -365,21 +386,39 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
         <main className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto p-3 md:p-6">
           <div className="mb-3 rounded-xl border border-slate-200 bg-white p-3 md:hidden">
             <div className="mb-2 flex items-center justify-between gap-2">
-              <div className="text-xs font-semibold text-slate-500">메뉴</div>
-              <div className="min-w-0 truncate text-xs font-bold text-blue-700">
-                {selectedMenu.title}
+              <div className="min-w-0">
+                <div className="text-xs font-semibold text-slate-500">메뉴</div>
+                <div className="truncate text-xs font-bold text-blue-700">
+                  {mobileMenuTitle}
+                </div>
               </div>
+
+              {mobileMenuPath.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleMobileMenuBack}
+                  className="shrink-0 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50"
+                >
+                  뒤로
+                </button>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-2">
               {displayedMobileMenus.map((menu) => {
+                const visibleChildren = getVisibleMenuItems(
+                  menu.children ?? [],
+                  userRole,
+                  user.department
+                );
+                const hasChildren = visibleChildren.length > 0;
                 const isSelected = selectedMenu.id === menu.id;
 
                 return (
                   <button
                     key={menu.id}
                     type="button"
-                    onClick={() => handleSelectMenu(menu)}
+                    onClick={() => handleMobileMenuClick(menu)}
                     className={[
                       "min-h-12 min-w-0 rounded-xl border px-3 py-2 text-left text-xs font-bold leading-snug shadow-sm transition",
                       isSelected
@@ -387,7 +426,10 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
                         : "border-slate-200 bg-slate-50 text-slate-800 hover:border-blue-200 hover:bg-blue-50",
                     ].join(" ")}
                   >
-                    <span className="block break-keep">{menu.title}</span>
+                    <span className="flex min-w-0 items-center justify-between gap-2">
+                      <span className="min-w-0 break-keep">{menu.title}</span>
+                      {hasChildren && <span className="shrink-0 text-slate-400">›</span>}
+                    </span>
                   </button>
                 );
               })}
@@ -550,33 +592,21 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
   );
 }
 
-function flattenMenus(
+function getVisibleMenuItems(
   items: MenuItem[],
   role: UserRole,
   department?: string | null
 ): MenuItem[] {
-  const result: MenuItem[] = [];
-
-  items.forEach((item) => {
+  return items.filter((item) => {
     if (item.roles && !item.roles.includes(role)) {
-      return;
+      return false;
     }
 
     if (item.departments && role !== "ADMIN" && !item.departments.includes(department ?? "")) {
-      return;
+      return false;
     }
 
-    result.push(item);
-
-    if (item.children?.length) {
-      result.push(...flattenMenus(item.children, role, department));
-    }
+    return true;
   });
-
-  return result;
 }
-
-
-
-
 
