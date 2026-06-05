@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import type { MenuItem } from "../../data/menuData";
@@ -29,11 +29,28 @@ const formatWon = (amount: number) => amount.toLocaleString();
 
 export default function DailyCashPage({ onSelectMenu }: DailyCashPageProps) {
   const [rows, setRows] = useState<DailyCashRow[]>([]);
+  const [balanceRows, setBalanceRows] = useState<DailyCashRow[]>([]);
   const [searchText, setSearchText] = useState("");
   const [period, setPeriod] = useState<PeriodValue>(1);
 
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+
+  async function fetchBalanceRows() {
+    const today = localDateText();
+
+    const { data, error } = await supabase
+      .from("daily_cash")
+      .select("*")
+      .lte("date", today);
+
+    if (error) {
+      alert("잔고 조회 실패: " + error.message);
+      return;
+    }
+
+    setBalanceRows(data ?? []);
+  }
 
   async function fetchRows(selectedPeriod: PeriodValue = period) {
     let query = supabase
@@ -122,6 +139,7 @@ export default function DailyCashPage({ onSelectMenu }: DailyCashPageProps) {
   }
 
   void fetchTodayRows();
+  void fetchBalanceRows();
 }, []);
 
   const filteredRows = useMemo(() => {
@@ -152,8 +170,46 @@ export default function DailyCashPage({ onSelectMenu }: DailyCashPageProps) {
     (sum, item) => sum + Number(item.expense || 0),
     0
   );
+  const accountNames = [
+    "국민은행",
+    "부산은행",
+    "카드",
+    "BLUE POINT",
+    "현금",
+    "법인1층",
+  ];
 
-  const balance = totalIncome - totalExpense;
+  const accountSummary = accountNames.map((accountName) => {
+    const periodRows = filteredRows.filter((row) => row.account === accountName);
+    const balanceAccountRows = balanceRows.filter((row) => row.account === accountName);
+
+    const income = periodRows.reduce(
+      (sum, row) => sum + Number(row.income || 0),
+      0
+    );
+
+    const expense = periodRows.reduce(
+      (sum, row) => sum + Number(row.expense || 0),
+      0
+    );
+
+    const balanceIncome = balanceAccountRows.reduce(
+      (sum, row) => sum + Number(row.income || 0),
+      0
+    );
+
+    const balanceExpense = balanceAccountRows.reduce(
+      (sum, row) => sum + Number(row.expense || 0),
+      0
+    );
+
+    return {
+      name: accountName,
+      income,
+      expense,
+      balance: balanceIncome - balanceExpense,
+    };
+  });
 
   return (
     <div className="space-y-5 text-slate-900">
@@ -164,7 +220,7 @@ export default function DailyCashPage({ onSelectMenu }: DailyCashPageProps) {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <div className="rounded-xl border bg-white p-4">
           <p className="text-sm font-semibold text-slate-700">입금합계</p>
           <p className="mt-2 text-2xl font-bold text-blue-600">
@@ -178,13 +234,40 @@ export default function DailyCashPage({ onSelectMenu }: DailyCashPageProps) {
             {formatWon(totalExpense)}
           </p>
         </div>
+      </div>
 
-        <div className="rounded-xl border bg-white p-4">
-          <p className="text-sm font-semibold text-slate-700">잔액</p>
-          <p className="mt-2 text-2xl font-bold text-green-600">
-            {formatWon(balance)}
-          </p>
-        </div>
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+        {accountSummary.map((account) => (
+          <div
+            key={account.name}
+            className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm"
+          >
+            <h4 className="text-sm font-bold text-slate-900">{account.name}</h4>
+
+            <div className="mt-3 space-y-1.5 text-xs">
+              <div className="flex justify-between gap-2">
+                <span className="text-slate-500">입금</span>
+                <span className="font-semibold text-blue-600">
+                  ₩ {formatWon(account.income)}
+                </span>
+              </div>
+
+              <div className="flex justify-between gap-2">
+                <span className="text-slate-500">출금</span>
+                <span className="font-semibold text-red-600">
+                  ₩ {formatWon(account.expense)}
+                </span>
+              </div>
+
+              <div className="flex justify-between gap-2 border-t pt-1.5">
+                <span className="font-semibold text-slate-700">잔액</span>
+                <span className="font-bold text-green-600">
+                  ₩ {formatWon(account.balance)}
+                </span>
+              </div>
+            </div>
+          </div>
+        ))}
       </div>
 
       <div className="rounded-xl border border-slate-200 bg-white p-4">
@@ -401,3 +484,5 @@ export default function DailyCashPage({ onSelectMenu }: DailyCashPageProps) {
     </div>  
    );
 }
+
+

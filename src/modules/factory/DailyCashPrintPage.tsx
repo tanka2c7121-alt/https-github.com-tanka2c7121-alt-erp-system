@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useState } from "react";
 import { localDateText } from "../../lib/date";
@@ -26,6 +26,22 @@ const [printDate, setPrintDate] =
 
 const [dailyCashList, setDailyCashList] =
   useState<DailyCashRow[]>([]);
+const [balanceRows, setBalanceRows] =
+  useState<DailyCashRow[]>([]);
+
+const fetchBalanceRows = useCallback(async (dateValue = printDate) => {
+  const { data, error } = await supabase
+    .from("daily_cash")
+    .select("*")
+    .lte("date", dateValue);
+
+  if (error) {
+    alert("전체 잔고 조회 실패: " + error.message);
+    return;
+  }
+
+  setBalanceRows(data ?? []);
+}, [printDate]);
 
 const fetchRows = useCallback(async (dateValue = printDate) => {
   const { data, error } = await supabase
@@ -44,10 +60,13 @@ const fetchRows = useCallback(async (dateValue = printDate) => {
 
   useEffect(() => {
     void fetchRows();
-  }, [fetchRows]);
+    void fetchBalanceRows();
+  }, [fetchBalanceRows, fetchRows]);
   const totalIncome = dailyCashList.reduce((sum, item) => sum + Number(item.income || 0),0);
-  const totalExpense = dailyCashList.reduce((sum, item) => sum + Number(item.expense || 0),0);
-  const balance = totalIncome - totalExpense;
+  const totalExpense = dailyCashList.reduce((sum, item) => sum + Number(item.expense || 0),0);  const totalBalance = balanceRows.reduce(
+    (sum, item) => sum + Number(item.income || 0) - Number(item.expense || 0),
+    0
+  );
 
   return (
     
@@ -68,6 +87,7 @@ const fetchRows = useCallback(async (dateValue = printDate) => {
     onChange={(event) => {
       setPrintDate(event.target.value);
       fetchRows(event.target.value);
+      fetchBalanceRows(event.target.value);
     }}
     className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
   />
@@ -103,11 +123,11 @@ const fetchRows = useCallback(async (dateValue = printDate) => {
 
   <div className="rounded-lg border border-slate-800 p-3">
     <div className="font-semibold text-slate-600">
-      잔액
+      전체 잔고
     </div>
 
     <div className="mt-2 text-xl font-bold text-green-600">
-      {balance.toLocaleString()} 원
+      {totalBalance.toLocaleString()} 원
     </div>
   </div>
 </div>
@@ -131,8 +151,8 @@ const fetchRows = useCallback(async (dateValue = printDate) => {
               </tr>
 
               <tr>
-                <th className="border border-slate-900 bg-slate-50 px-2 py-1">잔액</th>
-                <td className="border border-slate-900 px-2 py-1 text-right">{formatWon(balance)}</td>
+                <th className="border border-slate-900 bg-slate-50 px-2 py-1">전체 잔고</th>
+                <td className="border border-slate-900 px-2 py-1 text-right">{formatWon(totalBalance)}</td>
                 <th className="border border-slate-900 bg-slate-50 px-2 py-1">작성자</th>
                 <td className="border border-slate-900 px-2 py-1">ADMIN</td>
                 <th className="border border-slate-900 bg-slate-50 px-2 py-1">비고</th>
@@ -187,3 +207,4 @@ const fetchRows = useCallback(async (dateValue = printDate) => {
     </div>
   );
 }
+
