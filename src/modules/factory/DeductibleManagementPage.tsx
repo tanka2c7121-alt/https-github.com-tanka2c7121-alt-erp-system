@@ -293,7 +293,7 @@ export default function DeductibleManagementPage({
 
   const pendingCount = items.filter((item) => !item.hasDeductiblePayment).length;
   const completeCount = items.filter((item) => item.hasDeductiblePayment).length;
-  const paidAmount = items.reduce((sum, item) => sum + item.paidAmount, 0);
+  const paidAmount = filteredItems.reduce((sum, item) => sum + item.paidAmount, 0);
 
   const headers: Array<{
     key: keyof DeductibleItem;
@@ -932,6 +932,7 @@ function PageButton({
     </button>
   );
 }
+
 
 
 

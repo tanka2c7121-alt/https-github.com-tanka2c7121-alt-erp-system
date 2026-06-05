@@ -46,6 +46,34 @@ type LoginUser = {
   is_active: boolean;
 };
 
+const notificationLookbackDays = 7;
+
+type MyDocumentNotificationType = "expenses" | "attendances" | "incidents";
+
+const myDocumentReadKey = (userId: string, type: MyDocumentNotificationType) =>
+  `erp:my-document-notification-read:${userId}:${type}`;
+
+const fallbackNotificationReadAt = () =>
+  new Date(Date.now() - notificationLookbackDays * 24 * 60 * 60 * 1000).toISOString();
+
+const getMyDocumentReadAt = (userId: string, type: MyDocumentNotificationType) => {
+  if (typeof window === "undefined") return fallbackNotificationReadAt();
+
+  return localStorage.getItem(myDocumentReadKey(userId, type)) ?? fallbackNotificationReadAt();
+};
+
+const markMyDocumentRead = (userId: string, type: MyDocumentNotificationType) => {
+  if (typeof window === "undefined") return;
+
+  localStorage.setItem(myDocumentReadKey(userId, type), new Date().toISOString());
+};
+
+const getMyDocumentNotificationType = (menuId: string): MyDocumentNotificationType | null => {
+  if (menuId.startsWith("documents-expense-request")) return "expenses";
+  if (menuId.startsWith("documents-attendance-request")) return "attendances";
+  if (menuId.startsWith("documents-incident-report")) return "incidents";
+  return null;
+};
 type MainLayoutProps = {
   user: LoginUser;
   onLogout: () => void;
@@ -94,11 +122,23 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
     const nextMenu = displayedMobileMenus.find((menu) => menu.id === menuId);
 
     if (nextMenu) {
-      setSelectedMenu(nextMenu);
+      handleSelectMenu(nextMenu);
     }
   };
 
   const handleSelectMenu = (menu: MenuItem) => {
+    const myDocumentType = getMyDocumentNotificationType(menu.id);
+
+    if (myDocumentType) {
+      markMyDocumentRead(user.user_id, myDocumentType);
+      setNotificationCounts((prev) => ({
+        ...prev,
+        ...(myDocumentType === "expenses" ? { myExpenses: 0 } : {}),
+        ...(myDocumentType === "attendances" ? { myAttendances: 0 } : {}),
+        ...(myDocumentType === "incidents" ? { myIncidents: 0 } : {}),
+      }));
+    }
+
     setSelectedMenu(menu);
     setIsSidebarOpen(false);
   };
@@ -129,9 +169,9 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
     }
 
     const canCheckIncident = isAdmin || user.department === "관리부";
-    const notificationSince = new Date(
-      Date.now() - 7 * 24 * 60 * 60 * 1000
-    ).toISOString();
+    const myExpenseReadAt = getMyDocumentReadAt(user.user_id, "expenses");
+    const myAttendanceReadAt = getMyDocumentReadAt(user.user_id, "attendances");
+    const myIncidentReadAt = getMyDocumentReadAt(user.user_id, "incidents");
 
     const [
       employeesResult,
@@ -167,19 +207,19 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
           .select("id", { count: "exact", head: true })
           .eq("requested_by", user.user_id)
           .in("status", ["승인완료", "반려"])
-          .gte("approved_at", notificationSince),
+          .gt("approved_at", myExpenseReadAt),
         supabase
           .from("attendance_requests")
           .select("id", { count: "exact", head: true })
           .eq("requested_by", user.user_id)
           .in("status", ["승인완료", "반려"])
-          .gte("approved_at", notificationSince),
+          .gt("approved_at", myAttendanceReadAt),
         supabase
           .from("incident_reports")
           .select("id", { count: "exact", head: true })
           .eq("requested_by", user.user_id)
           .in("status", ["확인완료", "반려"])
-          .gte("checked_at", notificationSince),
+          .gt("checked_at", myIncidentReadAt),
       ]);
 
     setNotificationCounts({
@@ -530,3 +570,6 @@ function flattenMenus(
 
   return result;
 }
+
+
+
