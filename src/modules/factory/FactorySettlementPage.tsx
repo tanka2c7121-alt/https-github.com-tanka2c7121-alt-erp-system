@@ -9,7 +9,7 @@ import { supabase } from "../../lib/supabase";
 
 
 type FactorySettlementPageProps = {
-  view?: "all" | "complete" | "pending" | "deductible";
+  view?: "all" | "complete" | "pending" | "receivable" | "deductible";
   onSelectMenu: (menu: MenuItem) => void;
 };
 
@@ -23,6 +23,7 @@ type SettlementItem = {
   company: string;
   deductible_amount: string;
   status: "완결" | "미결";
+  hasReceivable: boolean;
   chargeAmount: number;
   paidAmount: number;
 };
@@ -47,6 +48,15 @@ const hasDeductibleCoverage = (value?: string | null) => {
 
   return normalized === "자차" || normalized === "과실";
 };
+
+const isEmptyDateValue = (value: unknown) => {
+  const text = String(value ?? "").trim().toLowerCase();
+
+  return !text || text === "null" || text === "undefined" || text === "0000-00-00";
+};
+
+const toAmountNumber = (value: unknown) =>
+  Number(String(value ?? 0).replaceAll(",", "")) || 0;
 
 const isDeductibleTarget = (
   item: Pick<SettlementItem, "coverage_type" | "deductible_amount">
@@ -98,6 +108,7 @@ export default function FactorySettlementPage({
 }: FactorySettlementPageProps) {
   const [settlementList, setSettlementList] = useState<SettlementItem[]>([]);
   const [deductiblePaidWorkNames, setDeductiblePaidWorkNames] = useState<Set<string>>(new Set());
+  const [activeView, setActiveView] = useState(view);
   const [searchText, setSearchText] = useState("");
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [selectedMonth, setSelectedMonth] = useState(currentMonth);
@@ -147,23 +158,32 @@ const handleSort = (field: keyof SettlementItem) => {
       return;
     }
 
-    const { data: deductiblePaymentRows, error: deductiblePaymentError } = await fetchAllRows<any>(
+    const { data: paymentRows, error: paymentError } = await fetchAllRows<any>(
       "settlement_payments",
-      "work_name",
-      { eq: { column: "payment_type", value: "면책금" } }
+      "work_name, payment_type, payment_amount, payment_date"
     );
 
-    if (deductiblePaymentError) {
-      alert("면책금 입금 조회 실패: " + deductiblePaymentError.message);
+    if (paymentError) {
+      alert("입금내역 조회 실패: " + paymentError.message);
       return;
     }
 
-  const settlementMap = new Map(
-  (settlementRows ?? []).map((row) => [
-    row.work_name,
-    row.progress_status,
-  ])
-);
+    const deductiblePaymentRows = paymentRows.filter(
+      (row) => row.payment_type === "면책금"
+    );
+    const settlementMap = new Map(
+      (settlementRows ?? []).map((row) => [
+        row.work_name,
+        row.progress_status,
+      ])
+    );
+
+    const receivableWorkNames = new Set(
+      paymentRows
+        .filter((row) => toAmountNumber(row.payment_amount) > 0 && isEmptyDateValue(row.payment_date))
+        .map((row) => row.work_name)
+        .filter(Boolean)
+    );
 
     setDeductiblePaidWorkNames(
       new Set(
@@ -184,11 +204,16 @@ const handleSort = (field: keyof SettlementItem) => {
         company: item.insurance_company || item.partner_company || "",
         deductible_amount: item.deductible_amount ?? "",
         status: settlementMap.get(item.work_name) ?? "미결",
+        hasReceivable: receivableWorkNames.has(item.work_name),
         chargeAmount: 0,
         paidAmount: 0,
       }))
     );
   }, []);
+
+  useEffect(() => {
+    setActiveView(view);
+  }, [view]);
 
   useEffect(() => {
     void loadSettlementList();
@@ -216,10 +241,11 @@ const handleSort = (field: keyof SettlementItem) => {
       return item.work_name.slice(5, 7) === selectedMonth;
     })
     .filter((item) => {
-      if (view === "all" && item.status === "완결") return false;
-      if (view === "complete" && item.status !== "완결") return false;
-      if (view === "pending" && item.status !== "미결") return false;
-      if (view === "deductible" && !isDeductibleTarget(item)) return false;
+      if (activeView === "all" && item.status === "완결") return false;
+      if (activeView === "complete" && item.status !== "완결") return false;
+      if (activeView === "pending" && (item.status !== "미결" || item.hasReceivable)) return false;
+      if (activeView === "receivable" && (item.status !== "미결" || !item.hasReceivable)) return false;
+      if (activeView === "deductible" && !isDeductibleTarget(item)) return false;
 
       if (!keyword) return true;
 
@@ -230,7 +256,7 @@ const handleSort = (field: keyof SettlementItem) => {
         item.company.toLowerCase().includes(keyword)
       );
     });
-}, [settlementList, searchText, selectedMonth, selectedYear, view, sortField, sortOrder]);
+}, [settlementList, searchText, selectedMonth, selectedYear, activeView, sortField, sortOrder]);
 
   const yearOptions = useMemo(() => {
     return Array.from(
@@ -244,7 +270,8 @@ const handleSort = (field: keyof SettlementItem) => {
   }, [settlementList]);
 
   const totalCount = settlementList.length;
-  const pendingCount = settlementList.filter((item) => item.status === "미결").length;
+  const receivableCount = settlementList.filter((item) => item.status === "미결" && item.hasReceivable).length;
+  const pendingCount = settlementList.filter((item) => item.status === "미결" && !item.hasReceivable).length;
   const completeCount = settlementList.filter((item) => item.status === "완결").length;
   const deductibleTargetItems = settlementList.filter(isDeductibleTarget);
   const deductibleTargetCount = deductibleTargetItems.length;
@@ -253,11 +280,13 @@ const handleSort = (field: keyof SettlementItem) => {
   ).length;
 
   const pageTitle =
-    view === "complete"
+    activeView === "complete"
       ? "완결 정산"
-      : view === "pending"
+      : activeView === "pending"
         ? "미결 정산"
-        : view === "deductible"
+        : activeView === "receivable"
+          ? "미수 정산"
+          : activeView === "deductible"
           ? "면책금 관리"
           : "차량정산";
 
@@ -280,28 +309,83 @@ const pagedList = filteredList.slice(
         </p>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-        <div className="rounded-xl border bg-white p-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-5">
+        <button
+          type="button"
+          onClick={() => {
+            setActiveView("all");
+            setCurrentPage(1);
+          }}
+          className={[
+            "rounded-xl border bg-white p-4 text-left transition hover:border-blue-300 hover:bg-blue-50",
+            activeView === "all" ? "border-blue-500 ring-2 ring-blue-100" : "",
+          ].join(" ")}
+        >
           <p className="text-sm font-semibold text-slate-700">전체</p>
           <p className="mt-2 text-2xl font-bold">{totalCount}건</p>
-        </div>
+        </button>
 
-        <div className="rounded-xl border bg-white p-4">
+        <button
+          type="button"
+          onClick={() => {
+            setActiveView("pending");
+            setCurrentPage(1);
+          }}
+          className={[
+            "rounded-xl border bg-white p-4 text-left transition hover:border-red-300 hover:bg-red-50",
+            activeView === "pending" ? "border-red-500 ring-2 ring-red-100" : "",
+          ].join(" ")}
+        >
           <p className="text-sm font-semibold text-slate-700">미결</p>
           <p className="mt-2 text-2xl font-bold text-red-600">{pendingCount}건</p>
-        </div>
+        </button>
 
-        <div className="rounded-xl border bg-white p-4">
+        <button
+          type="button"
+          onClick={() => {
+            setActiveView("receivable");
+            setCurrentPage(1);
+          }}
+          className={[
+            "rounded-xl border bg-white p-4 text-left transition hover:border-orange-300 hover:bg-orange-50",
+            activeView === "receivable" ? "border-orange-500 ring-2 ring-orange-100" : "",
+          ].join(" ")}
+        >
+          <p className="text-sm font-semibold text-slate-700">미수</p>
+          <p className="mt-2 text-2xl font-bold text-orange-600">{receivableCount}건</p>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setActiveView("complete");
+            setCurrentPage(1);
+          }}
+          className={[
+            "rounded-xl border bg-white p-4 text-left transition hover:border-green-300 hover:bg-green-50",
+            activeView === "complete" ? "border-green-500 ring-2 ring-green-100" : "",
+          ].join(" ")}
+        >
           <p className="text-sm font-semibold text-slate-700">완결</p>
           <p className="mt-2 text-2xl font-bold text-green-600">{completeCount}건</p>
-        </div>
+        </button>
 
-        <div className="rounded-xl border bg-white p-4">
+        <button
+          type="button"
+          onClick={() => {
+            setActiveView("deductible");
+            setCurrentPage(1);
+          }}
+          className={[
+            "rounded-xl border bg-white p-4 text-left transition hover:border-blue-300 hover:bg-blue-50",
+            activeView === "deductible" ? "border-blue-500 ring-2 ring-blue-100" : "",
+          ].join(" ")}
+        >
           <p className="text-sm font-semibold text-slate-700">면책금</p>
           <p className="mt-2 text-2xl font-bold text-blue-600">
             {deductibleCompleteCount} / {deductibleTargetCount}건
           </p>
-        </div>
+        </button>
       </div>
 
       <div className="rounded-xl border border-slate-200 bg-white p-4">
@@ -454,10 +538,12 @@ const pagedList = filteredList.slice(
                         className={
                           item.status === "완결"
                             ? "rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700"
-                            : "rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-700"
+                            : item.hasReceivable
+                              ? "rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold text-orange-700"
+                              : "rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-700"
                         }
                       >
-                        {item.status}
+                        {item.status === "완결" ? "완결" : item.hasReceivable ? "미수" : "미결"}
                       </span>
                     </td>
                     <td className="border border-slate-300 px-3 py-2 text-center">
@@ -549,6 +635,16 @@ const pagedList = filteredList.slice(
     </div>
   );
 }
+
+
+
+
+
+
+
+
+
+
 
 
 
