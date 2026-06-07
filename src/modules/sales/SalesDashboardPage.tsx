@@ -166,7 +166,22 @@ export default function SalesDashboardPage({
     return result;
   }, [rows]);
 
-  const recentRows = rows.slice(0, 10);
+  const insuranceChartRows = useMemo(
+    () =>
+      groupRevenueRows(
+        rows.filter((row) => row.category === "보험매출"),
+        (row) => row.insuranceCompany || "보험사 미입력"
+      ),
+    [rows]
+  );
+  const capitalChartRows = useMemo(
+    () =>
+      groupRevenueRows(
+        rows.filter((row) => row.category === "캐피탈매출"),
+        (row) => row.partnerCompany || row.insuranceCompany || "캐피탈 미입력"
+      ),
+    [rows]
+  );
   const yearOptions = useMemo(() => {
     const baseYear = Number(currentYear);
     return Array.from({ length: 5 }, (_, index) => String(baseYear - 2 + index))
@@ -329,45 +344,19 @@ export default function SalesDashboardPage({
         </div>
       </section>
 
-      <section className="no-print rounded-xl border border-slate-200 bg-white p-4">
-        <h4 className="mb-4 font-bold text-slate-900">최근 입금 내역</h4>
-        <div className="overflow-x-auto">
-          <table className="min-w-[900px] w-full border-collapse text-sm">
-            <thead className="bg-slate-100 text-slate-700">
-              <tr>
-                <th className="border px-2 py-2">입금일</th>
-                <th className="border px-2 py-2">작명</th>
-                <th className="border px-2 py-2">차량번호</th>
-                <th className="border px-2 py-2">구분</th>
-                <th className="border px-2 py-2">입금정보</th>
-                <th className="border px-2 py-2 text-right">금액</th>
-              </tr>
-            </thead>
-            <tbody>
-              {recentRows.map((row) => (
-                <tr key={row.id} className="hover:bg-slate-50">
-                  <td className="border px-2 py-2 text-center">{row.date}</td>
-                  <td className="border px-2 py-2 text-center font-semibold">
-                    {row.workName}
-                  </td>
-                  <td className="border px-2 py-2 text-center">{row.carNumber}</td>
-                  <td className="border px-2 py-2 text-center">{row.category}</td>
-                  <td className="border px-2 py-2 text-center">{row.paymentInfo}</td>
-                  <td className="border px-2 py-2 text-right font-bold">
-                    {formatWon(row.amount)}
-                  </td>
-                </tr>
-              ))}
-              {recentRows.length === 0 && (
-                <tr>
-                  <td className="border px-3 py-8 text-center text-slate-500" colSpan={6}>
-                    조회된 입금 내역이 없습니다.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+      <section className="no-print grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <RevenueGroupChart
+          title="보험사별 입금내역"
+          rows={insuranceChartRows}
+          total={totals.insurance}
+          tone="blue"
+        />
+        <RevenueGroupChart
+          title="캐피탈별 입금내역"
+          rows={capitalChartRows}
+          total={totals.capital}
+          tone="amber"
+        />
       </section>
 
       <section className="print-only mx-auto bg-white text-black">
@@ -423,6 +412,69 @@ function MetricCard({
   );
 }
 
+function RevenueGroupChart({
+  title,
+  rows,
+  total,
+  tone,
+}: {
+  title: string;
+  rows: Array<{ name: string; amount: number; count: number }>;
+  total: number;
+  tone: "blue" | "amber";
+}) {
+  const barClass = tone === "blue" ? "bg-blue-600" : "bg-amber-600";
+  const softClass =
+    tone === "blue"
+      ? "border-blue-100 bg-blue-50 text-blue-700"
+      : "border-amber-100 bg-amber-50 text-amber-700";
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-4">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <h4 className="font-bold text-slate-900">{title}</h4>
+        <span className={`rounded-full border px-3 py-1 text-xs font-bold ${softClass}`}>
+          {formatWon(total)}원
+        </span>
+      </div>
+
+      {rows.length === 0 ? (
+        <div className="rounded-lg border border-dashed border-slate-200 p-8 text-center text-sm text-slate-500">
+          조회된 입금 내역이 없습니다.
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {rows.map((row) => {
+            const ratio = total > 0 ? Math.round((row.amount / total) * 100) : 0;
+
+            return (
+              <div key={row.name} className="rounded-lg border border-slate-100 p-3">
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="truncate font-semibold text-slate-800">
+                      {row.name}
+                    </div>
+                    <div className="text-xs text-slate-500">{row.count}건</div>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <div className="font-bold text-slate-900">
+                      {formatWon(row.amount)}원
+                    </div>
+                    <div className="text-xs text-slate-500">{ratio}%</div>
+                  </div>
+                </div>
+                <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+                  <div className={`h-full ${barClass}`} style={{ width: `${ratio}%` }} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function PrintSummaryRow({ label, value }: { label: string; value: number }) {
   return (
     <tr>
@@ -434,6 +486,24 @@ function PrintSummaryRow({ label, value }: { label: string; value: number }) {
       </td>
     </tr>
   );
+}
+
+function groupRevenueRows(
+  rows: RevenueItem[],
+  getName: (row: RevenueItem) => string
+) {
+  const groupMap = new Map<string, { name: string; amount: number; count: number }>();
+
+  rows.forEach((row) => {
+    const name = getName(row).trim() || "미입력";
+    const current = groupMap.get(name) ?? { name, amount: 0, count: 0 };
+
+    current.amount += row.amount;
+    current.count += 1;
+    groupMap.set(name, current);
+  });
+
+  return Array.from(groupMap.values()).sort((a, b) => b.amount - a.amount);
 }
 
 function getRevenueCategory(
