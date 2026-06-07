@@ -352,7 +352,7 @@ function RiskCard({
       <div className="text-sm font-semibold">{title}</div>
       <div className="mt-2 text-3xl font-bold">{count.toLocaleString()}건</div>
       <div className="mt-2 text-sm font-semibold">
-        부족금액 ₩ {amount.toLocaleString()}
+        금액 ₩ {amount.toLocaleString()}
       </div>
     </button>
   );
@@ -387,7 +387,7 @@ function RiskTable({
             <th className="border-b border-slate-200 px-3 py-2 text-right">청구금액</th>
             <th className="border-b border-slate-200 px-3 py-2 text-right">입금금액</th>
             <th className="border-b border-slate-200 px-3 py-2 text-right">청구율</th>
-            <th className="border-b border-slate-200 px-3 py-2 text-right">부족금액</th>
+            <th className="border-b border-slate-200 px-3 py-2 text-right">금액</th>
           </tr>
         </thead>
         <tbody>
