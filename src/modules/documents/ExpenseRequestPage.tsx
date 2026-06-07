@@ -61,6 +61,11 @@ const receiptBucket = "expense-receipts";
 
 const todayText = localDateText;
 
+const normalizeAccountName = (value: string) =>
+  value.trim().toUpperCase().includes("BLUE") || value.includes("블루")
+    ? "BLUE POINT"
+    : value;
+
 const isFullUrl = (value: string) => /^https?:\/\//.test(value);
 
 const formatRequesterName = (user: LoginUser) => {
@@ -250,7 +255,7 @@ export default function ExpenseRequestPage({
       .from("expense_requests")
       .insert({
         request_date: form.requestDate,
-        account: form.account,
+        account: normalizeAccountName(form.account),
         expense_type: form.expenseType,
         category: form.category,
         vendor: form.vendor,
@@ -308,7 +313,8 @@ export default function ExpenseRequestPage({
 
     const { error: cashError } = await supabase.from("daily_cash").insert({
       date: row.request_date,
-      account: row.account,
+      created_on: localDateText(),
+      account: normalizeAccountName(row.account),
       type: row.expense_type,
       category: row.category,
       content: row.vendor ? `${row.vendor} - ${row.content}` : row.content,
@@ -412,7 +418,7 @@ export default function ExpenseRequestPage({
               <option>법인1층</option>
               <option>현금</option>
               <option>카드</option>
-              <option>BLUE</option>
+              <option>BLUE POINT</option>
             </select>
           </Field>
 

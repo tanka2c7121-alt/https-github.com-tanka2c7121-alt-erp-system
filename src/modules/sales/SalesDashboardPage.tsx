@@ -37,7 +37,7 @@ type RevenueItem = {
   carModel: string;
   partnerCompany: string;
   insuranceCompany: string;
-  category: "보험매출" | "일반매출" | "카드매출" | "BLUE포인트";
+  category: "보험매출" | "캐피탈매출" | "일반매출";
   paymentInfo: string;
   amount: number;
 };
@@ -45,7 +45,6 @@ type RevenueItem = {
 const currentDateText = localDateText();
 const currentYear = currentDateText.slice(0, 4);
 const currentMonth = currentDateText.slice(5, 7);
-const bankNames = ["국민은행", "부산은행"];
 
 const formatWon = (amount: number) => amount.toLocaleString();
 
@@ -152,38 +151,19 @@ export default function SalesDashboardPage({
     const result = {
       total: 0,
       insurance: 0,
+      capital: 0,
       general: 0,
-      card: 0,
-      blue: 0,
     };
 
     rows.forEach((row) => {
       result.total += row.amount;
 
       if (row.category === "보험매출") result.insurance += row.amount;
+      if (row.category === "캐피탈매출") result.capital += row.amount;
       if (row.category === "일반매출") result.general += row.amount;
-      if (row.category === "카드매출") result.card += row.amount;
-      if (row.category === "BLUE포인트") result.blue += row.amount;
     });
 
     return result;
-  }, [rows]);
-
-  const partnerTop = useMemo(() => {
-    const partnerMap = new Map<string, number>();
-
-    rows.forEach((row) => {
-      if (!row.partnerCompany) return;
-      partnerMap.set(
-        row.partnerCompany,
-        (partnerMap.get(row.partnerCompany) ?? 0) + row.amount
-      );
-    });
-
-    return Array.from(partnerMap.entries())
-      .map(([partnerCompany, amount]) => ({ partnerCompany, amount }))
-      .sort((a, b) => b.amount - a.amount)
-      .slice(0, 5);
   }, [rows]);
 
   const recentRows = rows.slice(0, 10);
@@ -201,22 +181,16 @@ export default function SalesDashboardPage({
       menuId: "sales-insurance",
     },
     {
+      label: "캐피탈매출",
+      amount: totals.capital,
+      color: "bg-amber-600",
+      menuId: "sales-capital",
+    },
+    {
       label: "일반매출",
       amount: totals.general,
       color: "bg-emerald-600",
       menuId: "sales-general",
-    },
-    {
-      label: "카드매출",
-      amount: totals.card,
-      color: "bg-violet-600",
-      menuId: "sales-card",
-    },
-    {
-      label: "BLUE포인트",
-      amount: totals.blue,
-      color: "bg-sky-500",
-      menuId: "sales-blue",
     },
   ];
 
@@ -281,7 +255,7 @@ export default function SalesDashboardPage({
         </div>
       </div>
 
-      <section className="no-print grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
+      <section className="no-print grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
         <button
           type="button"
           className="rounded-xl border border-slate-200 bg-slate-900 p-4 text-left text-white shadow-sm hover:bg-slate-800"
@@ -299,26 +273,20 @@ export default function SalesDashboardPage({
           onClick={() => openMenu("sales-insurance", "보험매출")}
         />
         <MetricCard
+          title="캐피탈매출"
+          amount={totals.capital}
+          tone="amber"
+          onClick={() => openMenu("sales-capital", "캐피탈매출")}
+        />
+        <MetricCard
           title="일반매출"
           amount={totals.general}
           tone="green"
           onClick={() => openMenu("sales-general", "일반매출")}
         />
-        <MetricCard
-          title="카드매출"
-          amount={totals.card}
-          tone="violet"
-          onClick={() => openMenu("sales-card", "카드매출")}
-        />
-        <MetricCard
-          title="BLUE포인트"
-          amount={totals.blue}
-          tone="sky"
-          onClick={() => openMenu("sales-blue", "BLUE포인트")}
-        />
       </section>
 
-      <section className="no-print grid grid-cols-1 gap-4 xl:grid-cols-[1.3fr_1fr]">
+      <section className="no-print">
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="mb-4 flex items-center justify-between">
             <h4 className="font-bold text-slate-900">매출 구성</h4>
@@ -357,45 +325,6 @@ export default function SalesDashboardPage({
                 </button>
               );
             })}
-          </div>
-        </div>
-
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <div className="mb-4 flex items-center justify-between">
-            <h4 className="font-bold text-slate-900">거래처 TOP 5</h4>
-            <button
-              type="button"
-              onClick={() => openMenu("sales-partner", "거래처매출")}
-              className="text-sm font-semibold text-blue-700 hover:text-blue-800"
-            >
-              자세히
-            </button>
-          </div>
-
-          <div className="space-y-2">
-            {partnerTop.map((item, index) => (
-              <div
-                key={item.partnerCompany}
-                className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2"
-              >
-                <div className="flex items-center gap-2">
-                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-700">
-                    {index + 1}
-                  </span>
-                  <span className="font-semibold text-slate-800">
-                    {item.partnerCompany}
-                  </span>
-                </div>
-                <span className="font-bold text-blue-700">
-                  {formatWon(item.amount)}원
-                </span>
-              </div>
-            ))}
-            {partnerTop.length === 0 && (
-              <div className="rounded-lg border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">
-                거래처 매출이 없습니다.
-              </div>
-            )}
           </div>
         </div>
       </section>
@@ -455,35 +384,8 @@ export default function SalesDashboardPage({
             <tbody>
               <PrintSummaryRow label="총매출" value={totals.total} />
               <PrintSummaryRow label="보험매출" value={totals.insurance} />
+              <PrintSummaryRow label="캐피탈매출" value={totals.capital} />
               <PrintSummaryRow label="일반매출" value={totals.general} />
-              <PrintSummaryRow label="카드매출" value={totals.card} />
-              <PrintSummaryRow label="BLUE포인트" value={totals.blue} />
-            </tbody>
-          </table>
-
-          <h2 className="mb-2 text-base font-bold">거래처 TOP 5</h2>
-          <table className="w-full border-collapse text-xs">
-            <thead className="bg-slate-100">
-              <tr>
-                <th className="border border-slate-400 px-2 py-1">순위</th>
-                <th className="border border-slate-400 px-2 py-1">거래처</th>
-                <th className="border border-slate-400 px-2 py-1">매출</th>
-              </tr>
-            </thead>
-            <tbody>
-              {partnerTop.map((item, index) => (
-                <tr key={`print-${item.partnerCompany}`}>
-                  <td className="border border-slate-400 px-2 py-1 text-center">
-                    {index + 1}
-                  </td>
-                  <td className="border border-slate-400 px-2 py-1">
-                    {item.partnerCompany}
-                  </td>
-                  <td className="border border-slate-400 px-2 py-1 text-right">
-                    {formatWon(item.amount)}
-                  </td>
-                </tr>
-              ))}
             </tbody>
           </table>
         </div>
@@ -500,14 +402,13 @@ function MetricCard({
 }: {
   title: string;
   amount: number;
-  tone: "blue" | "green" | "violet" | "sky";
+  tone: "blue" | "green" | "amber";
   onClick: () => void;
 }) {
   const toneClass = {
     blue: "text-blue-700 bg-blue-50 border-blue-100",
     green: "text-emerald-700 bg-emerald-50 border-emerald-100",
-    violet: "text-violet-700 bg-violet-50 border-violet-100",
-    sky: "text-sky-700 bg-sky-50 border-sky-100",
+    amber: "text-amber-700 bg-amber-50 border-amber-100",
   }[tone];
 
   return (
@@ -544,16 +445,15 @@ function getRevenueCategory(
   const detail = paymentRow.payment_detail ?? "";
   const type = paymentRow.payment_type ?? "";
   const text = [method, detail, type].join(" ");
-  const isCard = method.includes("카드");
-  const isBlue = text.includes("BLUE");
-  const isBank = bankNames.some((bankName) => method.includes(bankName));
+  const isCapital = detail.includes("캐피탈") || text.includes("캐피탈");
+  const isGeneral = detail.includes("일반");
   const isInsurance =
     detail.includes("보험") ||
     work?.category === "보험" ||
     Boolean(insuranceCompany);
 
-  if (isCard) return "카드매출";
-  if (isBlue) return "BLUE포인트";
-  if (isBank && isInsurance) return "보험매출";
+  if (isCapital) return "캐피탈매출";
+  if (isGeneral) return "일반매출";
+  if (isInsurance) return "보험매출";
   return "일반매출";
 }

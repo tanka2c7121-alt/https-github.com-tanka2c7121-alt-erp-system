@@ -50,6 +50,16 @@ const daysBetween = (startDate: string, endDate: string) => {
   );
 };
 
+const daysInMonth = (monthText: string) => {
+  const [year, month] = monthText.split("-").map(Number);
+
+  if (!year || !month) {
+    return 31;
+  }
+
+  return new Date(year, month, 0).getDate();
+};
+
 export default function FactoryDashboardPage({
   onSelectMenu,
 }: FactoryDashboardPageProps) {
@@ -96,11 +106,12 @@ export default function FactoryDashboardPage({
   const dashboard = useMemo(() => {
     const today = todayText();
     const thisMonth = currentWorkMonth(workOrders);
+    const monthDays = daysInMonth(thisMonth);
 
     const activeOrders = workOrders.filter((item) => !item.release_date);
     const todayInbound = workOrders.filter((item) => item.inbound_date === today);
     const thisMonthInbound = workOrders.filter((item) =>
-      item.work_name?.startsWith(thisMonth)
+      item.inbound_date?.startsWith(thisMonth)
     );
     const todayOutbound = workOrders.filter((item) => item.release_date === today);
     const thisMonthOutbound = workOrders.filter((item) =>
@@ -112,9 +123,21 @@ export default function FactoryDashboardPage({
     const dueTodayOrders = activeOrders.filter(
       (item) => item.outbound_date === today
     );
+    const dailyFlowRows = Array.from({ length: monthDays }, (_, index) => {
+      const day = String(index + 1).padStart(2, "0");
+      const date = `${thisMonth}-${day}`;
+
+      return {
+        date,
+        day,
+        inbound: workOrders.filter((item) => item.inbound_date === date).length,
+        outbound: workOrders.filter((item) => item.release_date === date).length,
+      };
+    });
 
     return {
       today,
+      thisMonth,
       activeOrders,
       todayInbound,
       thisMonthInbound,
@@ -122,12 +145,7 @@ export default function FactoryDashboardPage({
       thisMonthOutbound,
       delayedOrders,
       dueTodayOrders,
-      recentInbound: [...activeOrders]
-        .sort((a, b) => String(b.inbound_date).localeCompare(String(a.inbound_date)))
-        .slice(0, 8),
-      thisMonthInboundRows: [...thisMonthInbound]
-        .sort((a, b) => String(b.inbound_date).localeCompare(String(a.inbound_date)))
-        .slice(0, 8),
+      dailyFlowRows,
     };
   }, [workOrders]);
 
@@ -214,34 +232,93 @@ export default function FactoryDashboardPage({
             onOpen={openWork}
           />
 
-          <DashboardTable
-            title="최근 입고 차량"
-            rows={dashboard.recentInbound}
-            emptyText="진행중인 입고 차량이 없습니다."
-            badgeText={(row) =>
-              row.inbound_date
-                ? `${daysBetween(row.inbound_date, dashboard.today)}일 경과`
-                : "진행중"
-            }
-            badgeClass="bg-blue-100 text-blue-700"
-            onOpen={openWork}
-          />
-
-          <DashboardTable
-            title="해당월 입고 차량"
-            rows={dashboard.thisMonthInboundRows}
-            emptyText="해당월 입고 차량이 없습니다."
-            badgeText={(row) =>
-              row.work_name
-                ? `${Number(row.work_name.slice(5, 7))}월 작명`
-                : "입고"
-            }
-            badgeClass="bg-orange-100 text-orange-700"
-            onOpen={openWork}
+          <DailyFlowChart
+            month={dashboard.thisMonth}
+            rows={dashboard.dailyFlowRows}
           />
         </div>
       )}
     </div>
+  );
+}
+
+function DailyFlowChart({
+  month,
+  rows,
+}: {
+  month: string;
+  rows: Array<{
+    date: string;
+    day: string;
+    inbound: number;
+    outbound: number;
+  }>;
+}) {
+  const maxCount = Math.max(
+    1,
+    ...rows.map((row) => Math.max(row.inbound, row.outbound))
+  );
+
+  return (
+    <section className="rounded-xl border border-slate-200 bg-white p-4 xl:col-span-2">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h4 className="font-bold text-slate-900">일자별 입고/출고 대수</h4>
+          <p className="text-xs text-slate-500">{month} 기준</p>
+        </div>
+        <div className="flex items-center gap-4 text-xs font-semibold">
+          <span className="inline-flex items-center gap-1">
+            <span className="h-3 w-3 rounded-sm bg-blue-500" />
+            입고
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <span className="h-3 w-3 rounded-sm bg-green-500" />
+            출고
+          </span>
+        </div>
+      </div>
+
+      <div className="overflow-x-auto">
+        <div className="flex min-w-[980px] items-end gap-2 border-b border-slate-200 pb-2">
+          {rows.map((row) => {
+            const inboundHeight = Math.max(4, (row.inbound / maxCount) * 150);
+            const outboundHeight = Math.max(4, (row.outbound / maxCount) * 150);
+            const hasCount = row.inbound > 0 || row.outbound > 0;
+
+            return (
+              <div key={row.date} className="flex min-w-7 flex-1 flex-col items-center gap-1">
+                <div className="flex h-40 items-end gap-1">
+                  <div
+                    title={`${row.date} 입고 ${row.inbound}대`}
+                    className={[
+                      "w-3 rounded-t bg-blue-500",
+                      row.inbound === 0 ? "opacity-20" : "",
+                    ].join(" ")}
+                    style={{ height: `${inboundHeight}px` }}
+                  />
+                  <div
+                    title={`${row.date} 출고 ${row.outbound}대`}
+                    className={[
+                      "w-3 rounded-t bg-green-500",
+                      row.outbound === 0 ? "opacity-20" : "",
+                    ].join(" ")}
+                    style={{ height: `${outboundHeight}px` }}
+                  />
+                </div>
+                <div className="h-8 text-center text-[10px] leading-tight text-slate-500">
+                  <div className={hasCount ? "font-bold text-slate-800" : ""}>{Number(row.day)}</div>
+                  {hasCount && (
+                    <div>
+                      {row.inbound}/{row.outbound}
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </section>
   );
 }
 

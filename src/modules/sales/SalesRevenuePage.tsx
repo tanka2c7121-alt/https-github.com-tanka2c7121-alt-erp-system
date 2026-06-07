@@ -5,7 +5,7 @@ import { localDateText } from "../../lib/date";
 import { supabase } from "../../lib/supabase";
 
 type SalesRevenuePageProps = {
-  kind: "insurance" | "card" | "general" | "partner" | "blue";
+  kind: "insurance" | "capital" | "card" | "general" | "partner" | "blue";
   title: string;
 };
 
@@ -72,7 +72,6 @@ type SortField =
 const currentDateText = localDateText();
 const currentYear = currentDateText.slice(0, 4);
 const currentMonth = currentDateText.slice(5, 7);
-const bankNames = ["국민은행", "부산은행"];
 
 const formatWon = (amount: number) => amount.toLocaleString();
 const calculateSupplyAmount = (paymentAmount: number) =>
@@ -148,10 +147,7 @@ export default function SalesRevenuePage({
   const loadInsuranceRows = useCallback(async () => {
     const paymentRows = (await loadPaymentRows()).filter((row) => {
       const amount = Number(row.payment_amount ?? 0);
-      const method = row.payment_method ?? "";
-      const isBank = bankNames.some((bankName) => method.includes(bankName));
-
-      return amount > 0 && isBank;
+      return amount > 0;
     });
 
     const workNames = Array.from(
@@ -171,7 +167,7 @@ export default function SalesRevenuePage({
         work?.insurance_company ?? work?.other_insurance_company ?? "";
       const isInsurance = isInsurancePayment(paymentRow, work, insuranceCompany);
 
-      if (!isInsurance) return;
+      if (!isInsurance || isCapitalPayment(paymentRow)) return;
 
       const paymentAmount = Number(paymentRow.payment_amount ?? 0);
       const key = [
@@ -230,8 +226,7 @@ export default function SalesRevenuePage({
         const paymentAmount = Number(paymentRow.payment_amount ?? 0);
         const method = paymentRow.payment_method ?? "";
         const detail = paymentRow.payment_detail ?? "";
-        const isCard = method.includes("카드");
-        const isBlue = [method, detail].join(" ").includes("BLUE");
+        const isCapital = isCapitalPayment(paymentRow);
         const isInsurance = isInsurancePayment(
           paymentRow,
           work,
@@ -240,9 +235,9 @@ export default function SalesRevenuePage({
         const isGeneral =
           detail.includes("일반") ||
           work?.category === "일반" ||
-          (!isCard && !isBlue && !isInsurance);
+          (!isCapital && !isInsurance);
 
-        if (paymentAmount <= 0 || !isGeneral || isCard || isBlue || isInsurance) {
+        if (paymentAmount <= 0 || !isGeneral || isCapital || isInsurance) {
           return null;
         }
 
@@ -257,6 +252,51 @@ export default function SalesRevenuePage({
           carModel: work?.car_model ?? "",
           partnerCompany: work?.partner_company ?? "",
           paymentInfo: method,
+          paymentAmount,
+          supplyAmount: calculateSupplyAmount(paymentAmount),
+          vatAmount: calculateVatAmount(paymentAmount),
+          approvalNumber: paymentRow.approval_number ?? "",
+          merchantNumber: paymentRow.merchant_number ?? "",
+          cardNumber: paymentRow.card_number ?? "",
+        } satisfies RevenueRow;
+      })
+      .filter((row): row is RevenueRow => Boolean(row));
+  }, [loadPaymentRows, loadWorkMap]);
+
+  const loadCapitalRows = useCallback(async () => {
+    const paymentRows = await loadPaymentRows();
+    const workNames = Array.from(
+      new Set(
+        paymentRows
+          .map((row) => row.work_name)
+          .filter((workName): workName is string => Boolean(workName))
+      )
+    );
+    const workMap = await loadWorkMap(workNames);
+
+    return paymentRows
+      .map((paymentRow) => {
+        const paymentAmount = Number(paymentRow.payment_amount ?? 0);
+
+        if (paymentAmount <= 0 || !isCapitalPayment(paymentRow)) {
+          return null;
+        }
+
+        const workName = paymentRow.work_name ?? "";
+        const work = workMap.get(workName);
+
+        return {
+          id: String(paymentRow.id),
+          date: paymentRow.payment_date ?? "",
+          workName,
+          insuranceCompany:
+            work?.insurance_company ?? work?.other_insurance_company ?? "",
+          saleType: work?.category ?? paymentRow.payment_detail ?? "",
+          coverageType: work?.coverage_type ?? "",
+          carNumber: work?.car_number ?? "",
+          carModel: work?.car_model ?? "",
+          partnerCompany: work?.partner_company ?? "",
+          paymentInfo: paymentRow.payment_method ?? "",
           paymentAmount,
           supplyAmount: calculateSupplyAmount(paymentAmount),
           vatAmount: calculateVatAmount(paymentAmount),
@@ -404,6 +444,8 @@ export default function SalesRevenuePage({
       const nextRows =
         kind === "insurance"
           ? await loadInsuranceRows()
+          : kind === "capital"
+            ? await loadCapitalRows()
           : kind === "general"
             ? await loadGeneralRows()
             : kind === "partner"
@@ -421,6 +463,7 @@ export default function SalesRevenuePage({
     kind,
     loadCardRows,
     loadBlueRows,
+    loadCapitalRows,
     loadGeneralRows,
     loadInsuranceRows,
     loadPartnerRows,
@@ -723,7 +766,7 @@ function RevenueTable({
   onSort,
   printMode = false,
 }: {
-  kind: "insurance" | "card" | "general" | "partner" | "blue";
+  kind: "insurance" | "capital" | "card" | "general" | "partner" | "blue";
   rows: RevenueRow[];
   isLoading: boolean;
   totalPayment: number;
@@ -945,9 +988,21 @@ function isInsurancePayment(
   work: WorkOrderRow | undefined,
   insuranceCompany: string
 ) {
+  const detail = paymentRow.payment_detail ?? "";
+
+  if (detail.includes("일반") || detail.includes("캐피탈")) {
+    return false;
+  }
+
   return (
-    (paymentRow.payment_detail ?? "").includes("보험") ||
+    detail.includes("보험") ||
     work?.category === "보험" ||
     Boolean(insuranceCompany)
   );
+}
+
+function isCapitalPayment(paymentRow: SettlementPaymentRow) {
+  return [paymentRow.payment_detail, paymentRow.payment_type]
+    .join(" ")
+    .includes("캐피탈");
 }

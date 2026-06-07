@@ -510,6 +510,7 @@ export default function SettlementRegisterPage({
       .filter((row) => row.amount && row.date && row.method)
       .map((row) => ({
         date: row.date,
+        created_on: localDateText(),
         account: row.method,
         type: "수입",
         category: "차량정산",

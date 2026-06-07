@@ -7,6 +7,7 @@ import { supabase } from "../../lib/supabase";
 type DailyCashRow = {
   id: number;
   date: string;
+  created_on?: string | null;
   account: string;
   type: string;
   category: string | null;
@@ -47,7 +48,7 @@ const fetchRows = useCallback(async (dateValue = printDate) => {
   const { data, error } = await supabase
     .from("daily_cash")
     .select("*")
-    .eq("date", dateValue)
+    .eq("created_on", dateValue)
     .order("id", { ascending: true });
 
   if (error) {
@@ -142,7 +143,7 @@ const fetchRows = useCallback(async (dateValue = printDate) => {
           <table className="mb-5 w-full border-collapse text-[12px] font-semibold">
             <tbody>
               <tr>
-                <th className="w-24 border border-slate-900 bg-slate-50 px-2 py-1">일자</th>
+                <th className="w-24 border border-slate-900 bg-slate-50 px-2 py-1">입력일자</th>
                 <td className="border border-slate-900 px-2 py-1">{printDate}</td>
                 <th className="w-24 border border-slate-900 bg-slate-50 px-2 py-1">입금합계</th>
                 <td className="border border-slate-900 px-2 py-1 text-right">{formatWon(totalIncome)}</td>
@@ -164,7 +165,7 @@ const fetchRows = useCallback(async (dateValue = printDate) => {
           <table className="w-full border-collapse text-[10px]">
             <thead className="text-center">
               <tr className="bg-slate-50">
-                <th className="w-20 border border-slate-900 px-2 py-1">일자</th>
+                <th className="w-20 border border-slate-900 px-2 py-1">거래일자</th>
                 <th className="w-16 border border-slate-900 px-2 py-1">계정</th>
                 <th className="w-14 border border-slate-900 px-2 py-1">구분</th>
                 <th className="w-20 border border-slate-900 px-2 py-1">분류</th>

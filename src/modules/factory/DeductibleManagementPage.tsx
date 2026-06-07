@@ -407,6 +407,7 @@ export default function DeductibleManagementPage({
 
     const { error: dailyCashError } = await supabase.from("daily_cash").insert({
       date: input.date,
+      created_on: localDateText(),
       account: input.method,
       type: "수입",
       category: "면책금",

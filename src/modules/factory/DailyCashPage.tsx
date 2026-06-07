@@ -28,6 +28,19 @@ type DailyCashRow = {
 const formatWon = (amount: number) => amount.toLocaleString();
 type QueryBuilder = any;
 
+const normalizeAccountName = (value: unknown) => {
+  const rawText = String(value ?? "").trim();
+  const accountKey = rawText
+    .replace(/\s+/g, "")
+    .replaceAll("-", "")
+    .replaceAll("_", "")
+    .toUpperCase();
+
+  return accountKey.includes("BLUE") || accountKey.includes("블루")
+    ? "BLUE POINT"
+    : rawText;
+};
+
 async function fetchAllRows<T>(
   tableName: string,
   selectQuery: string,
@@ -219,8 +232,12 @@ export default function DailyCashPage({ onSelectMenu }: DailyCashPageProps) {
   ];
 
   const accountSummary = accountNames.map((accountName) => {
-    const periodRows = filteredRows.filter((row) => row.account === accountName);
-    const balanceAccountRows = balanceRows.filter((row) => row.account === accountName);
+    const periodRows = filteredRows.filter(
+      (row) => normalizeAccountName(row.account) === accountName
+    );
+    const balanceAccountRows = balanceRows.filter(
+      (row) => normalizeAccountName(row.account) === accountName
+    );
 
     const income = periodRows.reduce(
       (sum, row) => sum + Number(row.income || 0),

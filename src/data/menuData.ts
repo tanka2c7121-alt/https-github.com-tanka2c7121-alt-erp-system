@@ -77,10 +77,10 @@ export const menuData: MenuItem[] = [
     roles: ["ADMIN", "CHIEF"],
     children: [
       { id: "sales-insurance", title: "보험매출" },
+      { id: "sales-capital", title: "캐피탈매출" },
       { id: "sales-general", title: "일반매출" },
-      { id: "sales-partner", title: "거래처매출" },
-      { id: "sales-card", title: "카드매출" },
-      { id: "sales-blue", title: "BLUE포인트" },
+      { id: "sales-card", title: "카드승인" },
+      { id: "sales-blue", title: "BLUE POINT" },
     ],
   },
   {

@@ -1,6 +1,7 @@
 "use client";
 
 import type { MenuItem } from "../../data/menuData";
+import { localDateText } from "../../lib/date";
 import { supabase } from "../../lib/supabase";
 import type { UserRole } from "../../types/roles";
 
@@ -85,6 +86,7 @@ export default function ExpenseRequestPrintPage({
 
     const { error: cashError } = await supabase.from("daily_cash").insert({
       date: expenseRequest.request_date,
+      created_on: localDateText(),
       account: expenseRequest.account,
       type: expenseRequest.expense_type,
       category: expenseRequest.category,

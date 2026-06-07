@@ -1,12 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { localDateText } from "../../lib/date";
 import { supabase } from "../../lib/supabase";
 
 const inputClass =
   "mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:outline-none";
 
 const labelClass = "text-sm font-semibold text-slate-800";
+
+const normalizeAccountName = (value: string) =>
+  value.trim().toUpperCase().includes("BLUE") || value.includes("블루")
+    ? "BLUE POINT"
+    : value;
 
 type FormState = {
   date: string;
@@ -103,7 +109,7 @@ export default function DailyCashRegisterPage({
 
     setForm({
       date: editData.date,
-      account: editData.account,
+      account: normalizeAccountName(editData.account),
       type: editData.type,
       category: editData.category ?? "",
       content: editData.content ?? "",
@@ -153,7 +159,7 @@ export default function DailyCashRegisterPage({
 
     const payload = {
       date: form.date,
-      account: form.account,
+      account: normalizeAccountName(form.account),
       type: form.type,
       category: form.category,
       content: form.content,
@@ -169,7 +175,10 @@ expense:
 
     const { error } = editData
       ? await supabase.from("daily_cash").update(payload).eq("id", editData.id)
-      : await supabase.from("daily_cash").insert(payload);
+      : await supabase.from("daily_cash").insert({
+          ...payload,
+          created_on: localDateText(),
+        });
 
     if (error) {
       alert((isEditMode ? "수정 실패: " : "저장 실패: ") + error.message);
@@ -215,7 +224,7 @@ expense:
             <option>법인1층</option>
             <option>현금</option>
             <option>카드</option>
-            <option>BLUE</option>
+            <option>BLUE POINT</option>
           </select>
         </div>
 

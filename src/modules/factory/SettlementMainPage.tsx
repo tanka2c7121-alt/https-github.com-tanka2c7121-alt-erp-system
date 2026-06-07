@@ -128,13 +128,13 @@ const accountSummary = accountNames.map((accountName) => {
 
   // 월 기준 입출금
   const monthlyRows = filteredRows.filter(
-    (row) => row.account === accountName
+    (row) => normalizeBluePointAccount(row.account) === accountName
   );
 
   // 누적 잔고 기준
   const balanceAccountRows = balanceRows.filter(
   (row) =>
-    row.account === accountName
+    normalizeBluePointAccount(row.account) === accountName
 );
 
   const income = monthlyRows.reduce(
@@ -191,7 +191,22 @@ const receivableAccountNames = [
   "BLUE POINT",
 ];
 
-const normalizeText = (value: unknown) => String(value ?? "").trim();
+function normalizeText(value: unknown) {
+  return String(value ?? "").trim();
+}
+
+function normalizeBluePointAccount(value: unknown) {
+  const rawText = normalizeText(value);
+  const accountKey = rawText
+    .replace(/\s+/g, "")
+    .replaceAll("-", "")
+    .replaceAll("_", "")
+    .toUpperCase();
+
+  return accountKey.includes("BLUE") || accountKey.includes("블루")
+    ? "BLUE POINT"
+    : rawText;
+}
 
 const isEmptyDateValue = (value: unknown) => {
   const text = normalizeText(value).toLowerCase();
@@ -200,7 +215,7 @@ const isEmptyDateValue = (value: unknown) => {
 };
 
 const normalizeAccountName = (value: unknown) => {
-  const rawText = normalizeText(value);
+  const rawText = normalizeBluePointAccount(value);
   const accountKey = rawText
     .replace(/\s+/g, "")
     .replaceAll("-", "")
@@ -330,6 +345,7 @@ const handleReceivableDateSave = async (row: any) => {
 
   const { error: cashError } = await supabase.from("daily_cash").insert({
     date: paymentDate,
+    created_on: localDateText(),
     account: row.normalized_payment_method,
     type: "수입",
     category: "차량정산",

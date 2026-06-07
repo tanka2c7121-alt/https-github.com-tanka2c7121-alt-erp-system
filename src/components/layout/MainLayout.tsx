@@ -532,14 +532,16 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
               <SalesDashboardPage onSelectMenu={handleSelectMenu} />
             ) : selectedMenu.id === "sales-insurance" ? (
               <SalesRevenuePage kind="insurance" title="보험매출" />
+            ) : selectedMenu.id === "sales-capital" ? (
+              <SalesRevenuePage kind="capital" title="캐피탈매출" />
             ) : selectedMenu.id === "sales-general" ? (
               <SalesRevenuePage kind="general" title="일반매출" />
             ) : selectedMenu.id === "sales-partner" ? (
               <SalesRevenuePage kind="partner" title="거래처매출" />
             ) : selectedMenu.id === "sales-card" ? (
-              <SalesRevenuePage kind="card" title="카드매출" />
+              <SalesRevenuePage kind="card" title="카드승인" />
             ) : selectedMenu.id === "sales-blue" ? (
-              <SalesRevenuePage kind="blue" title="BLUE포인트" />
+              <SalesRevenuePage kind="blue" title="BLUE POINT" />
             ) : selectedMenu.id === "documents" ? (
               <DocumentsDashboardPage onSelectMenu={handleSelectMenu} />
             ) : selectedMenu.id === "documents-expense-request" ? (
