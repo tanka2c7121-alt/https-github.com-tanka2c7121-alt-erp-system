@@ -42,6 +42,7 @@ type RiskView = "pending" | "longPending" | "lowClaimRate";
 
 type PaymentSummary = {
   repairVatPaidAmount: number;
+  hasReceivable: boolean;
 };
 
 type RiskRow = {
@@ -107,7 +108,7 @@ export default function PendingSettlementPage({
 
     const { data, error } = await fetchAllRows<any>(
       "settlement_payments",
-      "id, work_name, payment_type, payment_amount",
+      "id, work_name, payment_type, payment_amount, payment_date",
       (query) => query.order("id", { ascending: true })
     );
 
@@ -172,10 +173,18 @@ export default function PendingSettlementPage({
 
       const current = map.get(workName) ?? {
         repairVatPaidAmount: 0,
+        hasReceivable: false,
       };
 
       if (["수리비", "부가세"].includes(normalizeText(row.payment_type))) {
         current.repairVatPaidAmount += toAmountNumber(row.payment_amount);
+      }
+
+      if (
+        toAmountNumber(row.payment_amount) > 0 &&
+        isEmptyDateValue(row.payment_date)
+      ) {
+        current.hasReceivable = true;
       }
 
       map.set(workName, current);
@@ -215,7 +224,11 @@ export default function PendingSettlementPage({
       return a.workName.localeCompare(b.workName, "ko");
     });
 
-  const pendingRows = riskRows.filter((row) => row.status === "미결");
+  const pendingRows = riskRows.filter((row) => {
+    const paymentSummary = paymentSummaryByWork.get(row.workName);
+
+    return row.status === "미결" && !paymentSummary?.hasReceivable;
+  });
   const longPendingRows = pendingRows.filter(
     (row) =>
       row.claimAmount > 0 &&
