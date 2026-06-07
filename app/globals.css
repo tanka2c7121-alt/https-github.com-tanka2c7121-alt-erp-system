@@ -89,4 +89,37 @@ body {
   }
 }
 
+@media print {
+  .settlement-complete-print {
+    left: 6mm !important;
+    top: 6mm !important;
+    width: 184mm !important;
+    min-height: 266mm !important;
+    padding: 5mm !important;
+    overflow: visible !important;
+  }
+
+  .settlement-complete-print h1 {
+    font-size: 22px !important;
+    line-height: 1.2 !important;
+  }
+
+  .settlement-complete-print table {
+    table-layout: fixed !important;
+    font-size: 11px !important;
+  }
+
+  .settlement-complete-print th,
+  .settlement-complete-print td {
+    padding: 4px 6px !important;
+    overflow-wrap: anywhere !important;
+  }
+
+  .settlement-complete-stamp {
+    width: 42mm !important;
+    height: 30mm !important;
+    border-radius: 0 !important;
+  }
+}
+
 

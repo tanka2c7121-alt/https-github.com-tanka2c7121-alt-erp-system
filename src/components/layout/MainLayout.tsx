@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useCallback, useEffect, useState } from "react";
 import Sidebar from "../sidebar/Sidebar";
@@ -16,6 +16,7 @@ import OutboundStatusPage from "../../modules/factory/OutboundStatusPage";
 import ReleaseListPage from "../../modules/factory/ReleaseListPage";
 import FactorySettlementPage from "../../modules/factory/FactorySettlementPage";
 import SettlementRegisterPage from "../../modules/factory/SettlementRegisterPage";
+import SettlementCompletePrintPage from "../../modules/factory/SettlementCompletePrintPage";
 import DailyCashPage from "../../modules/factory/DailyCashPage";
 import DailyCashPrintPage from "../../modules/factory/DailyCashPrintPage";
 import DailyCashRegisterPage from "../../modules/factory/DailyCashRegisterPage";
@@ -487,7 +488,16 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
             ) : selectedMenu.id === "factory-settlement" ? (
               <SettlementMainPage onSelectMenu={handleSelectMenu} />
             ) : selectedMenu.id === "factory-settlement-repair-register" ? (
-              <SettlementRegisterPage initialWorkName={selectedData?.workName} />
+              <SettlementRegisterPage
+                initialWorkName={selectedData?.workName}
+                user={user}
+                onSelectMenu={handleSelectMenu}
+              />            ) : selectedMenu.id === "factory-settlement-complete-print" ? (
+              <SettlementCompletePrintPage
+                workName={selectedData?.workName}
+                onSelectMenu={handleSelectMenu}
+              />
+
             ) : selectedMenu.id === "factory-settlement-repair" ? (
               <FactorySettlementPage onSelectMenu={handleSelectMenu} view="all" />
             ) : selectedMenu.id === "factory-settlement-daily-cash-register" ? (

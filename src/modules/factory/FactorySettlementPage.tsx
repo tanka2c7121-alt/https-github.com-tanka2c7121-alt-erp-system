@@ -26,6 +26,7 @@ type SettlementItem = {
   hasReceivable: boolean;
   chargeAmount: number;
   paidAmount: number;
+  receivableAmount: number;
 };
 
 const formatWon = (amount: number) => amount.toLocaleString();
@@ -58,35 +59,9 @@ const isEmptyDateValue = (value: unknown) => {
 const toAmountNumber = (value: unknown) =>
   Number(String(value ?? 0).replaceAll(",", "")) || 0;
 
-const receivableAccountNames = ["국민은행", "부산은행", "BLUE POINT"];
-
-const normalizeAccountName = (value: unknown) => {
-  const rawText = String(value ?? "").trim();
-  const accountKey = rawText
-    .replace(/\s+/g, "")
-    .replaceAll("-", "")
-    .replaceAll("_", "")
-    .toUpperCase();
-
-  if (accountKey.includes("국민") || accountKey.includes("KB")) {
-    return "국민은행";
-  }
-
-  if (accountKey.includes("부산") || accountKey.includes("BNK")) {
-    return "부산은행";
-  }
-
-  if (accountKey.includes("BLUE") || accountKey.includes("블루")) {
-    return "BLUE POINT";
-  }
-
-  return rawText;
-};
-
 const isReceivablePaymentRow = (row: any) =>
   toAmountNumber(row.payment_amount) > 0 &&
-  isEmptyDateValue(row.payment_date) &&
-  receivableAccountNames.includes(normalizeAccountName(row.payment_method));
+  isEmptyDateValue(row.payment_date);
 
 const isDeductibleTarget = (
   item: Pick<SettlementItem, "coverage_type" | "deductible_amount">
@@ -180,7 +155,7 @@ const handleSort = (field: keyof SettlementItem) => {
 
     const { data: settlementRows, error: settlementError } = await fetchAllRows<any>(
       "repair_settlements",
-      "work_name, progress_status"
+      "work_name, progress_status, claim_amount"
     );
 
     if (settlementError) {
@@ -190,7 +165,7 @@ const handleSort = (field: keyof SettlementItem) => {
 
     const { data: paymentRows, error: paymentError } = await fetchAllRows<any>(
       "settlement_payments",
-      "work_name, payment_type, payment_amount, payment_date, payment_method"
+      "work_name, payment_type, claim_amount, payment_amount, payment_date, payment_method"
     );
 
     if (paymentError) {
@@ -207,6 +182,37 @@ const handleSort = (field: keyof SettlementItem) => {
         row.progress_status,
       ])
     );
+    const settlementClaimAmountMap = new Map(
+      (settlementRows ?? []).map((row) => [
+        row.work_name,
+        toAmountNumber(row.claim_amount),
+      ])
+    );
+    const paymentAmountMap = new Map<string, number>();
+    const receivableAmountMap = new Map<string, number>();
+    const paymentClaimAmountMap = new Map<string, number>();
+
+    paymentRows.forEach((row) => {
+      const workName = String(row.work_name ?? "");
+      if (!workName) return;
+
+      paymentClaimAmountMap.set(
+        workName,
+        (paymentClaimAmountMap.get(workName) ?? 0) + toAmountNumber(row.claim_amount)
+      );
+
+      if (!isEmptyDateValue(row.payment_date)) {
+        paymentAmountMap.set(
+          workName,
+          (paymentAmountMap.get(workName) ?? 0) + toAmountNumber(row.payment_amount)
+        );
+      } else {
+        receivableAmountMap.set(
+          workName,
+          (receivableAmountMap.get(workName) ?? 0) + toAmountNumber(row.payment_amount)
+        );
+      }
+    });
 
     const receivableWorkNames = new Set(
       paymentRows
@@ -224,20 +230,27 @@ const handleSort = (field: keyof SettlementItem) => {
     );
 
     setSettlementList(
-      (data ?? []).map((item) => ({
+      (data ?? []).map((item) => {
+        const workName = item.work_name ?? "";
+        const settlementClaimAmount = settlementClaimAmountMap.get(workName) ?? 0;
+        const paymentClaimAmount = paymentClaimAmountMap.get(workName) ?? 0;
+
+        return {
         id: item.id,
-        work_name: item.work_name ?? "",
+        work_name: workName,
         car_number: item.car_number ?? "",
         car_model: item.car_model ?? "",
         category: item.category ?? "",
         coverage_type: item.coverage_type ?? "",
         company: item.insurance_company || item.partner_company || "",
         deductible_amount: item.deductible_amount ?? "",
-        status: settlementMap.get(item.work_name) ?? "미결",
-        hasReceivable: receivableWorkNames.has(item.work_name),
-        chargeAmount: 0,
-        paidAmount: 0,
-      }))
+        status: settlementMap.get(workName) ?? "미결",
+        hasReceivable: receivableWorkNames.has(workName),
+        chargeAmount: settlementClaimAmount || paymentClaimAmount,
+        paidAmount: paymentAmountMap.get(workName) ?? 0,
+        receivableAmount: receivableAmountMap.get(workName) ?? 0,
+      };
+    })
     );
   }, []);
 
@@ -544,8 +557,6 @@ const pagedList = filteredList.slice(
 
             <tbody>
               {pagedList.map((item) => {
-                const unpaidAmount = item.chargeAmount - item.paidAmount;
-
                 return (
                   <tr key={item.id} className="hover:bg-blue-50">
                     <td className="border border-slate-300 px-3 py-2 font-semibold">
@@ -570,7 +581,7 @@ const pagedList = filteredList.slice(
                     <td className="border border-slate-300 px-3 py-2 text-right">{formatWon(item.chargeAmount)}</td>
                     <td className="border border-slate-300 px-3 py-2 text-right">{formatWon(item.paidAmount)}</td>
                     <td className="border border-slate-300 px-3 py-2 text-right font-semibold text-red-600">
-                      {formatWon(unpaidAmount)}
+                      {formatWon(item.receivableAmount)}
                     </td>
                     <td className="border border-slate-300 px-3 py-2 text-right text-blue-600">
                       {item.deductible_amount || "-"}

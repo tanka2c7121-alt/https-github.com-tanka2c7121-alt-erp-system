@@ -1,10 +1,17 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
+import { localDateText } from "../../lib/date";
+import type { MenuItem } from "../../data/menuData";
 
 type SettlementRegisterPageProps = {
   initialWorkName?: string;
+  user: {
+    user_id: string;
+    user_name: string;
+  };
+  onSelectMenu: (menu: MenuItem) => void;
 };
 
 type PaymentRow = {
@@ -108,6 +115,8 @@ const hasStoredPaymentInputValue = (item: any) =>
 
 export default function SettlementRegisterPage({
   initialWorkName,
+  user,
+  onSelectMenu,
 }: SettlementRegisterPageProps) {
   const [paymentRows, setPaymentRows] = useState<PaymentRow[]>([
     emptyPaymentRow(),
@@ -118,6 +127,8 @@ export default function SettlementRegisterPage({
   ]);
   const [saving, setSaving] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
+  const [loadedProgressStatus, setLoadedProgressStatus] = useState("미결");
+  const [adminUnlocked, setAdminUnlocked] = useState(false);
   const [form, setForm] = useState({
     workName: "",
     carNumber: "",
@@ -143,6 +154,9 @@ export default function SettlementRegisterPage({
     otherClaimAmount: "",
     ownClaimDate: "",
     otherClaimDate: "",
+    completedAt: "",
+    completedBy: "",
+    completedByName: "",
     memo: "",
   });
 
@@ -155,8 +169,11 @@ export default function SettlementRegisterPage({
     [expenseRows]
   );
   const totalAmount = paymentTotal - expenseTotal;
+  const isCompleted = form.progressStatus === "완결";
+  const isLocked = isCompleted && !adminUnlocked;
 
   const handleChange = (key: string, value: string) => {
+    if (isLocked && key !== "workName") return;
     setForm((prev) => ({ ...prev, [key]: value }));
   };
 
@@ -165,6 +182,7 @@ export default function SettlementRegisterPage({
     field: keyof PaymentRow,
     value: string | boolean
   ) => {
+    if (isLocked) return;
     setPaymentRows((prev) =>
       prev.map((row, rowIndex) => {
         if (rowIndex !== index) return row;
@@ -189,6 +207,7 @@ export default function SettlementRegisterPage({
     field: keyof ClaimRow,
     value: string
   ) => {
+    if (isLocked) return;
     setClaimRows((prev) =>
       prev.map((row, rowIndex) =>
         rowIndex === index ? { ...row, [field]: value } : row
@@ -201,6 +220,7 @@ export default function SettlementRegisterPage({
     field: keyof ExpenseRow,
     value: string
   ) => {
+    if (isLocked) return;
     setExpenseRows((prev) =>
       prev.map((row, rowIndex) =>
         rowIndex === index ? { ...row, [field]: value } : row
@@ -311,6 +331,9 @@ export default function SettlementRegisterPage({
         settlement?.own_claim_date ?? legacyOwnClaimRow?.claim_date ?? "",
       otherClaimDate:
         settlement?.other_claim_date ?? legacyOtherClaimRow?.claim_date ?? "",
+      completedAt: settlement?.completed_at ?? "",
+      completedBy: settlement?.completed_by ?? "",
+      completedByName: settlement?.completed_by_name ?? "",
       memo: workOrder.message ?? settlement?.memo ?? "",
     });
 
@@ -389,6 +412,9 @@ export default function SettlementRegisterPage({
         : [emptyExpenseRow()]
     );
 
+    const loadedStatus = settlement?.progress_status ?? "미결";
+    setLoadedProgressStatus(loadedStatus);
+    setAdminUnlocked(false);
     setIsEditMode(Boolean(settlement) || paymentItems.length > 0 || Boolean(expenses?.length));
     alert("불러왔습니다.");
   };
@@ -501,10 +527,44 @@ export default function SettlementRegisterPage({
     return error;
   };
 
+  const handleAdminUnlock = async () => {
+    const adminId = window.prompt("관리자 아이디를 입력하세요.");
+    if (!adminId) return;
+
+    const password = window.prompt("관리자 비밀번호를 입력하세요.");
+    if (!password) return;
+
+    const { data, error } = await supabase
+      .from("app_users")
+      .select("id")
+      .eq("user_id", adminId.trim().toLowerCase())
+      .eq("password", password)
+      .eq("role", "ADMIN")
+      .eq("is_active", true)
+      .maybeSingle();
+
+    if (error || !data) {
+      alert("관리자 인증에 실패했습니다.");
+      return;
+    }
+
+    setAdminUnlocked(true);
+    alert("잠금이 해제되었습니다. 저장 후 다시 잠금 상태가 됩니다.");
+  };
   const handleSave = async () => {
     if (!form.workName) {
       alert("작명을 입력하세요.");
       return;
+    }
+
+    if (isLocked) {
+      alert("완결 처리된 정산입니다. 관리자 잠금해제 후 수정할 수 있습니다.");
+      return;
+    }
+
+    if (form.progressStatus === "완결" && loadedProgressStatus !== "완결") {
+      const confirmed = window.confirm("완결 하시겠습니까?\n완결 처리시 되돌리수 없습니다.");
+      if (!confirmed) return;
     }
 
     setSaving(true);
@@ -521,6 +581,16 @@ export default function SettlementRegisterPage({
       claimRows.find((row) => row.date)?.date || form.claimDate || null;
     const ownClaimRow = claimRows.find((row) => row.detail === "자차");
     const otherClaimRow = claimRows.find((row) => row.detail === "대물");
+    const completedAt =
+      form.progressStatus === "완결"
+        ? form.completedAt || localDateText()
+        : null;
+    const completedBy =
+      form.progressStatus === "완결" ? form.completedBy || user.user_id : null;
+    const completedByName =
+      form.progressStatus === "완결"
+        ? form.completedByName || user.user_name || user.user_id
+        : null;
 
     const { error: settlementError } = await supabase
       .from("repair_settlements")
@@ -541,6 +611,9 @@ export default function SettlementRegisterPage({
         other_claim_amount: toNumber(otherClaimRow?.amount ?? ""),
         own_claim_date: ownClaimRow?.date || null,
         other_claim_date: otherClaimRow?.date || null,
+        completed_at: completedAt,
+        completed_by: completedBy,
+        completed_by_name: completedByName,
         memo: form.memo,
       });
 
@@ -591,6 +664,8 @@ export default function SettlementRegisterPage({
 
     setSaving(false);
     setIsEditMode(true);
+    setLoadedProgressStatus(form.progressStatus);
+    setAdminUnlocked(false);
     alert(isEditMode ? "수정되었습니다." : "저장되었습니다.");
   };
 
@@ -602,6 +677,17 @@ export default function SettlementRegisterPage({
           작업별 청구금액, 입금내역, 면책금, 부가세, 지출내역을 등록합니다.
         </p>
       </div>
+
+      {isLocked && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+          완결 처리된 정산입니다. 관리자 잠금해제 후 수정할 수 있습니다.
+        </div>
+      )}
+      {isCompleted && adminUnlocked && (
+        <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-700">
+          관리자 잠금해제 상태입니다. 저장 후 다시 잠깁니다.
+        </div>
+      )}
 
       <section className="rounded-xl border border-slate-200 bg-white p-4">
         <h3 className="mb-4 text-lg font-bold text-slate-900">기본정보</h3>
@@ -689,12 +775,14 @@ export default function SettlementRegisterPage({
             <button
               type="button"
               onClick={() => setClaimRows((prev) => [...prev, emptyClaimRow()])}
+              disabled={isLocked}
               className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700"
             >
               추가
             </button>
             <button
               type="button"
+              disabled={isLocked}
               onClick={() =>
                 setClaimRows((prev) =>
                   prev.length > 1 ? prev.slice(0, -1) : [emptyClaimRow()]
@@ -747,12 +835,14 @@ export default function SettlementRegisterPage({
             <button
               type="button"
               onClick={() => setPaymentRows((prev) => [...prev, emptyPaymentRow()])}
+              disabled={isLocked}
               className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700"
             >
               추가
             </button>
             <button
               type="button"
+              disabled={isLocked}
               onClick={() =>
                 setPaymentRows((prev) =>
                   prev.length > 1 ? prev.slice(0, -1) : [emptyPaymentRow()]
@@ -870,12 +960,14 @@ export default function SettlementRegisterPage({
             <button
               type="button"
               onClick={() => setExpenseRows((prev) => [...prev, emptyExpenseRow()])}
+              disabled={isLocked}
               className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700"
             >
               추가
             </button>
             <button
               type="button"
+              disabled={isLocked}
               onClick={() =>
                 setExpenseRows((prev) =>
                   prev.length > 1 ? prev.slice(0, -1) : [emptyExpenseRow()]
@@ -924,14 +1016,40 @@ export default function SettlementRegisterPage({
       <section className="rounded-xl border border-slate-200 bg-white p-4">
         <label className={labelClass}>비고</label>
         <textarea
-          className={`${getInputStateClass(form.memo)} ${inputClass} h-28 resize-none`}
+          className={`${getInputStateClass(form.memo)} ${inputClass} h-28 resize-none disabled:cursor-not-allowed disabled:bg-slate-100`}
           placeholder="정산 관련 메모를 입력하세요."
           value={form.memo}
+          disabled={isLocked}
+          readOnly={isLocked}
           onChange={(event) => handleChange("memo", event.target.value)}
         />
       </section>
 
       <div className="flex justify-end gap-2">
+        {isCompleted && (
+          <button
+            type="button"
+            onClick={() =>
+              onSelectMenu({
+                id: "factory-settlement-complete-print",
+                title: "완결출력",
+                data: { workName: form.workName },
+              })
+            }
+            className="rounded-lg border border-red-300 px-5 py-2 text-sm font-semibold text-red-600 hover:bg-red-50"
+          >
+            완결출력
+          </button>
+        )}
+        {isCompleted && (
+          <button
+            type="button"
+            onClick={() => void handleAdminUnlock()}
+            className="rounded-lg border border-slate-300 px-5 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+          >
+            관리자 잠금해제
+          </button>
+        )}
         <button
           type="button"
           onClick={() => void handleSave()}
@@ -952,6 +1070,7 @@ function Field({
   value,
   options,
   onChange,
+  disabled = false,
 }: {
   label: string;
   placeholder?: string;
@@ -959,14 +1078,16 @@ function Field({
   value?: string;
   options?: string[];
   onChange?: (value: string) => void;
+  disabled?: boolean;
 }) {
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-4">
       <label className={labelClass}>{label}</label>
       {options ? (
         <select
-          className={`${getInputStateClass(value)} ${inputClass}`}
+          className={`${getInputStateClass(value)} ${inputClass} disabled:cursor-not-allowed disabled:bg-slate-100`}
           value={value}
+          disabled={disabled || !onChange}
           onChange={(event) => onChange?.(event.target.value)}
         >
           <option value="">선택</option>
@@ -978,18 +1099,18 @@ function Field({
         </select>
       ) : (
         <input
-          className={`${getInputStateClass(value)} ${inputClass}`}
+          className={`${getInputStateClass(value)} ${inputClass} disabled:cursor-not-allowed disabled:bg-slate-100`}
           placeholder={placeholder}
           type={type}
           value={value}
           onChange={(event) => onChange?.(event.target.value)}
-          readOnly={!onChange}
+          readOnly={disabled || !onChange}
+          disabled={disabled}
         />
       )}
     </div>
   );
 }
-
 function StackedField({
   label,
   rows,
@@ -1067,6 +1188,7 @@ function CardInfoFields({
     </div>
   );
 }
+
 
 
 
