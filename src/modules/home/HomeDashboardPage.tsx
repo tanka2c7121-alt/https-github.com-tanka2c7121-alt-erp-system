@@ -776,8 +776,21 @@ function QuickActions({
 }: {
   onSelectMenu: (menu: MenuItem) => void;
 }) {
-  const actions: Array<{ id: string; title: string; description: string }> = [
+  const actions: Array<{
+    id: string;
+    menuId?: string;
+    title: string;
+    description: string;
+    data?: MenuItem["data"];
+  }> = [
     { id: "factory-work-register", title: "작업등록", description: "신규 입고 차량 등록" },
+    {
+      id: "factory-work-register-camera",
+      menuId: "factory-work-register",
+      title: "작업등록 카메라열기",
+      description: "작업등록으로 이동 후 카메라 실행",
+      data: { openCamera: true },
+    },
     { id: "factory-settlement-repair", title: "차량정산", description: "차량별 정산 확인" },
     { id: "factory-settlement-daily-cash", title: "일일입출금", description: "일일 입출금 확인" },
   ];
@@ -792,8 +805,9 @@ function QuickActions({
             type="button"
             onClick={() =>
               onSelectMenu({
-                id: action.id,
+                id: action.menuId ?? action.id,
                 title: action.title,
+                data: action.data,
               })
             }
             className="rounded-xl border border-slate-200 p-4 text-left transition hover:border-blue-300 hover:bg-blue-50"

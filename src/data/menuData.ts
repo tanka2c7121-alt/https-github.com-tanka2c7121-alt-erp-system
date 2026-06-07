@@ -9,6 +9,7 @@ export type MenuItem = {
   data?: {
     workName?: string;
     nextWorkName?: string;
+    openCamera?: boolean;
 
     [key: string]: unknown;
   };

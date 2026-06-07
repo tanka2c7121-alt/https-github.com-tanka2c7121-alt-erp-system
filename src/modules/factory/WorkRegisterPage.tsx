@@ -406,11 +406,13 @@ function Field({
 type WorkRegisterPageProps = {
   onSelectMenu: (menu: MenuItem) => void;
   initialWorkName?: string;
+  openCameraOnMount?: boolean;
 };
 
 export default function WorkRegisterPage({
   onSelectMenu,
   initialWorkName,
+  openCameraOnMount = false,
 }: WorkRegisterPageProps) {
   const [workName, setWorkName] = useState("");
   const [carNumber, setCarNumber] = useState("");
@@ -487,6 +489,7 @@ export default function WorkRegisterPage({
   );
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const cameraStreamRef = useRef<MediaStream | null>(null);
+  const cameraAutoOpenRef = useRef(false);
 
   useEffect(() => {
     if (coverageType === "과실") {
@@ -680,6 +683,19 @@ useEffect(() => {
     cameraStreamRef.current?.getTracks().forEach((track) => track.stop());
   };
 }, []);
+
+useEffect(() => {
+  if (!openCameraOnMount || cameraAutoOpenRef.current) {
+    return;
+  }
+
+  cameraAutoOpenRef.current = true;
+  const timer = window.setTimeout(() => {
+    void openCamera();
+  }, 0);
+
+  return () => window.clearTimeout(timer);
+}, [openCameraOnMount]);
 
 useEffect(() => {
   if (!cameraOpen || !videoRef.current || !cameraStreamRef.current) {

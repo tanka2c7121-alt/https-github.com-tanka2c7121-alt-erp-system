@@ -108,6 +108,7 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
     | {
         workName?: string;
         nextWorkName?: string;
+        openCamera?: boolean;
         expenseRequest?: any;
         attendanceRequest?: any;
         incidentReport?: any;
@@ -519,6 +520,7 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
               <WorkRegisterPage
                 onSelectMenu={handleSelectMenu}
                 initialWorkName={selectedData?.workName ?? selectedData?.nextWorkName}
+                openCameraOnMount={Boolean(selectedData?.openCamera)}
               />
             ) : selectedMenu.id === "factory-work-print" ? (
               <WorkPrintPage
