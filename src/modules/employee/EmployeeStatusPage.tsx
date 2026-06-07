@@ -2,10 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
+import type { UserRole } from "../../types/roles";
 
 type EmployeeStatusPageProps = {
   departmentFilter?: string;
   canManage: boolean;
+  userRole: UserRole;
   onOpenManage: () => void;
 };
 
@@ -25,14 +27,25 @@ const departments = ["관리부", "도장부", "판금부", "정비부"];
 export default function EmployeeStatusPage({
   departmentFilter,
   canManage,
+  userRole,
   onOpenManage,
 }: EmployeeStatusPageProps) {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [searchText, setSearchText] = useState("");
   const [loading, setLoading] = useState(true);
+  const [openPhoneEmployeeId, setOpenPhoneEmployeeId] = useState<number | null>(null);
+  const isStaffMode = userRole === "STAFF";
 
   const loadEmployees = useCallback(async () => {
     setLoading(true);
+
+    const contactResult = await supabase.rpc("get_employee_contacts");
+
+    if (!contactResult.error) {
+      setEmployees((contactResult.data ?? []) as Employee[]);
+      setLoading(false);
+      return;
+    }
 
     const { data, error } = await supabase
       .from("app_users")
@@ -83,7 +96,7 @@ export default function EmployeeStatusPage({
   const staffCount = visibleEmployees.filter((item) => item.role === "STAFF").length;
 
   const departmentSummary = departments.map((department) => {
-    const departmentEmployees = employees.filter(
+    const departmentEmployees = visibleEmployees.filter(
       (employee) => employee.department === department
     );
 
@@ -92,6 +105,7 @@ export default function EmployeeStatusPage({
       total: departmentEmployees.length,
       active: departmentEmployees.filter((employee) => employee.is_active).length,
       pending: departmentEmployees.filter((employee) => !employee.is_active).length,
+      employees: departmentEmployees,
     };
   });
 
@@ -135,7 +149,84 @@ export default function EmployeeStatusPage({
         <SummaryCard title="관리자 / 직원" value={`${adminCount} / ${staffCount}`} tone="slate" />
       </section>
 
-      {!departmentFilter && (
+      {isStaffMode && (
+        <section className="rounded-2xl border border-slate-200 bg-white p-5">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <h4 className="text-lg font-bold">부서별 직원 카드</h4>
+            <span className="rounded-full bg-blue-50 px-3 py-1 text-sm font-semibold text-blue-700">
+              {visibleEmployees.length.toLocaleString()}명
+            </span>
+          </div>
+
+          {loading ? (
+            <div className="rounded-xl border border-slate-200 p-6 text-center text-sm text-slate-500">
+              직원현황을 불러오는 중입니다.
+            </div>
+          ) : visibleEmployees.length === 0 ? (
+            <div className="rounded-xl border border-slate-200 p-6 text-center text-sm text-slate-500">
+              조회된 직원이 없습니다.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+              {departmentSummary.map((item) => (
+                <div
+                  key={item.department}
+                  className="rounded-xl border border-slate-200 bg-slate-50 p-4"
+                >
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <h5 className="font-bold text-slate-900">{item.department}</h5>
+                    <span className="rounded-full bg-white px-2 py-1 text-xs font-semibold text-blue-700">
+                      {item.total}명
+                    </span>
+                  </div>
+
+                  {item.employees.length === 0 ? (
+                    <div className="rounded-lg bg-white p-3 text-sm text-slate-500">
+                      직원 없음
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {item.employees.map((employee) => {
+                        const isOpen = openPhoneEmployeeId === employee.id;
+
+                        return (
+                          <button
+                            key={employee.id}
+                            type="button"
+                            onClick={() =>
+                              setOpenPhoneEmployeeId((prev) =>
+                                prev === employee.id ? null : employee.id
+                              )
+                            }
+                            className="w-full rounded-lg bg-white px-3 py-2 text-left transition hover:bg-blue-50"
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-semibold text-slate-900">
+                                {employee.user_name ?? "-"}
+                              </span>
+                              <span className="text-[11px] font-semibold text-slate-500">
+                                {employee.is_active ? "사용중" : "승인대기"}
+                              </span>
+                            </div>
+
+                            {isOpen && (
+                              <div className="mt-2 rounded bg-blue-50 px-2 py-1 text-sm font-semibold text-blue-700">
+                                {employee.phone_number ?? "-"}
+                              </div>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
+      {!departmentFilter && !isStaffMode && (
         <section className="grid grid-cols-1 gap-3 md:grid-cols-4">
           {departmentSummary.map((item) => (
             <div
@@ -163,6 +254,7 @@ export default function EmployeeStatusPage({
         </section>
       )}
 
+      {!isStaffMode && (
       <section className="rounded-2xl border border-slate-200 bg-white p-5">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -236,6 +328,7 @@ export default function EmployeeStatusPage({
           </table>
         </div>
       </section>
+      )}
     </div>
   );
 }

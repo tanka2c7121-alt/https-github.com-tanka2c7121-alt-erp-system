@@ -493,7 +493,7 @@ export default function HomeDashboardPage({
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-          <QuickActions onSelectMenu={onSelectMenu} />
+          <QuickActions userRole={user?.role ?? "STAFF"} onSelectMenu={onSelectMenu} />
 
           {(isAdmin || canApproveAttendance) && (
             <AdminApprovalPanel
@@ -772,8 +772,10 @@ function NoticeManager({
 }
 
 function QuickActions({
+  userRole,
   onSelectMenu,
 }: {
+  userRole: UserRole;
   onSelectMenu: (menu: MenuItem) => void;
 }) {
   const actions: Array<{
@@ -795,11 +797,20 @@ function QuickActions({
     { id: "factory-settlement-daily-cash", title: "일일입출금", description: "일일 입출금 확인" },
   ];
 
+  const visibleActions =
+    userRole === "STAFF"
+      ? actions.filter(
+          (action) =>
+            action.id !== "factory-settlement-repair" &&
+            action.id !== "factory-settlement-daily-cash"
+        )
+      : actions;
+
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-4">
       <h4 className="mb-3 font-bold text-slate-900">빠른 작업</h4>
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-        {actions.map((action) => (
+        {visibleActions.map((action) => (
           <button
             key={action.id}
             type="button"

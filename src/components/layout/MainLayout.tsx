@@ -453,6 +453,7 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
             selectedMenu.id === "employee-repair" ? (
               <EmployeeStatusPage
                 canManage={isAdmin}
+                userRole={userRole}
                 departmentFilter={
                   selectedMenu.id === "employee-admin"
                     ? "愿由щ?"
