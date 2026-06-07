@@ -84,6 +84,11 @@ export const menuData: MenuItem[] = [
     ],
   },
   {
+    id: "factory-settlement-pending",
+    title: "미결관리",
+    roles: ["ADMIN", "CHIEF"],
+  },
+  {
     id: "documents",
     title: "문서관리",
     children: [

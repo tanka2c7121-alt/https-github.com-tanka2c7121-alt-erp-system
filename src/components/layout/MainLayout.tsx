@@ -21,6 +21,7 @@ import DailyCashPage from "../../modules/factory/DailyCashPage";
 import DailyCashPrintPage from "../../modules/factory/DailyCashPrintPage";
 import DailyCashRegisterPage from "../../modules/factory/DailyCashRegisterPage";
 import SettlementMainPage from "../../modules/factory/SettlementMainPage";
+import PendingSettlementPage from "../../modules/factory/PendingSettlementPage";
 import DeductibleManagementPage from "../../modules/factory/DeductibleManagementPage";
 import EmployeeManagePage from "../../modules/admin/EmployeeManagePage";
 import VehicleCatalogPage from "../../modules/admin/VehicleCatalogPage";
@@ -489,6 +490,8 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
               <FactoryDashboardPage onSelectMenu={handleSelectMenu} />
             ) : selectedMenu.id === "factory-settlement" ? (
               <SettlementMainPage onSelectMenu={handleSelectMenu} />
+            ) : selectedMenu.id === "factory-settlement-pending" ? (
+              <PendingSettlementPage onSelectMenu={handleSelectMenu} />
             ) : selectedMenu.id === "factory-settlement-repair-register" ? (
               <SettlementRegisterPage
                 initialWorkName={selectedData?.workName}
