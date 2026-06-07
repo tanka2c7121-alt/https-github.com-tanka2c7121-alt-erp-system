@@ -52,6 +52,11 @@ export default function SettlementMainPage({
   const [balanceRows, setBalanceRows] = useState<any[]>([]);
   const [paymentRows, setPaymentRows] = useState<any[]>([]);
   const [settlementRows, setSettlementRows] = useState<any[]>([]);
+  const [riskSourceCounts, setRiskSourceCounts] = useState({
+    workOrders: 0,
+    settlements: 0,
+    payments: 0,
+  });
   const [showReceivables, setShowReceivables] = useState(false);
   const [showReceivableDebug, setShowReceivableDebug] = useState(false);
   const [activeRiskView, setActiveRiskView] = useState<
@@ -88,6 +93,10 @@ const fetchReceivableRows = useCallback(async () => {
   }
 
   setPaymentRows(rows);
+  setRiskSourceCounts((prev) => ({
+    ...prev,
+    payments: rows.length,
+  }));
 }, []);
 
 const fetchBalanceRows = useCallback(async () => {
@@ -108,9 +117,21 @@ const fetchBalanceRows = useCallback(async () => {
 }, []);
 
 const fetchRiskRows = useCallback(async () => {
-  const { data, error } = await fetchAllRows<any>(
+  const { data: workRows, error: workError } = await fetchAllRows<any>(
+    "work_orders",
+    "work_name, insurance_company, partner_company",
+    (query) => query.order("id", { ascending: false })
+  );
+
+  if (workError) {
+    alert("정산 위험관리 차량 조회 실패: " + workError.message);
+    return;
+  }
+
+  const { data: settlementData, error } = await fetchAllRows<any>(
     "repair_settlements",
-    "work_name, insurance_company, partner_company, progress_status, claim_amount, claim_date"
+    "work_name, insurance_company, partner_company, progress_status, claim_amount, claim_date",
+    (query) => query.order("work_name", { ascending: false })
   );
 
   if (error) {
@@ -118,7 +139,44 @@ const fetchRiskRows = useCallback(async () => {
     return;
   }
 
-  setSettlementRows(data ?? []);
+  const settlementMap = new Map(
+    (settlementData ?? []).map((row) => [normalizeText(row.work_name), row])
+  );
+  const workOrderMap = new Map(
+    (workRows ?? []).map((row) => [normalizeText(row.work_name), row])
+  );
+  const workNames = Array.from(
+    new Set([
+      ...(workRows ?? []).map((row) => normalizeText(row.work_name)),
+      ...(settlementData ?? []).map((row) => normalizeText(row.work_name)),
+    ])
+  ).filter(Boolean);
+
+  setRiskSourceCounts((prev) => ({
+    ...prev,
+    workOrders: workRows?.length ?? 0,
+    settlements: settlementData?.length ?? 0,
+  }));
+
+  setSettlementRows(
+    workNames.map((workName) => {
+      const workRow = workOrderMap.get(workName);
+      const settlementRow = settlementMap.get(workName);
+
+      return {
+        work_name: workName,
+        insurance_company:
+          normalizeText(settlementRow?.insurance_company) ||
+          normalizeText(workRow.insurance_company),
+        partner_company:
+          normalizeText(settlementRow?.partner_company) ||
+          normalizeText(workRow.partner_company),
+        progress_status: settlementRow?.progress_status ?? "미결",
+        claim_amount: settlementRow?.claim_amount ?? 0,
+        claim_date: settlementRow?.claim_date ?? "",
+      };
+    })
+  );
 }, []);
 
 const filteredRows = dailyRows;
@@ -269,7 +327,13 @@ const dateDiffDays = (fromDate: unknown, toDate = today) => {
   return Math.max(0, Math.floor((toTime - fromTime) / 86400000));
 };
 
-const paymentSummaryByWork = paymentRows.reduce((map, row) => {
+type PaymentSummary = {
+  claimAmount: number;
+  paidAmount: number;
+  claimDates: string[];
+};
+
+const paymentSummaryByWork = paymentRows.reduce<Map<string, PaymentSummary>>((map, row) => {
   const workName = normalizeText(row.work_name);
 
   if (!workName) {
@@ -294,11 +358,21 @@ const paymentSummaryByWork = paymentRows.reduce((map, row) => {
 
   map.set(workName, current);
   return map;
-}, new Map<string, { claimAmount: number; paidAmount: number; claimDates: string[] }>());
+}, new Map<string, PaymentSummary>());
 
-const riskRows = settlementRows
-  .map((row) => {
-    const workName = normalizeText(row.work_name);
+const settlementRowMap = new Map(
+  settlementRows.map((row) => [normalizeText(row.work_name), row])
+);
+const riskWorkNames: string[] = Array.from(
+  new Set<string>([
+    ...settlementRows.map((row) => normalizeText(row.work_name)),
+    ...Array.from(paymentSummaryByWork.keys()),
+  ])
+).filter(Boolean);
+
+const riskRows = riskWorkNames
+  .map((workName) => {
+    const row = settlementRowMap.get(workName) ?? { work_name: workName };
     const paymentSummary = paymentSummaryByWork.get(workName);
     const claimAmount =
       toAmountNumber(row.claim_amount) || paymentSummary?.claimAmount || 0;
@@ -852,6 +926,9 @@ const fetchSettlementMain = useCallback(async (year: string, month: string) => {
           <h4 className="text-lg font-bold text-slate-900">정산 위험관리</h4>
           <p className="text-sm text-slate-500">
             미결, 장기미결, 청구율 95% 미만 차량을 따로 확인합니다.
+          </p>
+          <p className="mt-1 text-xs font-semibold text-slate-500">
+            원본: 차량 {riskSourceCounts.workOrders.toLocaleString()}건 / 정산 {riskSourceCounts.settlements.toLocaleString()}건 / 입금 {riskSourceCounts.payments.toLocaleString()}건
           </p>
         </div>
 
