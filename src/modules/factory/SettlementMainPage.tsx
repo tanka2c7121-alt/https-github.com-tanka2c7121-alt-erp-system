@@ -176,13 +176,11 @@ const accountSummary = accountNames.map((accountName) => {
   };
 });  
 
-const totalBalance = accountSummary.reduce(
-  (sum, account) =>
-    sum +
-    Number(
-      String(account.balance).replaceAll(",", "")
-    ),
-  0
+const totalCompanyBalance = balanceRows
+  .filter((row) => row.type !== "내부이동")
+  .reduce(
+    (sum, row) => sum + Number(row.income || 0) - Number(row.expense || 0),
+    0
   );
 
 const receivableAccountNames = [
@@ -508,7 +506,7 @@ const fetchSettlementMain = useCallback(async (year: string, month: string) => {
 
       {/* 요약 카드 */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-       <SummaryCard title="전체 잔고" value={totalBalance} color="text-blue-600" />
+       <SummaryCard title="전체 잔고" value={totalCompanyBalance} color="text-blue-600" />
        <SummaryCard
          title="미수금"
          value={receivableAmount}
