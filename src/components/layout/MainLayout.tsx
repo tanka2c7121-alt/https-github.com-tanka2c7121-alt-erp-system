@@ -70,6 +70,18 @@ const markMyDocumentRead = (userId: string, type: MyDocumentNotificationType) =>
   localStorage.setItem(myDocumentReadKey(userId, type), new Date().toISOString());
 };
 
+const quickActionStorageKey = (userId: string) =>
+  `erp:quick-actions:${userId}`;
+
+const defaultCameraQuickAction: MenuItem = {
+  id: "factory-work-register",
+  title: "작업등록 카메라열기",
+  data: { openCamera: true },
+};
+
+const isSameQuickAction = (left: MenuItem, right: MenuItem) =>
+  left.id === right.id && JSON.stringify(left.data ?? {}) === JSON.stringify(right.data ?? {});
+
 const getMyDocumentNotificationType = (menuId: string): MyDocumentNotificationType | null => {
   if (menuId.startsWith("documents-expense-request")) return "expenses";
   if (menuId.startsWith("documents-attendance-request")) return "attendances";
@@ -92,6 +104,7 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
     id: "dashboard",
     title: "업무홈",
   });
+  const [quickActionMenus, setQuickActionMenus] = useState<MenuItem[]>([]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [mobileMenuPath, setMobileMenuPath] = useState<MenuItem[]>([]);
   const isSalesMenu = selectedMenu.id === "sales" || selectedMenu.id.startsWith("sales-");
@@ -121,6 +134,56 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
     user.department
   );
   const mobileMenuTitle = mobileMenuParent?.title ?? "메뉴";
+  const canFavoriteCurrentMenu = selectedMenu.id !== "dashboard";
+  const isCurrentMenuFavorited = quickActionMenus.some((menu) =>
+    isSameQuickAction(menu, selectedMenu)
+  );
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const storedValue = localStorage.getItem(quickActionStorageKey(user.user_id));
+
+    if (!storedValue) {
+      setQuickActionMenus([]);
+      return;
+    }
+
+    try {
+      const parsedValue = JSON.parse(storedValue);
+      setQuickActionMenus(Array.isArray(parsedValue) ? parsedValue : []);
+    } catch {
+      setQuickActionMenus([]);
+    }
+  }, [user.user_id]);
+
+  const saveQuickActionMenus = (menus: MenuItem[]) => {
+    setQuickActionMenus(menus);
+
+    if (typeof window === "undefined") return;
+
+    localStorage.setItem(quickActionStorageKey(user.user_id), JSON.stringify(menus));
+  };
+
+  const toggleCurrentQuickAction = () => {
+    if (!canFavoriteCurrentMenu) return;
+
+    if (isCurrentMenuFavorited) {
+      saveQuickActionMenus(
+        quickActionMenus.filter((menu) => !isSameQuickAction(menu, selectedMenu))
+      );
+      return;
+    }
+
+    saveQuickActionMenus([
+      ...quickActionMenus,
+      {
+        id: selectedMenu.id,
+        title: selectedMenu.title,
+        data: selectedMenu.data,
+      },
+    ]);
+  };
 
   const handleMobileMenuClick = (menu: MenuItem) => {
     const visibleChildren = getVisibleMenuItems(
@@ -445,9 +508,27 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
                 isAdmin={isAdmin}
                 user={user}
                 userName={user?.user_name}
+                quickActionMenus={[defaultCameraQuickAction, ...quickActionMenus]}
                 onSelectMenu={handleSelectMenu}
               />
-            ) : selectedMenu.id === "employee" ||
+            ) : (
+              <>
+                {canFavoriteCurrentMenu && (
+                  <label className="mb-4 inline-flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-blue-50">
+                    <input
+                      type="checkbox"
+                      checked={isCurrentMenuFavorited}
+                      onChange={toggleCurrentQuickAction}
+                      className="sr-only"
+                    />
+                    <span className={isCurrentMenuFavorited ? "text-yellow-500" : "text-slate-400"}>
+                      {isCurrentMenuFavorited ? "★" : "☆"}
+                    </span>
+                    <span>빠른작업</span>
+                  </label>
+                )}
+
+                {selectedMenu.id === "employee" ||
             selectedMenu.id === "employee-admin" ||
             selectedMenu.id === "employee-body" ||
             selectedMenu.id === "employee-paint" ||
@@ -599,6 +680,8 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
                     {selectedMenu.title}
                   </span>
                 </div>
+              </>
+            )}
               </>
             )}
           </section>

@@ -16,6 +16,7 @@ type HomeDashboardPageProps = {
     role: UserRole;
   };
   userName?: string;
+  quickActionMenus: MenuItem[];
   onSelectMenu: (menu: MenuItem) => void;
 };
 
@@ -88,6 +89,7 @@ export default function HomeDashboardPage({
   isAdmin,
   user,
   userName,
+  quickActionMenus,
   onSelectMenu,
 }: HomeDashboardPageProps) {
   const approvalRole = user?.approval_role ?? (isAdmin ? "관리자" : "직원");
@@ -493,7 +495,7 @@ export default function HomeDashboardPage({
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-          <QuickActions userRole={user?.role ?? "STAFF"} onSelectMenu={onSelectMenu} />
+          <QuickActions actions={quickActionMenus} onSelectMenu={onSelectMenu} />
 
           {(isAdmin || canApproveAttendance) && (
             <AdminApprovalPanel
@@ -772,51 +774,23 @@ function NoticeManager({
 }
 
 function QuickActions({
-  userRole,
+  actions,
   onSelectMenu,
 }: {
-  userRole: UserRole;
+  actions: MenuItem[];
   onSelectMenu: (menu: MenuItem) => void;
 }) {
-  const actions: Array<{
-    id: string;
-    menuId?: string;
-    title: string;
-    description: string;
-    data?: MenuItem["data"];
-  }> = [
-    { id: "factory-work-register", title: "작업등록", description: "신규 입고 차량 등록" },
-    {
-      id: "factory-work-register-camera",
-      menuId: "factory-work-register",
-      title: "작업등록 카메라열기",
-      description: "작업등록으로 이동 후 카메라 실행",
-      data: { openCamera: true },
-    },
-    { id: "factory-settlement-repair", title: "차량정산", description: "차량별 정산 확인" },
-    { id: "factory-settlement-daily-cash", title: "일일입출금", description: "일일 입출금 확인" },
-  ];
-
-  const visibleActions =
-    userRole === "STAFF"
-      ? actions.filter(
-          (action) =>
-            action.id !== "factory-settlement-repair" &&
-            action.id !== "factory-settlement-daily-cash"
-        )
-      : actions;
-
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-4">
       <h4 className="mb-3 font-bold text-slate-900">빠른 작업</h4>
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-        {visibleActions.map((action) => (
+        {actions.map((action, index) => (
           <button
-            key={action.id}
+            key={`${action.id}-${index}`}
             type="button"
             onClick={() =>
               onSelectMenu({
-                id: action.menuId ?? action.id,
+                id: action.id,
                 title: action.title,
                 data: action.data,
               })
@@ -824,7 +798,9 @@ function QuickActions({
             className="rounded-xl border border-slate-200 p-4 text-left transition hover:border-blue-300 hover:bg-blue-50"
           >
             <div className="font-bold text-slate-900">{action.title}</div>
-            <div className="mt-1 text-xs text-slate-500">{action.description}</div>
+            <div className="mt-1 text-xs text-slate-500">
+              {action.data?.openCamera ? "작업등록으로 이동 후 카메라 실행" : "즐겨찾기 페이지로 이동"}
+            </div>
           </button>
         ))}
       </div>
