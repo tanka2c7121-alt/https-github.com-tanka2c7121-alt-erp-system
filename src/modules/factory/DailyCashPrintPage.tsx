@@ -18,7 +18,16 @@ type DailyCashRow = {
 };
 const formatWon = (amount: number) => amount.toLocaleString();
 
-export default function DailyCashPrintPage() {
+type DailyCashPrintPageProps = {
+  user: {
+    user_id: string;
+    user_name: string;
+  };
+};
+
+export default function DailyCashPrintPage({
+  user,
+}: DailyCashPrintPageProps) {
 
   const today = localDateText();
 
@@ -122,7 +131,9 @@ const fetchRows = useCallback(async (dateValue = printDate) => {
 
               <tr>
                 <th className="border border-slate-900 bg-slate-50 px-2 py-1">작성자</th>
-                <td className="border border-slate-900 px-2 py-1" colSpan={2}>ADMIN</td>
+                <td className="border border-slate-900 px-2 py-1" colSpan={2}>
+                  {user.user_name || user.user_id}
+                </td>
                 <th className="border border-slate-900 bg-slate-50 px-2 py-1">비고</th>
                 <td className="border border-slate-900 px-2 py-1" colSpan={2}>일일 정산</td>
               </tr>

@@ -503,7 +503,7 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
             ) : selectedMenu.id === "factory-settlement-daily-cash-register" ? (
               <DailyCashRegisterPage editData={selectedMenu.data as any} />
             ) : selectedMenu.id === "factory-settlement-daily-cash-print" ? (
-              <DailyCashPrintPage />
+              <DailyCashPrintPage user={user} />
             ) : selectedMenu.id === "factory-settlement-daily-cash" ? (
               <DailyCashPage onSelectMenu={handleSelectMenu} />
             ) : selectedMenu.id === "factory-inbound" ? (
