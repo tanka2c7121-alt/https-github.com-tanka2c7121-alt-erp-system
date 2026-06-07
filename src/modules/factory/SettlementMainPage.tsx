@@ -51,8 +51,12 @@ export default function SettlementMainPage({
   const [selectedMonth, setSelectedMonth] = useState(currentMonth);
   const [balanceRows, setBalanceRows] = useState<any[]>([]);
   const [paymentRows, setPaymentRows] = useState<any[]>([]);
+  const [settlementRows, setSettlementRows] = useState<any[]>([]);
   const [showReceivables, setShowReceivables] = useState(false);
   const [showReceivableDebug, setShowReceivableDebug] = useState(false);
+  const [activeRiskView, setActiveRiskView] = useState<
+    "pending" | "longPending" | "lowClaimRate" | null
+  >(null);
   const [receivablePaymentDates, setReceivablePaymentDates] = useState<Record<string, string>>({});
   const [savingReceivableId, setSavingReceivableId] = useState<number | null>(null);
 
@@ -101,6 +105,20 @@ const fetchBalanceRows = useCallback(async () => {
   }
 
   setBalanceRows(data ?? []);
+}, []);
+
+const fetchRiskRows = useCallback(async () => {
+  const { data, error } = await fetchAllRows<any>(
+    "repair_settlements",
+    "work_name, insurance_company, partner_company, progress_status, claim_amount, claim_date"
+  );
+
+  if (error) {
+    alert("정산 위험관리 조회 실패: " + error.message);
+    return;
+  }
+
+  setSettlementRows(data ?? []);
 }, []);
 
 const filteredRows = dailyRows;
@@ -238,6 +256,107 @@ const normalizeAccountName = (value: unknown) => {
 const toAmountNumber = (value: unknown) =>
   Number(String(value ?? 0).replaceAll(",", "")) || 0;
 
+const dateDiffDays = (fromDate: unknown, toDate = today) => {
+  const fromText = normalizeText(fromDate);
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(fromText)) {
+    return null;
+  }
+
+  const fromTime = new Date(`${fromText}T00:00:00`).getTime();
+  const toTime = new Date(`${toDate}T00:00:00`).getTime();
+
+  return Math.max(0, Math.floor((toTime - fromTime) / 86400000));
+};
+
+const paymentSummaryByWork = paymentRows.reduce((map, row) => {
+  const workName = normalizeText(row.work_name);
+
+  if (!workName) {
+    return map;
+  }
+
+  const current = map.get(workName) ?? {
+    claimAmount: 0,
+    paidAmount: 0,
+    claimDates: [] as string[],
+  };
+
+  current.claimAmount += toAmountNumber(row.claim_amount);
+
+  if (!isEmptyDateValue(row.payment_date)) {
+    current.paidAmount += toAmountNumber(row.payment_amount);
+  }
+
+  if (!isEmptyDateValue(row.claim_date)) {
+    current.claimDates.push(normalizeText(row.claim_date));
+  }
+
+  map.set(workName, current);
+  return map;
+}, new Map<string, { claimAmount: number; paidAmount: number; claimDates: string[] }>());
+
+const riskRows = settlementRows
+  .map((row) => {
+    const workName = normalizeText(row.work_name);
+    const paymentSummary = paymentSummaryByWork.get(workName);
+    const claimAmount =
+      toAmountNumber(row.claim_amount) || paymentSummary?.claimAmount || 0;
+    const paidAmount = paymentSummary?.paidAmount ?? 0;
+    const claimDate =
+      normalizeText(row.claim_date) ||
+      [...(paymentSummary?.claimDates ?? [])].sort()[0] ||
+      "";
+    const elapsedDays = dateDiffDays(claimDate);
+    const claimRate = claimAmount > 0 ? (paidAmount / claimAmount) * 100 : null;
+    const status = normalizeText(row.progress_status) || "미결";
+
+    return {
+      workName,
+      company: normalizeText(row.insurance_company) || normalizeText(row.partner_company),
+      status,
+      claimDate,
+      elapsedDays,
+      claimAmount,
+      paidAmount,
+      shortageAmount: Math.max(0, claimAmount - paidAmount),
+      claimRate,
+    };
+  })
+  .filter((row) => row.workName)
+  .sort((a, b) => {
+    const dayCompare = (b.elapsedDays ?? -1) - (a.elapsedDays ?? -1);
+
+    if (dayCompare !== 0) return dayCompare;
+    return a.workName.localeCompare(b.workName, "ko");
+  });
+
+const pendingRiskRows = riskRows.filter((row) => row.status !== "완결");
+const longPendingRiskRows = pendingRiskRows.filter(
+  (row) => (row.elapsedDays ?? 0) > 30
+);
+const lowClaimRateRiskRows = riskRows.filter(
+  (row) => row.claimAmount > 0 && (row.claimRate ?? 0) < 95
+);
+
+const activeRiskRows =
+  activeRiskView === "pending"
+    ? pendingRiskRows
+    : activeRiskView === "longPending"
+      ? longPendingRiskRows
+      : activeRiskView === "lowClaimRate"
+        ? lowClaimRateRiskRows
+        : [];
+
+const activeRiskTitle =
+  activeRiskView === "pending"
+    ? "미결건"
+    : activeRiskView === "longPending"
+      ? "장기미결건"
+      : activeRiskView === "lowClaimRate"
+        ? "청구율 95% 미만"
+        : "";
+
 const getReceivableAmount = (row: any) =>
   toAmountNumber(row.payment_amount);
 
@@ -368,6 +487,7 @@ const handleReceivableDateSave = async (row: any) => {
     return next;
   });
   await fetchReceivableRows();
+  await fetchRiskRows();
   await fetchSettlementMain(selectedYear, selectedMonth);
   await fetchBalanceRows();
   alert("입금일자를 저장했습니다.");
@@ -437,9 +557,11 @@ const fetchSettlementMain = useCallback(async (year: string, month: string) => {
     void fetchSettlementMain(selectedYear, selectedMonth);
     void fetchBalanceRows();
     void fetchReceivableRows();
+    void fetchRiskRows();
   }, [
     fetchBalanceRows,
     fetchReceivableRows,
+    fetchRiskRows,
     fetchSettlementMain,
     selectedMonth,
     selectedYear,
@@ -724,11 +846,219 @@ const fetchSettlementMain = useCallback(async (year: string, month: string) => {
     </div>
   ))}
 </div>
+
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="mb-4">
+          <h4 className="text-lg font-bold text-slate-900">정산 위험관리</h4>
+          <p className="text-sm text-slate-500">
+            미결, 장기미결, 청구율 95% 미만 차량을 따로 확인합니다.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+          <RiskCard
+            title="미결건"
+            count={pendingRiskRows.length}
+            amount={pendingRiskRows.reduce((sum, row) => sum + row.shortageAmount, 0)}
+            tone="orange"
+            active={activeRiskView === "pending"}
+            onClick={() =>
+              setActiveRiskView((view) => (view === "pending" ? null : "pending"))
+            }
+          />
+          <RiskCard
+            title="장기미결건"
+            count={longPendingRiskRows.length}
+            amount={longPendingRiskRows.reduce((sum, row) => sum + row.shortageAmount, 0)}
+            tone="red"
+            active={activeRiskView === "longPending"}
+            onClick={() =>
+              setActiveRiskView((view) =>
+                view === "longPending" ? null : "longPending"
+              )
+            }
+          />
+          <RiskCard
+            title="청구율 95% 미만"
+            count={lowClaimRateRiskRows.length}
+            amount={lowClaimRateRiskRows.reduce(
+              (sum, row) => sum + row.shortageAmount,
+              0
+            )}
+            tone="blue"
+            active={activeRiskView === "lowClaimRate"}
+            onClick={() =>
+              setActiveRiskView((view) =>
+                view === "lowClaimRate" ? null : "lowClaimRate"
+              )
+            }
+          />
+        </div>
+
+        {activeRiskView && (
+          <RiskTable
+            title={activeRiskTitle}
+            rows={activeRiskRows}
+            onEdit={(workName) =>
+              onSelectMenu({
+                id: "factory-settlement-repair-register",
+                title: "정산등록",
+                data: { workName },
+              })
+            }
+          />
+        )}
+      </section>
       
 </div>
     
   );
 }
+
+function RiskCard({
+  title,
+  count,
+  amount,
+  tone,
+  active,
+  onClick,
+}: {
+  title: string;
+  count: number;
+  amount: number;
+  tone: "orange" | "red" | "blue";
+  active: boolean;
+  onClick: () => void;
+}) {
+  const toneClass = {
+    orange: active
+      ? "border-orange-400 bg-orange-50 text-orange-700"
+      : "border-orange-100 bg-white text-orange-700 hover:bg-orange-50",
+    red: active
+      ? "border-red-400 bg-red-50 text-red-700"
+      : "border-red-100 bg-white text-red-700 hover:bg-red-50",
+    blue: active
+      ? "border-blue-400 bg-blue-50 text-blue-700"
+      : "border-blue-100 bg-white text-blue-700 hover:bg-blue-50",
+  }[tone];
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-xl border p-4 text-left transition ${toneClass}`}
+    >
+      <div className="text-sm font-semibold">{title}</div>
+      <div className="mt-2 text-3xl font-bold">{count.toLocaleString()}건</div>
+      <div className="mt-2 text-sm font-semibold">
+        부족금액 ₩ {amount.toLocaleString()}
+      </div>
+    </button>
+  );
+}
+
+function RiskTable({
+  title,
+  rows,
+  onEdit,
+}: {
+  title: string;
+  rows: Array<{
+    workName: string;
+    company: string;
+    status: string;
+    claimDate: string;
+    elapsedDays: number | null;
+    claimAmount: number;
+    paidAmount: number;
+    shortageAmount: number;
+    claimRate: number | null;
+  }>;
+  onEdit: (workName: string) => void;
+}) {
+  return (
+    <div className="mt-5 overflow-x-auto rounded-xl border border-slate-200">
+      <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-3">
+        <h5 className="font-bold text-slate-900">{title} 목록</h5>
+        <span className="text-sm font-semibold text-slate-600">
+          {rows.length.toLocaleString()}건
+        </span>
+      </div>
+
+      <table className="w-full border-collapse text-sm">
+        <thead>
+          <tr className="bg-white text-left text-slate-600">
+            <th className="border-b border-slate-200 px-3 py-2">작명</th>
+            <th className="border-b border-slate-200 px-3 py-2">보험사</th>
+            <th className="border-b border-slate-200 px-3 py-2">상태</th>
+            <th className="border-b border-slate-200 px-3 py-2">청구일</th>
+            <th className="border-b border-slate-200 px-3 py-2 text-right">소요일수</th>
+            <th className="border-b border-slate-200 px-3 py-2 text-right">청구금액</th>
+            <th className="border-b border-slate-200 px-3 py-2 text-right">입금금액</th>
+            <th className="border-b border-slate-200 px-3 py-2 text-right">청구율</th>
+            <th className="border-b border-slate-200 px-3 py-2 text-right">부족금액</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.length === 0 ? (
+            <tr>
+              <td colSpan={9} className="px-3 py-8 text-center text-slate-500">
+                관리 대상이 없습니다.
+              </td>
+            </tr>
+          ) : (
+            rows.map((row) => (
+              <tr key={row.workName} className="hover:bg-slate-50">
+                <td className="border-b border-slate-100 px-3 py-2">
+                  <button
+                    type="button"
+                    onClick={() => onEdit(row.workName)}
+                    className="font-semibold text-blue-700 underline-offset-2 hover:underline"
+                  >
+                    {row.workName}
+                  </button>
+                </td>
+                <td className="border-b border-slate-100 px-3 py-2">
+                  {row.company || "-"}
+                </td>
+                <td className="border-b border-slate-100 px-3 py-2">
+                  <span
+                    className={
+                      row.status === "완결"
+                        ? "rounded-full bg-green-100 px-2 py-1 text-xs font-bold text-green-700"
+                        : "rounded-full bg-orange-100 px-2 py-1 text-xs font-bold text-orange-700"
+                    }
+                  >
+                    {row.status}
+                  </span>
+                </td>
+                <td className="border-b border-slate-100 px-3 py-2">
+                  {row.claimDate || "-"}
+                </td>
+                <td className="border-b border-slate-100 px-3 py-2 text-right">
+                  {row.elapsedDays === null ? "-" : `${row.elapsedDays}일`}
+                </td>
+                <td className="border-b border-slate-100 px-3 py-2 text-right">
+                  ₩ {row.claimAmount.toLocaleString()}
+                </td>
+                <td className="border-b border-slate-100 px-3 py-2 text-right">
+                  ₩ {row.paidAmount.toLocaleString()}
+                </td>
+                <td className="border-b border-slate-100 px-3 py-2 text-right font-semibold">
+                  {row.claimRate === null ? "-" : `${row.claimRate.toFixed(1)}%`}
+                </td>
+                <td className="border-b border-slate-100 px-3 py-2 text-right font-semibold text-red-600">
+                  ₩ {row.shortageAmount.toLocaleString()}
+                </td>
+              </tr>
+            ))
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function SummaryCard({
   title,
   value,
