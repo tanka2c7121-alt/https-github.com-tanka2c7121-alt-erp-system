@@ -248,9 +248,6 @@ export default function OutboundStatusPage({
                     {header.label}
                   </th>
                 ))}
-                <th className="w-28 border border-slate-300 bg-slate-100 px-2 py-1">
-                  관리
-                </th>
               </tr>
             </thead>
 
@@ -258,7 +255,7 @@ export default function OutboundStatusPage({
               {pagedList.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={headers.length + 1}
+                    colSpan={headers.length}
                     className="border border-slate-200 px-3 py-8 text-sm text-slate-500"
                   >
                     조회된 출고 차량이 없습니다.
@@ -274,7 +271,19 @@ export default function OutboundStatusPage({
                       {(safeCurrentPage - 1) * pageSize + index + 1}
                     </td>
                     <td className="border border-slate-200 px-2 py-1">
-                      {item.work_name}
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onSelectMenu({
+                            id: "factory-work-register",
+                            title: "작업등록",
+                            data: { workName: item.work_name },
+                          })
+                        }
+                        className="font-semibold text-blue-700 underline-offset-2 hover:underline"
+                      >
+                        {item.work_name || "-"}
+                      </button>
                     </td>
                     <td className="border border-slate-200 px-2 py-1">
                       {item.car_number}
@@ -305,21 +314,6 @@ export default function OutboundStatusPage({
                     </td>
                     <td className="border border-slate-200 px-2 py-1">
                       {item.release_date}
-                    </td>
-                    <td className="border border-slate-200 px-2 py-1">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          onSelectMenu({
-                            id: "factory-work-register",
-                            title: "작업등록",
-                            data: { workName: item.work_name },
-                          })
-                        }
-                        className="rounded bg-blue-600 px-3 py-[2px] text-white hover:bg-blue-700"
-                      >
-                        수정
-                      </button>
                     </td>
                   </tr>
                 ))
@@ -408,7 +402,7 @@ function MobileOutboundCards({
       ) : (
         rows.map((item, index) => (
           <div key={item.id} className="rounded-xl border border-slate-200 p-4">
-            <div className="mb-3 flex items-start justify-between gap-3">
+            <div className="mb-3">
               <div className="min-w-0">
                 <div className="text-xs font-semibold text-slate-400">
                   No. {(page - 1) * pageSize + index + 1}
@@ -420,18 +414,14 @@ function MobileOutboundCards({
                   {item.car_model || "-"} / {item.color_code || "-"}
                 </div>
               </div>
-
-              <button
-                type="button"
-                onClick={() => onEdit(item.work_name)}
-                className="shrink-0 rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white"
-              >
-                수정
-              </button>
             </div>
 
             <div className="grid grid-cols-2 gap-2 text-sm">
-              <MobileField label="작명" value={item.work_name} />
+              <MobileField
+                label="작명"
+                value={item.work_name}
+                onClick={() => onEdit(item.work_name)}
+              />
               <MobileField label="상태" value={item.status} />
               <MobileField label="입고일" value={item.inbound_date} />
               <MobileField label="출고예정" value={item.outbound_date} />
@@ -445,13 +435,39 @@ function MobileOutboundCards({
   );
 }
 
-function MobileField({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-lg bg-slate-50 p-2">
+function MobileField({
+  label,
+  value,
+  onClick,
+}: {
+  label: string;
+  value: string;
+  onClick?: () => void;
+}) {
+  const content = (
+    <>
       <div className="text-[11px] font-semibold text-slate-400">{label}</div>
       <div className="mt-1 break-words text-sm font-semibold text-slate-800">
         {value || "-"}
       </div>
+    </>
+  );
+
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        className="rounded-lg bg-blue-50 p-2 text-left ring-1 ring-blue-100 transition hover:bg-blue-100"
+      >
+        {content}
+      </button>
+    );
+  }
+
+  return (
+    <div className="rounded-lg bg-slate-50 p-2">
+      {content}
     </div>
   );
 }
