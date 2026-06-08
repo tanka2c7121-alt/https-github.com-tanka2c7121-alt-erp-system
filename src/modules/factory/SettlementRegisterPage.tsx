@@ -170,7 +170,7 @@ export default function SettlementRegisterPage({
   );
   const totalAmount = paymentTotal - expenseTotal;
   const isCompleted = form.progressStatus === "완결";
-  const isLocked = isCompleted && !adminUnlocked;
+  const isLocked = loadedProgressStatus === "완결" && !adminUnlocked;
 
   const handleChange = (key: string, value: string) => {
     if (isLocked && key !== "workName") return;
@@ -427,7 +427,7 @@ export default function SettlementRegisterPage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialWorkName]);
 
-  const savePaymentRows = async () => {
+  const savePaymentRows = async (targetForm = form) => {
     const rows = paymentRows
       .filter(hasPaymentInputValue)
       .map((row) => {
@@ -436,7 +436,7 @@ export default function SettlementRegisterPage({
           toNumber(row.claimAmount) || (row.invoiceIssued ? inputAmount : 0);
 
         return {
-          work_name: form.workName,
+          work_name: targetForm.workName,
           payment_type: row.paymentType,
           payment_detail: row.paymentDetail,
           claim_amount: claimAmount,
@@ -458,11 +458,11 @@ export default function SettlementRegisterPage({
     return error;
   };
 
-  const saveClaimRows = async () => {
+  const saveClaimRows = async (targetForm = form) => {
     const rows = claimRows
       .filter((row) => row.date || row.amount || row.detail)
       .map((row) => ({
-        work_name: form.workName,
+        work_name: targetForm.workName,
         payment_type: "청구",
         payment_detail: row.detail,
         claim_amount: toNumber(row.amount),
@@ -483,11 +483,11 @@ export default function SettlementRegisterPage({
     return error;
   };
 
-  const saveExpenseRows = async () => {
+  const saveExpenseRows = async (targetForm = form) => {
     const rows = expenseRows
       .filter((row) => row.amount || row.date || row.type)
       .map((row) => ({
-        work_name: form.workName,
+        work_name: targetForm.workName,
         expense_amount: toNumber(row.amount),
         expense_date: row.date || null,
         expense_type: row.type,
@@ -499,12 +499,12 @@ export default function SettlementRegisterPage({
     return error;
   };
 
-  const saveDailyCashRows = async () => {
+  const saveDailyCashRows = async (targetForm = form) => {
     await supabase
       .from("daily_cash")
       .delete()
       .eq("source_type", "settlement_payment")
-      .eq("source_work_name", form.workName);
+      .eq("source_work_name", targetForm.workName);
 
     const rows = paymentRows
       .filter((row) => row.amount && row.date && row.method)
@@ -514,12 +514,12 @@ export default function SettlementRegisterPage({
         account: row.method,
         type: "수입",
         category: "차량정산",
-        content: `${row.paymentType} / ${row.paymentDetail} / ${form.carNumber}`,
+        content: `${row.paymentType} / ${row.paymentDetail} / ${targetForm.carNumber}`,
         income: toNumber(row.amount),
         expense: 0,
-        memo: form.workName,
+        memo: targetForm.workName,
         source_type: "settlement_payment",
-        source_work_name: form.workName,
+        source_work_name: targetForm.workName,
       }));
 
     if (rows.length === 0) return null;
@@ -552,8 +552,20 @@ export default function SettlementRegisterPage({
     setAdminUnlocked(true);
     alert("잠금이 해제되었습니다. 저장 후 다시 잠금 상태가 됩니다.");
   };
-  const handleSave = async () => {
-    if (!form.workName) {
+  const handleSave = async ({
+    nextProgressStatus,
+    printAfterSave = false,
+    skipCompleteConfirm = false,
+  }: {
+    nextProgressStatus?: string;
+    printAfterSave?: boolean;
+    skipCompleteConfirm?: boolean;
+  } = {}) => {
+    const saveForm = nextProgressStatus
+      ? { ...form, progressStatus: nextProgressStatus }
+      : form;
+
+    if (!saveForm.workName) {
       alert("작명을 입력하세요.");
       return;
     }
@@ -563,49 +575,52 @@ export default function SettlementRegisterPage({
       return;
     }
 
-    if (form.progressStatus === "완결" && loadedProgressStatus !== "완결") {
-      const confirmed = window.confirm("완결 하시겠습니까?\n완결 처리시 되돌리수 없습니다.");
+    const isNewCompletion =
+      saveForm.progressStatus === "완결" && loadedProgressStatus !== "완결";
+
+    if (isNewCompletion && !skipCompleteConfirm) {
+      const confirmed = window.confirm("완결로 바꾸면 되돌릴 수 없습니다.");
       if (!confirmed) return;
     }
 
     setSaving(true);
 
-    await supabase.from("repair_settlements").delete().eq("work_name", form.workName);
-    await supabase.from("settlement_payments").delete().eq("work_name", form.workName);
-    await supabase.from("settlement_expenses").delete().eq("work_name", form.workName);
+    await supabase.from("repair_settlements").delete().eq("work_name", saveForm.workName);
+    await supabase.from("settlement_payments").delete().eq("work_name", saveForm.workName);
+    await supabase.from("settlement_expenses").delete().eq("work_name", saveForm.workName);
 
     const claimTotal = claimRows.reduce(
       (sum, row) => sum + toNumber(row.amount),
       0
     );
     const firstClaimDate =
-      claimRows.find((row) => row.date)?.date || form.claimDate || null;
+      claimRows.find((row) => row.date)?.date || saveForm.claimDate || null;
     const ownClaimRow = claimRows.find((row) => row.detail === "자차");
     const otherClaimRow = claimRows.find((row) => row.detail === "대물");
     const completedAt =
-      form.progressStatus === "완결"
-        ? form.completedAt || localDateText()
+      saveForm.progressStatus === "완결"
+        ? saveForm.completedAt || localDateText()
         : null;
     const completedBy =
-      form.progressStatus === "완결" ? form.completedBy || user.user_id : null;
+      saveForm.progressStatus === "완결" ? saveForm.completedBy || user.user_id : null;
     const completedByName =
-      form.progressStatus === "완결"
-        ? form.completedByName || user.user_name || user.user_id
+      saveForm.progressStatus === "완결"
+        ? saveForm.completedByName || user.user_name || user.user_id
         : null;
 
     const { error: settlementError } = await supabase
       .from("repair_settlements")
       .insert({
-        work_name: form.workName,
-        car_number: form.carNumber,
-        car_model: form.carModel,
-        insurance_company: form.insuranceCompany,
-        category: form.category,
-        coverage_type: form.coverageType,
-        manager_name: form.managerName,
-        receipt_number: form.receiptNumber,
+        work_name: saveForm.workName,
+        car_number: saveForm.carNumber,
+        car_model: saveForm.carModel,
+        insurance_company: saveForm.insuranceCompany,
+        category: saveForm.category,
+        coverage_type: saveForm.coverageType,
+        manager_name: saveForm.managerName,
+        receipt_number: saveForm.receiptNumber,
         total_amount: totalAmount,
-        progress_status: form.progressStatus,
+        progress_status: saveForm.progressStatus,
         claim_amount: claimTotal,
         claim_date: firstClaimDate,
         own_claim_amount: toNumber(ownClaimRow?.amount ?? ""),
@@ -615,7 +630,7 @@ export default function SettlementRegisterPage({
         completed_at: completedAt,
         completed_by: completedBy,
         completed_by_name: completedByName,
-        memo: form.memo,
+        memo: saveForm.memo,
       });
 
     if (settlementError) {
@@ -626,8 +641,8 @@ export default function SettlementRegisterPage({
 
     const { error: workOrderMemoError } = await supabase
       .from("work_orders")
-      .update({ message: form.memo })
-      .eq("work_name", form.workName);
+      .update({ message: saveForm.memo })
+      .eq("work_name", saveForm.workName);
 
     if (workOrderMemoError) {
       setSaving(false);
@@ -635,28 +650,28 @@ export default function SettlementRegisterPage({
       return;
     }
 
-    const claimError = await saveClaimRows();
+    const claimError = await saveClaimRows(saveForm);
     if (claimError) {
       setSaving(false);
       alert("청구정보 저장 실패: " + claimError.message);
       return;
     }
 
-    const paymentError = await savePaymentRows();
+    const paymentError = await savePaymentRows(saveForm);
     if (paymentError) {
       setSaving(false);
       alert("입금내역 저장 실패: " + paymentError.message);
       return;
     }
 
-    const dailyCashError = await saveDailyCashRows();
+    const dailyCashError = await saveDailyCashRows(saveForm);
     if (dailyCashError) {
       setSaving(false);
       alert("일일입출금 연동 저장 실패: " + dailyCashError.message);
       return;
     }
 
-    const expenseError = await saveExpenseRows();
+    const expenseError = await saveExpenseRows(saveForm);
     if (expenseError) {
       setSaving(false);
       alert("지출내역 저장 실패: " + expenseError.message);
@@ -664,10 +679,37 @@ export default function SettlementRegisterPage({
     }
 
     setSaving(false);
+    setForm(saveForm);
     setIsEditMode(true);
-    setLoadedProgressStatus(form.progressStatus);
+    setLoadedProgressStatus(saveForm.progressStatus);
     setAdminUnlocked(false);
+
+    if (printAfterSave) {
+      onSelectMenu({
+        id: "factory-settlement-complete-print",
+        title: "완결출력",
+        data: { workName: saveForm.workName, autoPrint: true },
+      });
+      return;
+    }
+
     alert(isEditMode ? "수정되었습니다." : "저장되었습니다.");
+  };
+
+  const handleProgressStatusChange = (value: string) => {
+    if (value !== "완결" || loadedProgressStatus === "완결") {
+      handleChange("progressStatus", value);
+      return;
+    }
+
+    const confirmed = window.confirm("완결로 바꾸면 되돌릴 수 없습니다.");
+    if (!confirmed) return;
+
+    void handleSave({
+      nextProgressStatus: "완결",
+      printAfterSave: true,
+      skipCompleteConfirm: true,
+    });
   };
 
   return (
@@ -762,7 +804,7 @@ export default function SettlementRegisterPage({
           <Field
             label="진행상황"
             value={form.progressStatus}
-            onChange={(value) => handleChange("progressStatus", value)}
+            onChange={handleProgressStatusChange}
             options={["미결", "완결"]}
           />
           <Field label="거래처" value={form.partnerCompany} />

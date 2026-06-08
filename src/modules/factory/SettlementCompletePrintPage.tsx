@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../../lib/supabase";
 import type { MenuItem } from "../../data/menuData";
 
 type SettlementCompletePrintPageProps = {
   workName?: string;
+  autoPrint?: boolean;
   onSelectMenu: (menu: MenuItem) => void;
 };
 
@@ -116,6 +117,7 @@ const getRowType = (row: PaymentRow) => {
 
 export default function SettlementCompletePrintPage({
   workName,
+  autoPrint = false,
   onSelectMenu,
 }: SettlementCompletePrintPageProps) {
   const [inputWorkName, setInputWorkName] = useState(workName ?? "");
@@ -124,6 +126,7 @@ export default function SettlementCompletePrintPage({
   const [payments, setPayments] = useState<PaymentRow[]>([]);
   const [expenses, setExpenses] = useState<ExpenseRow[]>([]);
   const [loading, setLoading] = useState(false);
+  const autoPrintedRef = useRef(false);
 
   const paymentRows = useMemo(
     () => payments.filter((row) => toAmount(row.payment_amount) > 0 || row.payment_date),
@@ -241,6 +244,16 @@ export default function SettlementCompletePrintPage({
     void loadData(workName);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workName]);
+
+  useEffect(() => {
+    if (!autoPrint || autoPrintedRef.current || loading || (!workOrder && !settlement)) {
+      return;
+    }
+
+    autoPrintedRef.current = true;
+    const timer = window.setTimeout(() => window.print(), 300);
+    return () => window.clearTimeout(timer);
+  }, [autoPrint, loading, settlement, workOrder]);
 
   const netTotal = paymentTotal - expenseTotal;
   const completedDate = formatDateOnly(settlement?.completed_at);

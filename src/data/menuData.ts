@@ -10,6 +10,7 @@ export type MenuItem = {
     workName?: string;
     nextWorkName?: string;
     openCamera?: boolean;
+    autoPrint?: boolean;
 
     [key: string]: unknown;
   };

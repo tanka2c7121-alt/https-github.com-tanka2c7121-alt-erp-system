@@ -123,6 +123,7 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
         workName?: string;
         nextWorkName?: string;
         openCamera?: boolean;
+        autoPrint?: boolean;
         expenseRequest?: any;
         attendanceRequest?: any;
         incidentReport?: any;
@@ -581,6 +582,7 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
               />            ) : selectedMenu.id === "factory-settlement-complete-print" ? (
               <SettlementCompletePrintPage
                 workName={selectedData?.workName}
+                autoPrint={Boolean(selectedData?.autoPrint)}
                 onSelectMenu={handleSelectMenu}
               />
 
