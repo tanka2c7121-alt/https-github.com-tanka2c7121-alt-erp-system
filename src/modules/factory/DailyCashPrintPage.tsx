@@ -121,9 +121,9 @@ const fetchRows = useCallback(async (dateValue = printDate) => {
         key={pageIndex}
         className="daily-cash-print-page mx-auto mb-6 bg-white text-slate-900 shadow-lg print:m-0 print:shadow-none"
         style={{
-          width: "180mm",
-          minHeight: "270mm",
-          padding: "6mm",
+          width: "190mm",
+          minHeight: "275mm",
+          padding: "7mm",
         }}
       
       >
