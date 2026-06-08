@@ -17,6 +17,7 @@ type DailyCashRow = {
   memo: string | null;
 };
 const formatWon = (amount: number) => amount.toLocaleString();
+const rowsPerPage = 32;
 
 type DailyCashPrintPageProps = {
   user: {
@@ -56,20 +57,22 @@ const fetchRows = useCallback(async (dateValue = printDate) => {
   }, [fetchRows]);
   const totalIncome = dailyCashList.reduce((sum, item) => sum + Number(item.income || 0), 0);
   const totalExpense = dailyCashList.reduce((sum, item) => sum + Number(item.expense || 0), 0);
+  const pageRows =
+    dailyCashList.length === 0
+      ? [[]]
+      : Array.from(
+          { length: Math.ceil(dailyCashList.length / rowsPerPage) },
+          (_, pageIndex) =>
+            dailyCashList.slice(
+              pageIndex * rowsPerPage,
+              pageIndex * rowsPerPage + rowsPerPage
+            )
+        );
 
   return (
     
-    <div className="print-area min-h-screen bg-slate-200 p-6 print:bg-white print:p-0">
-      <div
-        className="mx-auto bg-white text-slate-900 shadow-lg print:m-0 print:shadow-none"
-        style={{
-          width: "190mm",
-          minHeight: "275mm",
-          padding: "7mm",
-        }}
-      
-      >
-        <div className="no-print mb-4 flex items-center justify-end gap-2">
+    <div className="daily-cash-print-root print-area min-h-screen bg-slate-200 p-6 print:bg-white print:p-0">
+      <div className="no-print mx-auto mb-4 flex max-w-[190mm] items-center justify-end gap-2">
   <input
     type="date"
     value={printDate}
@@ -88,6 +91,33 @@ const fetchRows = useCallback(async (dateValue = printDate) => {
     인쇄
   </button>
 </div>
+
+      {pageRows.map((rows, pageIndex) => {
+        const rowsWithBlanks = [
+          ...rows,
+          ...Array.from({ length: Math.max(0, rowsPerPage - rows.length) }).map(() => ({
+            date: "",
+            account: "",
+            type: "",
+            category: "",
+            content: "",
+            income: 0,
+            expense: 0,
+            memo: "",
+          })),
+        ];
+
+        return (
+      <div
+        key={pageIndex}
+        className="daily-cash-print-page mx-auto mb-6 bg-white text-slate-900 shadow-lg print:m-0 print:shadow-none"
+        style={{
+          width: "190mm",
+          minHeight: "275mm",
+          padding: "7mm",
+        }}
+      
+      >
        <div className="mb-6 grid grid-cols-2 gap-4 text-sm">
   <div className="rounded-lg border border-slate-800 p-3">
     <div className="font-semibold text-slate-600">
@@ -111,11 +141,14 @@ const fetchRows = useCallback(async (dateValue = printDate) => {
 
 </div>
         <div className="border-2 border-slate-900 p-4">
-          <div className="mb-4 text-center">
+          <div className="relative mb-4 text-center">
             <h1 className="text-2xl font-bold tracking-widest">
               일일입출금내역
             </h1>
             <p className="mt-1 text-xs font-semibold">신흥현대서비스 ERP</p>
+            <p className="absolute right-0 top-1 text-xs font-semibold text-slate-600">
+              {pageIndex + 1} / {pageRows.length}
+            </p>
           </div>
 
           <table className="mb-5 w-full border-collapse text-[12px] font-semibold">
@@ -155,19 +188,7 @@ const fetchRows = useCallback(async (dateValue = printDate) => {
             </thead>
 
             <tbody>
-              {[
-                ...dailyCashList,
-                ...Array.from({ length: 32 }).map(() => ({
-                  date: "",
-                  account: "",
-                  type: "",
-                  category: "",
-                  content: "",
-                  income: 0,
-                  expense: 0,
-                  memo: "",
-                })),
-              ].map((item, index) => (
+              {rowsWithBlanks.map((item, index) => (
                 <tr key={index}>
                   <td className="border border-slate-900 px-1 py-[2px] text-center">{item.date || "\u00A0"}</td>
                   <td className="border border-slate-900 px-1 py-[2px] text-center">{item.account || "\u00A0"}</td>
@@ -183,6 +204,8 @@ const fetchRows = useCallback(async (dateValue = printDate) => {
           </table>
         </div>
       </div>
+        );
+      })}
     </div>
   );
 }

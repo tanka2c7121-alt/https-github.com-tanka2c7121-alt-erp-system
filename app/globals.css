@@ -87,6 +87,27 @@ body {
   .daily-cash-print {
     margin-top: 15mm !important;
   }
+
+  .daily-cash-print-root {
+    position: static !important;
+    width: auto !important;
+    min-height: auto !important;
+    padding: 0 !important;
+  }
+
+  .daily-cash-print-page {
+    page-break-after: always !important;
+    break-after: page !important;
+    width: 190mm !important;
+    min-height: 275mm !important;
+    padding: 7mm !important;
+    box-shadow: none !important;
+  }
+
+  .daily-cash-print-page:last-child {
+    page-break-after: auto !important;
+    break-after: auto !important;
+  }
 }
 
 @media print {
