@@ -247,7 +247,7 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
       );
     }
 
-    const canCheckIncident = isAdmin || user.department === "관리부";
+    const canCheckIncident = isAdmin;
     const myExpenseReadAt = getMyDocumentReadAt(user.user_id, "expenses");
     const myAttendanceReadAt = getMyDocumentReadAt(user.user_id, "attendances");
     const myIncidentReadAt = getMyDocumentReadAt(user.user_id, "incidents");
@@ -366,7 +366,7 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
           },
         ]
       : []),
-    ...(isAdmin || user.department === "관리부"
+    ...(isAdmin
       ? [
           {
             id: "incidents",

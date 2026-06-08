@@ -67,7 +67,7 @@ export default function IncidentReportPrintPage({
     );
   }
 
-  const canCheck = isAdmin || user.department === "관리부";
+  const canCheck = isAdmin;
   const showCheck = canCheck && incidentReport.status === "확인대기";
   const goList = () =>
     onSelectMenu({

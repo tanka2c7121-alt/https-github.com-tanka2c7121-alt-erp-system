@@ -57,6 +57,16 @@ type PendingAttendanceRequest = {
   reason: string;
 };
 
+type PendingIncidentReport = {
+  id: number;
+  report_date: string;
+  incident_type: string;
+  title: string;
+  requested_name: string | null;
+  requested_by: string;
+  content: string;
+};
+
 type HomeNotice = {
   id: number;
   title: string;
@@ -103,6 +113,9 @@ export default function HomeDashboardPage({
   const [pendingAttendanceRequests, setPendingAttendanceRequests] = useState<
     PendingAttendanceRequest[]
   >([]);
+  const [pendingIncidentReports, setPendingIncidentReports] = useState<
+    PendingIncidentReport[]
+  >([]);
   const [homeNotice, setHomeNotice] = useState<HomeNotice | null>(null);
   const [noticeList, setNoticeList] = useState<HomeNotice[]>([]);
   const [noticePopupOpen, setNoticePopupOpen] = useState(false);
@@ -136,7 +149,14 @@ export default function HomeDashboardPage({
       );
     }
 
-    const [ordersResult, userResult, expenseResult, attendanceResult, noticeResult] =
+    const [
+      ordersResult,
+      userResult,
+      expenseResult,
+      attendanceResult,
+      incidentResult,
+      noticeResult,
+    ] =
       await Promise.all([
       supabase
         .from("work_orders")
@@ -158,6 +178,13 @@ export default function HomeDashboardPage({
         : Promise.resolve({ data: [], error: null }),
       canApproveAttendance
         ? attendanceQuery
+        : Promise.resolve({ data: [], error: null }),
+      isAdmin
+        ? supabase
+            .from("incident_reports")
+            .select("id, report_date, incident_type, title, requested_name, requested_by, content")
+            .eq("status", "확인대기")
+            .order("id", { ascending: false })
         : Promise.resolve({ data: [], error: null }),
       supabase
         .from("home_notices")
@@ -186,6 +213,11 @@ export default function HomeDashboardPage({
       attendanceResult.error
         ? []
         : ((attendanceResult.data ?? []) as PendingAttendanceRequest[])
+    );
+    setPendingIncidentReports(
+      incidentResult.error
+        ? []
+        : ((incidentResult.data ?? []) as PendingIncidentReport[])
     );
 
     if (!noticeResult.error && noticeResult.data) {
@@ -410,6 +442,56 @@ export default function HomeDashboardPage({
     await loadNoticeList();
   };
 
+  const checkIncidentReport = async (row: PendingIncidentReport) => {
+    if (!isAdmin) return;
+
+    const ok = confirm("이 경위서를 확인완료 처리할까요?");
+    if (!ok) return;
+
+    const { error } = await supabase
+      .from("incident_reports")
+      .update({
+        status: "확인완료",
+        checked_by: user?.user_id ?? "",
+        checked_name: user?.user_name ?? "",
+        checked_at: new Date().toISOString(),
+      })
+      .eq("id", row.id);
+
+    if (error) {
+      alert("확인 처리 실패: " + error.message);
+      return;
+    }
+
+    alert("확인완료 처리되었습니다.");
+    void loadDashboard();
+  };
+
+  const rejectIncidentReport = async (row: PendingIncidentReport) => {
+    if (!isAdmin) return;
+
+    const ok = confirm("이 경위서를 반려 처리할까요?");
+    if (!ok) return;
+
+    const { error } = await supabase
+      .from("incident_reports")
+      .update({
+        status: "반려",
+        checked_by: user?.user_id ?? "",
+        checked_name: user?.user_name ?? "",
+        checked_at: new Date().toISOString(),
+      })
+      .eq("id", row.id);
+
+    if (error) {
+      alert("반려 처리 실패: " + error.message);
+      return;
+    }
+
+    alert("반려 처리되었습니다.");
+    void loadDashboard();
+  };
+
   return (
     <div className="space-y-5 text-slate-900">
       {noticePopupOpen && homeNotice && (
@@ -502,9 +584,11 @@ export default function HomeDashboardPage({
               showEmployeeApprovals={isAdmin}
               showExpenseApprovals={isAdmin}
               showAttendanceApprovals={canApproveAttendance}
+              showIncidentApprovals={isAdmin}
               pendingUsers={pendingUsers.slice(0, 6)}
               pendingExpenses={pendingExpenseRequests.slice(0, 6)}
               pendingAttendances={pendingAttendanceRequests.slice(0, 6)}
+              pendingIncidents={pendingIncidentReports.slice(0, 6)}
               onOpenManage={() =>
                 onSelectMenu({
                   id: "employee-manage",
@@ -523,6 +607,18 @@ export default function HomeDashboardPage({
                   title: "근태신청서",
                 })
               }
+              onOpenIncidentReports={() =>
+                onSelectMenu({
+                  id: "documents-incident-report",
+                  title: "경위서",
+                })
+              }
+              onCheckIncident={(row) => {
+                void checkIncidentReport(row);
+              }}
+              onRejectIncident={(row) => {
+                void rejectIncidentReport(row);
+              }}
             />
           )}
 
@@ -867,22 +963,32 @@ function AdminApprovalPanel({
   showEmployeeApprovals,
   showExpenseApprovals,
   showAttendanceApprovals,
+  showIncidentApprovals,
   pendingUsers,
   pendingExpenses,
   pendingAttendances,
+  pendingIncidents,
   onOpenManage,
   onOpenExpenseRequests,
   onOpenAttendanceRequests,
+  onOpenIncidentReports,
+  onCheckIncident,
+  onRejectIncident,
 }: {
   showEmployeeApprovals: boolean;
   showExpenseApprovals: boolean;
   showAttendanceApprovals: boolean;
+  showIncidentApprovals: boolean;
   pendingUsers: PendingUser[];
   pendingExpenses: PendingExpenseRequest[];
   pendingAttendances: PendingAttendanceRequest[];
+  pendingIncidents: PendingIncidentReport[];
   onOpenManage: () => void;
   onOpenExpenseRequests: () => void;
   onOpenAttendanceRequests: () => void;
+  onOpenIncidentReports: () => void;
+  onCheckIncident: (row: PendingIncidentReport) => void;
+  onRejectIncident: (row: PendingIncidentReport) => void;
 }) {
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-4">
@@ -1015,6 +1121,69 @@ function AdminApprovalPanel({
                     승인대기
                   </span>
                 </button>
+              ))
+            )}
+          </div>
+        </div>
+        )}
+
+        {showIncidentApprovals && (
+        <div className="border-t border-slate-200 pt-4">
+          <div className="mb-3 flex items-center justify-between">
+            <h4 className="font-bold text-slate-900">경위서 확인대기</h4>
+            <button
+              type="button"
+              onClick={onOpenIncidentReports}
+              className="rounded border border-blue-300 px-3 py-1 text-xs font-semibold text-blue-600 hover:bg-blue-50"
+            >
+              경위서
+            </button>
+          </div>
+
+          <div className="space-y-2">
+            {pendingIncidents.length === 0 ? (
+              <div className="rounded-lg bg-slate-50 p-5 text-center text-sm text-slate-500">
+                확인대기 경위서가 없습니다.
+              </div>
+            ) : (
+              pendingIncidents.map((row) => (
+                <div
+                  key={row.id}
+                  className="rounded-lg border border-slate-100 p-3"
+                >
+                  <button
+                    type="button"
+                    onClick={onOpenIncidentReports}
+                    className="block w-full text-left hover:text-blue-700"
+                  >
+                    <div className="truncate font-semibold">
+                      {row.incident_type} - {row.title}
+                    </div>
+                    <div className="text-xs text-slate-500">
+                      {row.report_date} / {row.requested_name ?? row.requested_by}
+                    </div>
+                    <div className="mt-1 line-clamp-2 text-xs text-slate-500">
+                      {row.content}
+                    </div>
+                  </button>
+
+                  <div className="mt-3 flex justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => onCheckIncident(row)}
+                      className="rounded bg-blue-600 px-3 py-1 text-xs font-semibold text-white hover:bg-blue-700"
+                    >
+                      확인
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onRejectIncident(row)}
+                      className="rounded border border-red-300 px-3 py-1 text-xs font-semibold text-red-600 hover:bg-red-50"
+                    >
+                      반려
+                    </button>
+                  </div>
+                </div>
               ))
             )}
           </div>

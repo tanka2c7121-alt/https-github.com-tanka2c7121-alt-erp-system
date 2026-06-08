@@ -79,7 +79,7 @@ export default function IncidentReportPage({
     actionTaken: "",
     memo: "",
   });
-  const canCheck = isAdmin || user.department === "관리부";
+  const canCheck = isAdmin;
 
   const loadRows = useCallback(async () => {
     const { data, error } = await supabase
@@ -239,7 +239,7 @@ export default function IncidentReportPage({
         <div>
           <h3 className="text-xl font-bold md:text-2xl">경위서</h3>
           <p className="text-sm text-slate-700">
-            경위서는 승인이 아니라 관리자 또는 관리부 확인으로 처리됩니다.
+            경위서는 승인이 아니라 관리자 확인으로 처리됩니다.
           </p>
         </div>
 
@@ -253,7 +253,7 @@ export default function IncidentReportPage({
         <div className="mb-4 flex flex-col gap-1">
           <h4 className="font-bold text-slate-900">경위서 작성</h4>
           <p className="text-sm text-slate-600">
-            발생 경위와 조치 내용을 기록하면 관리자 또는 관리부가 확인합니다.
+            발생 경위와 조치 내용을 기록하면 관리자가 확인합니다.
           </p>
         </div>
 
