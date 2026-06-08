@@ -78,10 +78,7 @@ const isDeductibleTarget = (
 ) => hasDeductibleCoverage(item.coverage_type) && hasDeductibleValue(item.deductible_amount);
 
 const isPendingSettlement = (item: SettlementItem) =>
-  item.status === "미결" &&
-  !isEmptyDateValue(item.release_date) &&
-  item.paidAmount <= 0 &&
-  !item.hasReceivable;
+  item.status === "미결";
 
 const isReceivableSettlement = (item: SettlementItem) =>
   item.status === "미결" && item.hasReceivable;
