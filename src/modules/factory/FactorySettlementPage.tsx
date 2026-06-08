@@ -80,7 +80,6 @@ const isDeductibleTarget = (
 const isPendingSettlement = (item: SettlementItem) =>
   item.status === "미결" &&
   !isEmptyDateValue(item.release_date) &&
-  item.chargeAmount > 0 &&
   item.paidAmount <= 0 &&
   !item.hasReceivable;
 
