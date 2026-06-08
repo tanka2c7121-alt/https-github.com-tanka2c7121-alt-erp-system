@@ -128,6 +128,7 @@ export default function SettlementRegisterPage({
   const [saving, setSaving] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [loadedProgressStatus, setLoadedProgressStatus] = useState("미결");
+  const [completionWarningAccepted, setCompletionWarningAccepted] = useState(false);
   const [adminUnlocked, setAdminUnlocked] = useState(false);
   const [form, setForm] = useState({
     workName: "",
@@ -414,6 +415,7 @@ export default function SettlementRegisterPage({
 
     const loadedStatus = settlement?.progress_status ?? "미결";
     setLoadedProgressStatus(loadedStatus);
+    setCompletionWarningAccepted(false);
     setAdminUnlocked(false);
     setIsEditMode(Boolean(settlement) || paymentItems.length > 0 || Boolean(expenses?.length));
     alert("불러왔습니다.");
@@ -578,7 +580,7 @@ export default function SettlementRegisterPage({
     const isNewCompletion =
       saveForm.progressStatus === "완결" && loadedProgressStatus !== "완결";
 
-    if (isNewCompletion && !skipCompleteConfirm) {
+    if (isNewCompletion && !skipCompleteConfirm && !completionWarningAccepted) {
       const confirmed = window.confirm("완결로 바꾸면 되돌릴 수 없습니다.");
       if (!confirmed) return;
     }
@@ -684,7 +686,7 @@ export default function SettlementRegisterPage({
     setLoadedProgressStatus(saveForm.progressStatus);
     setAdminUnlocked(false);
 
-    if (printAfterSave) {
+    if (printAfterSave || isNewCompletion) {
       onSelectMenu({
         id: "factory-settlement-complete-print",
         title: "완결출력",
@@ -698,6 +700,9 @@ export default function SettlementRegisterPage({
 
   const handleProgressStatusChange = (value: string) => {
     if (value !== "완결" || loadedProgressStatus === "완결") {
+      if (value !== "완결") {
+        setCompletionWarningAccepted(false);
+      }
       handleChange("progressStatus", value);
       return;
     }
@@ -705,11 +710,8 @@ export default function SettlementRegisterPage({
     const confirmed = window.confirm("완결로 바꾸면 되돌릴 수 없습니다.");
     if (!confirmed) return;
 
-    void handleSave({
-      nextProgressStatus: "완결",
-      printAfterSave: true,
-      skipCompleteConfirm: true,
-    });
+    setCompletionWarningAccepted(true);
+    handleChange("progressStatus", "완결");
   };
 
   return (
