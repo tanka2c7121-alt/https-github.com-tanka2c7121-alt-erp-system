@@ -71,7 +71,7 @@ const fetchRows = useCallback(async (dateValue = printDate) => {
 
   return (
     
-    <div className="daily-cash-print-root print-area min-h-screen bg-slate-200 p-6 print:bg-white print:p-0">
+    <div className="daily-cash-print-root min-h-screen bg-slate-200 p-6 print:bg-white print:p-0">
       <div className="no-print mx-auto mb-4 flex max-w-[190mm] items-center justify-end gap-2">
   <input
     type="date"
@@ -112,9 +112,9 @@ const fetchRows = useCallback(async (dateValue = printDate) => {
         key={pageIndex}
         className="daily-cash-print-page mx-auto mb-6 bg-white text-slate-900 shadow-lg print:m-0 print:shadow-none"
         style={{
-          width: "190mm",
-          minHeight: "275mm",
-          padding: "7mm",
+          width: "180mm",
+          minHeight: "270mm",
+          padding: "6mm",
         }}
       
       >
