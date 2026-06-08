@@ -4,12 +4,14 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
 import { localDateText } from "../../lib/date";
 import type { MenuItem } from "../../data/menuData";
+import type { UserRole } from "../../types/roles";
 
 type SettlementRegisterPageProps = {
   initialWorkName?: string;
   user: {
     user_id: string;
     user_name: string;
+    role: UserRole;
   };
   onSelectMenu: (menu: MenuItem) => void;
 };
@@ -129,6 +131,7 @@ export default function SettlementRegisterPage({
   const [isEditMode, setIsEditMode] = useState(false);
   const [loadedProgressStatus, setLoadedProgressStatus] = useState("미결");
   const [completionWarningAccepted, setCompletionWarningAccepted] = useState(false);
+  const [closingWarningAccepted, setClosingWarningAccepted] = useState(false);
   const [adminUnlocked, setAdminUnlocked] = useState(false);
   const [form, setForm] = useState({
     workName: "",
@@ -170,8 +173,19 @@ export default function SettlementRegisterPage({
     [expenseRows]
   );
   const totalAmount = paymentTotal - expenseTotal;
+  const canCloseSettlement = user.role === "ADMIN" || user.role === "CHIEF";
   const isCompleted = form.progressStatus === "완결";
-  const isLocked = loadedProgressStatus === "완결" && !adminUnlocked;
+  const isFinalized = form.progressStatus === "완결" || form.progressStatus === "종결";
+  const isLocked =
+    (loadedProgressStatus === "완결" || loadedProgressStatus === "종결") &&
+    !adminUnlocked;
+  const canEditExpenseWhileCompleted =
+    loadedProgressStatus === "완결" && !adminUnlocked;
+  const isExpenseLocked = isLocked && !canEditExpenseWhileCompleted;
+  const progressStatusOptions =
+    canCloseSettlement || form.progressStatus === "종결"
+      ? ["미결", "완결", "종결"]
+      : ["미결", "완결"];
 
   const handleChange = (key: string, value: string) => {
     if (isLocked && key !== "workName") return;
@@ -221,7 +235,7 @@ export default function SettlementRegisterPage({
     field: keyof ExpenseRow,
     value: string
   ) => {
-    if (isLocked) return;
+    if (isExpenseLocked) return;
     setExpenseRows((prev) =>
       prev.map((row, rowIndex) =>
         rowIndex === index ? { ...row, [field]: value } : row
@@ -416,6 +430,7 @@ export default function SettlementRegisterPage({
     const loadedStatus = settlement?.progress_status ?? "미결";
     setLoadedProgressStatus(loadedStatus);
     setCompletionWarningAccepted(false);
+    setClosingWarningAccepted(false);
     setAdminUnlocked(false);
     setIsEditMode(Boolean(settlement) || paymentItems.length > 0 || Boolean(expenses?.length));
     alert("불러왔습니다.");
@@ -572,24 +587,30 @@ export default function SettlementRegisterPage({
       return;
     }
 
-    if (isLocked) {
-      alert("완결 처리된 정산입니다. 관리자 잠금해제 후 수정할 수 있습니다.");
+    if (isLocked && !canEditExpenseWhileCompleted) {
+      alert("완결 또는 종결 처리된 정산입니다. 관리자 잠금해제 후 수정할 수 있습니다.");
       return;
     }
 
     const isNewCompletion =
       saveForm.progressStatus === "완결" && loadedProgressStatus !== "완결";
+    const isNewClosing =
+      saveForm.progressStatus === "종결" && loadedProgressStatus !== "종결";
 
     if (isNewCompletion && !skipCompleteConfirm && !completionWarningAccepted) {
       const confirmed = window.confirm("완결로 바꾸면 되돌릴 수 없습니다.");
       if (!confirmed) return;
     }
 
-    setSaving(true);
+    if (isNewClosing && !canCloseSettlement) {
+      alert("종결은 관리자와 총괄관리만 처리할 수 있습니다.");
+      return;
+    }
 
-    await supabase.from("repair_settlements").delete().eq("work_name", saveForm.workName);
-    await supabase.from("settlement_payments").delete().eq("work_name", saveForm.workName);
-    await supabase.from("settlement_expenses").delete().eq("work_name", saveForm.workName);
+    if (isNewClosing && !closingWarningAccepted) {
+      const confirmed = window.confirm("종결 처리하시겠습니까?");
+      if (!confirmed) return;
+    }
 
     const claimTotal = claimRows.reduce(
       (sum, row) => sum + toNumber(row.amount),
@@ -599,14 +620,42 @@ export default function SettlementRegisterPage({
       claimRows.find((row) => row.date)?.date || saveForm.claimDate || null;
     const ownClaimRow = claimRows.find((row) => row.detail === "자차");
     const otherClaimRow = claimRows.find((row) => row.detail === "대물");
+    const hasDatedPaymentAmount = paymentRows.some(
+      (row) => toNumber(row.amount) > 0 && Boolean(row.date)
+    );
+    const hasExpense = expenseRows.some(
+      (row) => toNumber(row.amount) > 0 || Boolean(row.date) || Boolean(row.type)
+    );
+
+    if (
+      (saveForm.progressStatus === "완결" || saveForm.progressStatus === "종결") &&
+      (claimTotal <= 0 || !hasDatedPaymentAmount)
+    ) {
+      alert("완결/종결은 청구금액, 입금일, 입금금액이 모두 있어야 저장할 수 있습니다.");
+      return;
+    }
+
+    if (saveForm.progressStatus === "종결" && !hasExpense) {
+      alert("종결은 청구/입금 정보와 지출내역이 모두 있어야 저장할 수 있습니다.");
+      return;
+    }
+
+    setSaving(true);
+
+    await supabase.from("repair_settlements").delete().eq("work_name", saveForm.workName);
+    await supabase.from("settlement_payments").delete().eq("work_name", saveForm.workName);
+    await supabase.from("settlement_expenses").delete().eq("work_name", saveForm.workName);
+
     const completedAt =
-      saveForm.progressStatus === "완결"
+      saveForm.progressStatus === "완결" || saveForm.progressStatus === "종결"
         ? saveForm.completedAt || localDateText()
         : null;
     const completedBy =
-      saveForm.progressStatus === "완결" ? saveForm.completedBy || user.user_id : null;
+      saveForm.progressStatus === "완결" || saveForm.progressStatus === "종결"
+        ? saveForm.completedBy || user.user_id
+        : null;
     const completedByName =
-      saveForm.progressStatus === "완결"
+      saveForm.progressStatus === "완결" || saveForm.progressStatus === "종결"
         ? saveForm.completedByName || user.user_name || user.user_id
         : null;
 
@@ -699,9 +748,25 @@ export default function SettlementRegisterPage({
   };
 
   const handleProgressStatusChange = (value: string) => {
+    if (value === "종결") {
+      if (!canCloseSettlement) {
+        alert("종결은 관리자와 총괄관리만 처리할 수 있습니다.");
+        return;
+      }
+
+      const confirmed = window.confirm("종결 처리하시겠습니까?");
+      if (!confirmed) return;
+
+      setCompletionWarningAccepted(false);
+      setClosingWarningAccepted(true);
+      handleChange("progressStatus", "종결");
+      return;
+    }
+
     if (value !== "완결" || loadedProgressStatus === "완결") {
       if (value !== "완결") {
         setCompletionWarningAccepted(false);
+        setClosingWarningAccepted(false);
       }
       handleChange("progressStatus", value);
       return;
@@ -711,6 +776,7 @@ export default function SettlementRegisterPage({
     if (!confirmed) return;
 
     setCompletionWarningAccepted(true);
+    setClosingWarningAccepted(false);
     handleChange("progressStatus", "완결");
   };
 
@@ -725,10 +791,12 @@ export default function SettlementRegisterPage({
 
       {isLocked && (
         <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
-          완결 처리된 정산입니다. 관리자 잠금해제 후 수정할 수 있습니다.
+          {canEditExpenseWhileCompleted
+            ? "완결 처리된 정산입니다. 기본정보, 청구정보, 입금내역은 잠기며 지출내역만 수정할 수 있습니다."
+            : "완결 또는 종결 처리된 정산입니다. 관리자 잠금해제 후 수정할 수 있습니다."}
         </div>
       )}
-      {isCompleted && adminUnlocked && (
+      {isFinalized && adminUnlocked && (
         <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-700">
           관리자 잠금해제 상태입니다. 저장 후 다시 잠깁니다.
         </div>
@@ -807,7 +875,7 @@ export default function SettlementRegisterPage({
             label="진행상황"
             value={form.progressStatus}
             onChange={handleProgressStatusChange}
-            options={["미결", "완결"]}
+            options={progressStatusOptions}
           />
           <Field label="거래처" value={form.partnerCompany} />
         </div>
@@ -1005,14 +1073,14 @@ export default function SettlementRegisterPage({
             <button
               type="button"
               onClick={() => setExpenseRows((prev) => [...prev, emptyExpenseRow()])}
-              disabled={isLocked}
+              disabled={isExpenseLocked}
               className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700"
             >
               추가
             </button>
             <button
               type="button"
-              disabled={isLocked}
+              disabled={isExpenseLocked}
               onClick={() =>
                 setExpenseRows((prev) =>
                   prev.length > 1 ? prev.slice(0, -1) : [emptyExpenseRow()]
@@ -1035,12 +1103,14 @@ export default function SettlementRegisterPage({
                 label="지출일"
                 type="date"
                 value={row.date}
+                disabled={isExpenseLocked}
                 onChange={(value) => handleExpenseChange(index, "date", value)}
               />
               <Field
                 label="지출금액"
                 placeholder="0"
                 value={row.amount}
+                disabled={isExpenseLocked}
                 onChange={(value) =>
                   handleExpenseChange(index, "amount", formatAmount(value))
                 }
@@ -1048,6 +1118,7 @@ export default function SettlementRegisterPage({
               <Field
                 label="지출내역"
                 value={row.type}
+                disabled={isExpenseLocked}
                 onChange={(value) => handleExpenseChange(index, "type", value)}
                 options={["입고지원", "교통비", "견인비", "탁송비", "대차비", "기타"]}
               />
@@ -1086,7 +1157,7 @@ export default function SettlementRegisterPage({
             완결출력
           </button>
         )}
-        {isCompleted && (
+        {isFinalized && (
           <button
             type="button"
             onClick={() => void handleAdminUnlock()}

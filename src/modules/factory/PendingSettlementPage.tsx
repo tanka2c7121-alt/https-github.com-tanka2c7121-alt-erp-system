@@ -62,6 +62,7 @@ const normalizeText = (value: unknown) => String(value ?? "").trim();
 const normalizeStatus = (value: unknown) => {
   const text = normalizeText(value);
 
+  if (text.includes("종결")) return "종결";
   if (text.includes("완결")) return "완결";
   if (text.includes("미결")) return "미결";
   return text || "미결";

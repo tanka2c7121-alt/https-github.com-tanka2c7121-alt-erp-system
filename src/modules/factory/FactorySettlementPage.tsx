@@ -9,7 +9,7 @@ import { supabase } from "../../lib/supabase";
 
 
 type FactorySettlementPageProps = {
-  view?: "all" | "complete" | "pending" | "receivable" | "deductible";
+  view?: "all" | "complete" | "closed" | "pending" | "receivable" | "deductible";
   onSelectMenu: (menu: MenuItem) => void;
 };
 
@@ -22,8 +22,10 @@ type SettlementItem = {
   coverage_type: string;
   company: string;
   deductible_amount: string;
-  status: "완결" | "미결";
+  status: "완결" | "미결" | "종결";
+  release_date: string;
   hasReceivable: boolean;
+  hasExpense: boolean;
   chargeAmount: number;
   paidAmount: number;
   receivableAmount: number;
@@ -59,6 +61,14 @@ const isEmptyDateValue = (value: unknown) => {
 const toAmountNumber = (value: unknown) =>
   Number(String(value ?? 0).replaceAll(",", "")) || 0;
 
+const normalizeSettlementStatus = (value: unknown): SettlementItem["status"] => {
+  const text = String(value ?? "").trim();
+
+  if (text.includes("종결")) return "종결";
+  if (text.includes("완결")) return "완결";
+  return "미결";
+};
+
 const isReceivablePaymentRow = (row: any) =>
   toAmountNumber(row.payment_amount) > 0 &&
   isEmptyDateValue(row.payment_date);
@@ -66,6 +76,25 @@ const isReceivablePaymentRow = (row: any) =>
 const isDeductibleTarget = (
   item: Pick<SettlementItem, "coverage_type" | "deductible_amount">
 ) => hasDeductibleCoverage(item.coverage_type) && hasDeductibleValue(item.deductible_amount);
+
+const isPendingSettlement = (item: SettlementItem) =>
+  item.status === "미결" &&
+  !isEmptyDateValue(item.release_date) &&
+  item.chargeAmount > 0 &&
+  item.paidAmount <= 0 &&
+  !item.hasReceivable;
+
+const isReceivableSettlement = (item: SettlementItem) =>
+  item.status === "미결" && item.hasReceivable;
+
+const isCompleteSettlement = (item: SettlementItem) =>
+  item.status === "완결" && item.chargeAmount > 0 && item.paidAmount > 0;
+
+const isClosedSettlement = (item: SettlementItem) =>
+  item.status === "종결" &&
+  item.chargeAmount > 0 &&
+  item.paidAmount > 0 &&
+  item.hasExpense;
 
 
 async function fetchAllRows<T>(
@@ -173,6 +202,16 @@ const handleSort = (field: keyof SettlementItem) => {
       return;
     }
 
+    const { data: expenseRows, error: expenseError } = await fetchAllRows<any>(
+      "settlement_expenses",
+      "work_name, expense_amount, expense_date, expense_type"
+    );
+
+    if (expenseError) {
+      alert("지출내역 조회 실패: " + expenseError.message);
+      return;
+    }
+
     const deductiblePaymentRows = paymentRows.filter(
       (row) => row.payment_type === "면책금"
     );
@@ -181,6 +220,17 @@ const handleSort = (field: keyof SettlementItem) => {
         row.work_name,
         row.progress_status,
       ])
+    );
+    const expenseWorkNames = new Set(
+      (expenseRows ?? [])
+        .filter(
+          (row) =>
+            toAmountNumber(row.expense_amount) > 0 ||
+            !isEmptyDateValue(row.expense_date) ||
+            Boolean(String(row.expense_type ?? "").trim())
+        )
+        .map((row) => row.work_name)
+        .filter(Boolean)
     );
     const settlementClaimAmountMap = new Map(
       (settlementRows ?? []).map((row) => [
@@ -244,8 +294,10 @@ const handleSort = (field: keyof SettlementItem) => {
         coverage_type: item.coverage_type ?? "",
         company: item.insurance_company || item.partner_company || "",
         deductible_amount: item.deductible_amount ?? "",
-        status: settlementMap.get(workName) ?? "미결",
+        status: normalizeSettlementStatus(settlementMap.get(workName)),
+        release_date: item.release_date ?? "",
         hasReceivable: receivableWorkNames.has(workName),
+        hasExpense: expenseWorkNames.has(workName),
         chargeAmount: settlementClaimAmount || paymentClaimAmount,
         paidAmount: paymentAmountMap.get(workName) ?? 0,
         receivableAmount: receivableAmountMap.get(workName) ?? 0,
@@ -284,10 +336,11 @@ const handleSort = (field: keyof SettlementItem) => {
       return item.work_name.slice(5, 7) === selectedMonth;
     })
     .filter((item) => {
-      if (activeView === "all" && item.status === "완결") return false;
-      if (activeView === "complete" && item.status !== "완결") return false;
-      if (activeView === "pending" && (item.status !== "미결" || item.hasReceivable)) return false;
-      if (activeView === "receivable" && (item.status !== "미결" || !item.hasReceivable)) return false;
+      if (activeView === "all" && (item.status === "완결" || item.status === "종결")) return false;
+      if (activeView === "complete" && !isCompleteSettlement(item)) return false;
+      if (activeView === "closed" && !isClosedSettlement(item)) return false;
+      if (activeView === "pending" && !isPendingSettlement(item)) return false;
+      if (activeView === "receivable" && !isReceivableSettlement(item)) return false;
       if (activeView === "deductible" && !isDeductibleTarget(item)) return false;
 
       if (!keyword) return true;
@@ -313,9 +366,10 @@ const handleSort = (field: keyof SettlementItem) => {
   }, [settlementList]);
 
   const totalCount = settlementList.length;
-  const receivableCount = settlementList.filter((item) => item.status === "미결" && item.hasReceivable).length;
-  const pendingCount = settlementList.filter((item) => item.status === "미결" && !item.hasReceivable).length;
-  const completeCount = settlementList.filter((item) => item.status === "완결").length;
+  const receivableCount = settlementList.filter(isReceivableSettlement).length;
+  const pendingCount = settlementList.filter(isPendingSettlement).length;
+  const completeCount = settlementList.filter(isCompleteSettlement).length;
+  const closedCount = settlementList.filter(isClosedSettlement).length;
   const deductibleTargetItems = settlementList.filter(isDeductibleTarget);
   const deductibleTargetCount = deductibleTargetItems.length;
   const deductibleCompleteCount = deductibleTargetItems.filter((item) =>
@@ -325,6 +379,8 @@ const handleSort = (field: keyof SettlementItem) => {
   const pageTitle =
     activeView === "complete"
       ? "완결 정산"
+      : activeView === "closed"
+      ? "종결 정산"
       : activeView === "pending"
         ? "미결 정산"
         : activeView === "receivable"
@@ -352,7 +408,7 @@ const pagedList = filteredList.slice(
         </p>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-5">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-6">
         <button
           type="button"
           onClick={() => {
@@ -411,6 +467,21 @@ const pagedList = filteredList.slice(
         >
           <p className="text-sm font-semibold text-slate-700">완결</p>
           <p className="mt-2 text-2xl font-bold text-green-600">{completeCount}건</p>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setActiveView("closed");
+            setCurrentPage(1);
+          }}
+          className={[
+            "rounded-xl border bg-white p-4 text-left transition hover:border-slate-400 hover:bg-slate-50",
+            activeView === "closed" ? "border-slate-700 ring-2 ring-slate-200" : "",
+          ].join(" ")}
+        >
+          <p className="text-sm font-semibold text-slate-700">종결</p>
+          <p className="mt-2 text-2xl font-bold text-slate-700">{closedCount}건</p>
         </button>
 
         <button
@@ -589,14 +660,22 @@ const pagedList = filteredList.slice(
                     <td className="border border-slate-300 px-3 py-2 text-center">
                       <span
                         className={
-                          item.status === "완결"
+                          item.status === "종결"
+                            ? "rounded-full bg-slate-200 px-3 py-1 text-xs font-semibold text-slate-700"
+                            : item.status === "완결"
                             ? "rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700"
                             : item.hasReceivable
                               ? "rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold text-orange-700"
                               : "rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-700"
                         }
                       >
-                        {item.status === "완결" ? "완결" : item.hasReceivable ? "미수" : "미결"}
+                        {item.status === "종결"
+                          ? "종결"
+                          : item.status === "완결"
+                            ? "완결"
+                            : item.hasReceivable
+                              ? "미수"
+                              : "미결"}
                       </span>
                     </td>
                     <td className="border border-slate-300 px-3 py-2 text-center">
