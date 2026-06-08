@@ -29,7 +29,15 @@ type BusinessCatalogRow = {
   is_active: boolean;
 };
 
-type TabId = "vehicle" | "rental" | "partner" | "insurer";
+type DailyCashCategoryRow = {
+  id: number;
+  type: string;
+  name: string;
+  sort_order: number | null;
+  is_active: boolean;
+};
+
+type TabId = "vehicle" | "rental" | "partner" | "insurer" | "dailyCashCategory";
 
 const inputClass =
   "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:outline-none";
@@ -39,7 +47,10 @@ const tabs: Array<{ id: TabId; label: string }> = [
   { id: "rental", label: "렌터카업체" },
   { id: "partner", label: "거래처" },
   { id: "insurer", label: "보험사" },
+  { id: "dailyCashCategory", label: "입출금분류" },
 ];
+
+const dailyCashTypes = ["수입", "고정비", "변동비", "내부이동"];
 
 const catalogErrorMessage = (action: string, message: string) => {
   const policyHint =
@@ -119,7 +130,7 @@ function PasswordCheck({
     <div className="mx-auto max-w-md rounded-xl border border-slate-200 bg-white p-6 text-slate-900">
       <h3 className="text-xl font-bold">기초자료관리 확인</h3>
       <p className="mt-2 text-sm text-slate-600">
-        제조사, 렌터카업체, 거래처, 보험사 목록을 수정하려면 비밀번호를 한 번 더 입력하세요.
+        제조사, 렌터카업체, 거래처, 보험사, 입출금 분류 목록을 수정하려면 비밀번호를 한 번 더 입력하세요.
       </p>
       <input
         type="password"
@@ -151,17 +162,22 @@ function CatalogManager({ canManage }: { canManage: boolean }) {
   const [activeTab, setActiveTab] = useState<TabId>("vehicle");
   const [vehicleRows, setVehicleRows] = useState<VehicleCatalogRow[]>([]);
   const [businessRows, setBusinessRows] = useState<BusinessCatalogRow[]>([]);
+  const [dailyCashCategoryRows, setDailyCashCategoryRows] = useState<
+    DailyCashCategoryRow[]
+  >([]);
   const [maker, setMaker] = useState("");
   const [model, setModel] = useState("");
   const [colorCode, setColorCode] = useState("");
   const [businessName, setBusinessName] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [groupName, setGroupName] = useState("보험");
+  const [dailyCashType, setDailyCashType] = useState("수입");
+  const [dailyCashCategoryName, setDailyCashCategoryName] = useState("");
   const [searchText, setSearchText] = useState("");
   const [saving, setSaving] = useState(false);
 
   const loadRows = async () => {
-    const [vehicleResult, businessResult] = await Promise.all([
+    const [vehicleResult, businessResult, dailyCashCategoryResult] = await Promise.all([
       supabase
         .from("vehicle_catalog")
         .select("id, maker, model, color_code, is_active")
@@ -172,6 +188,12 @@ function CatalogManager({ canManage }: { canManage: boolean }) {
         .from("business_catalog")
         .select("id, item_type, name, phone_number, group_name, is_active")
         .order("item_type", { ascending: true })
+        .order("name", { ascending: true }),
+      supabase
+        .from("daily_cash_categories")
+        .select("id, type, name, sort_order, is_active")
+        .order("type", { ascending: true })
+        .order("sort_order", { ascending: true })
         .order("name", { ascending: true }),
     ]);
 
@@ -185,6 +207,14 @@ function CatalogManager({ canManage }: { canManage: boolean }) {
       alert("업체목록 조회 실패: " + businessResult.error.message);
     } else {
       setBusinessRows((businessResult.data ?? []) as BusinessCatalogRow[]);
+    }
+
+    if (dailyCashCategoryResult.error) {
+      setDailyCashCategoryRows([]);
+    } else {
+      setDailyCashCategoryRows(
+        (dailyCashCategoryResult.data ?? []) as DailyCashCategoryRow[]
+      );
     }
   };
 
@@ -219,6 +249,16 @@ function CatalogManager({ canManage }: { canManage: boolean }) {
     );
   }, [activeTab, businessRows, searchText]);
 
+  const visibleDailyCashCategoryRows = useMemo(() => {
+    const keyword = searchText.trim().toLowerCase();
+
+    if (!keyword) return dailyCashCategoryRows;
+
+    return dailyCashCategoryRows.filter((row) =>
+      [row.type, row.name].join(" ").toLowerCase().includes(keyword)
+    );
+  }, [dailyCashCategoryRows, searchText]);
+
   const resetForm = () => {
     setMaker("");
     setModel("");
@@ -226,6 +266,8 @@ function CatalogManager({ canManage }: { canManage: boolean }) {
     setBusinessName("");
     setPhoneNumber("");
     setGroupName(activeTab === "insurer" ? "보험" : "");
+    setDailyCashType("수입");
+    setDailyCashCategoryName("");
   };
 
   const handleAddVehicle = async () => {
@@ -289,6 +331,34 @@ function CatalogManager({ canManage }: { canManage: boolean }) {
     void loadRows();
   };
 
+  const handleAddDailyCashCategory = async () => {
+    const nextType = dailyCashType.trim();
+    const nextName = dailyCashCategoryName.trim();
+
+    if (!nextType || !nextName) {
+      alert("구분과 분류명을 입력하세요.");
+      return;
+    }
+
+    setSaving(true);
+
+    const { error } = await supabase.from("daily_cash_categories").insert({
+      type: nextType,
+      name: nextName,
+      is_active: true,
+    });
+
+    setSaving(false);
+
+    if (error) {
+      alert("입출금분류 추가 실패: " + error.message);
+      return;
+    }
+
+    resetForm();
+    void loadRows();
+  };
+
   const toggleVehicleActive = async (row: VehicleCatalogRow) => {
     const { error } = await supabase
       .from("vehicle_catalog")
@@ -311,6 +381,20 @@ function CatalogManager({ canManage }: { canManage: boolean }) {
 
     if (error) {
       alert(catalogErrorMessage("상태 변경 실패", error.message));
+      return;
+    }
+
+    void loadRows();
+  };
+
+  const toggleDailyCashCategoryActive = async (row: DailyCashCategoryRow) => {
+    const { error } = await supabase
+      .from("daily_cash_categories")
+      .update({ is_active: !row.is_active })
+      .eq("id", row.id);
+
+    if (error) {
+      alert("입출금분류 상태 변경 실패: " + error.message);
       return;
     }
 
@@ -347,15 +431,37 @@ function CatalogManager({ canManage }: { canManage: boolean }) {
     void loadRows();
   };
 
+  const deleteDailyCashCategory = async (row: DailyCashCategoryRow) => {
+    if (!confirm(`${row.type} / ${row.name} 항목을 삭제할까요?`)) {
+      return;
+    }
+
+    const { error } = await supabase
+      .from("daily_cash_categories")
+      .delete()
+      .eq("id", row.id);
+
+    if (error) {
+      alert("입출금분류 삭제 실패: " + error.message);
+      return;
+    }
+
+    void loadRows();
+  };
+
   const currentCount =
-    activeTab === "vehicle" ? visibleVehicleRows.length : visibleBusinessRows.length;
+    activeTab === "vehicle"
+      ? visibleVehicleRows.length
+      : activeTab === "dailyCashCategory"
+        ? visibleDailyCashCategoryRows.length
+        : visibleBusinessRows.length;
 
   return (
     <div className="space-y-5 text-slate-900">
       <div>
         <h3 className="text-xl font-bold">기초자료관리</h3>
         <p className="mt-1 text-sm text-slate-600">
-          작업등록에서 사용할 차량, 렌터카업체, 거래처, 보험사 목록을 관리합니다.
+          작업등록과 입출금등록에서 사용할 차량, 업체, 보험사, 입출금 분류 목록을 관리합니다.
         </p>
       </div>
 
@@ -406,6 +512,37 @@ function CatalogManager({ canManage }: { canManage: boolean }) {
               type="button"
               onClick={() => {
                 void handleAddVehicle();
+              }}
+              disabled={saving}
+              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:bg-slate-400"
+            >
+              {saving ? "추가 중..." : "목록추가"}
+            </button>
+          </div>
+        ) : activeTab === "dailyCashCategory" ? (
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+            <select
+              className={inputClass}
+              value={dailyCashType}
+              onChange={(event) => setDailyCashType(event.target.value)}
+            >
+              {dailyCashTypes.map((type) => (
+                <option key={type} value={type}>
+                  {type}
+                </option>
+              ))}
+            </select>
+            <input
+              className={inputClass}
+              placeholder="분류명 예: 기타지출"
+              value={dailyCashCategoryName}
+              onChange={(event) => setDailyCashCategoryName(event.target.value)}
+            />
+            <div />
+            <button
+              type="button"
+              onClick={() => {
+                void handleAddDailyCashCategory();
               }}
               disabled={saving}
               className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:bg-slate-400"
@@ -488,6 +625,13 @@ function CatalogManager({ canManage }: { canManage: boolean }) {
           onToggle={toggleVehicleActive}
           onDelete={deleteVehicle}
         />
+      ) : activeTab === "dailyCashCategory" ? (
+        <DailyCashCategoryTable
+          rows={visibleDailyCashCategoryRows}
+          canManage={canManage}
+          onToggle={toggleDailyCashCategoryActive}
+          onDelete={deleteDailyCashCategory}
+        />
       ) : (
         <BusinessTable
           rows={visibleBusinessRows}
@@ -567,6 +711,71 @@ function VehicleTable({
                 </td>
               </tr>
             ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function DailyCashCategoryTable({
+  rows,
+  canManage,
+  onToggle,
+  onDelete,
+}: {
+  rows: DailyCashCategoryRow[];
+  canManage: boolean;
+  onToggle: (row: DailyCashCategoryRow) => Promise<void>;
+  onDelete: (row: DailyCashCategoryRow) => Promise<void>;
+}) {
+  return (
+    <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[640px] border-collapse">
+          <thead className="bg-slate-100">
+            <tr>
+              <th className="border-b border-slate-200 px-3 py-2 text-left text-sm font-semibold">구분</th>
+              <th className="border-b border-slate-200 px-3 py-2 text-left text-sm font-semibold">분류</th>
+              <th className="border-b border-slate-200 px-3 py-2 text-center text-sm font-semibold">사용</th>
+              <th className="border-b border-slate-200 px-3 py-2 text-center text-sm font-semibold">관리</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.id} className="hover:bg-slate-50">
+                <td className="border-b border-slate-100 px-3 py-2 text-sm">{row.type}</td>
+                <td className="border-b border-slate-100 px-3 py-2 text-sm font-semibold">{row.name}</td>
+                <td className="border-b border-slate-100 px-3 py-2 text-center">
+                  <StatusButton
+                    active={row.is_active}
+                    onClick={canManage ? () => void onToggle(row) : undefined}
+                  />
+                </td>
+                <td className="border-b border-slate-100 px-3 py-2 text-center">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (canManage) void onDelete(row);
+                    }}
+                    disabled={!canManage}
+                    className="rounded-lg border border-red-300 px-3 py-1 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:border-slate-200 disabled:text-slate-400 disabled:hover:bg-transparent"
+                  >
+                    삭제
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {rows.length === 0 && (
+              <tr>
+                <td
+                  colSpan={4}
+                  className="border-b border-slate-100 px-3 py-8 text-center text-sm text-slate-500"
+                >
+                  등록된 입출금 분류가 없습니다.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>

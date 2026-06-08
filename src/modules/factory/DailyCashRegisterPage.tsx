@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { localDateText } from "../../lib/date";
 import { supabase } from "../../lib/supabase";
 
@@ -40,10 +40,7 @@ type DailyCashRegisterPageProps = {
   editData?: DailyCashRow;
 };
 
-export default function DailyCashRegisterPage({
-  editData,
-}: DailyCashRegisterPageProps) {
-  const categoryOptions: Record<string, string[]> = {
+const defaultCategoryOptions: Record<string, string[]> = {
   수입: [
     "수리비",
     "면책금",
@@ -55,7 +52,6 @@ export default function DailyCashRegisterPage({
     "차량정산",
     "기타수입",
   ],
-
   고정비: [
     "임대료",
     "관리비",
@@ -70,7 +66,6 @@ export default function DailyCashRegisterPage({
     "렌트료",
     "AOS프로그램사용료",
   ],
-
   변동비: [
     "부품대",
     "외주",
@@ -84,14 +79,13 @@ export default function DailyCashRegisterPage({
     "세차비",
     "공구구입비",
   ],
-
-  내부이동: [
-    "계좌이체",
-    "현금이동",
-    "카드정산",
-  ],
+  내부이동: ["계좌이체", "현금이동", "카드정산"],
 };
 
+export default function DailyCashRegisterPage({
+  editData,
+}: DailyCashRegisterPageProps) {
+  const [categoryOptions, setCategoryOptions] = useState(defaultCategoryOptions);
   const [form, setForm] = useState<FormState>({
     date: "",
     account: "",
@@ -103,6 +97,59 @@ export default function DailyCashRegisterPage({
   });
 
   const isEditMode = Boolean(editData);
+
+  useEffect(() => {
+    const loadCategoryOptions = async () => {
+      const { data, error } = await supabase
+        .from("daily_cash_categories")
+        .select("type, name")
+        .eq("is_active", true)
+        .order("type", { ascending: true })
+        .order("sort_order", { ascending: true })
+        .order("name", { ascending: true });
+
+      if (error || !data || data.length === 0) {
+        setCategoryOptions(defaultCategoryOptions);
+        return;
+      }
+
+      const nextOptions: Record<string, string[]> = {
+        수입: [],
+        고정비: [],
+        변동비: [],
+        내부이동: [],
+      };
+
+      data.forEach((row: any) => {
+        const type = String(row.type ?? "");
+        const name = String(row.name ?? "").trim();
+
+        if (!name) return;
+        nextOptions[type] = [...(nextOptions[type] ?? []), name];
+      });
+
+      setCategoryOptions({
+        수입: nextOptions.수입.length ? nextOptions.수입 : defaultCategoryOptions.수입,
+        고정비: nextOptions.고정비.length ? nextOptions.고정비 : defaultCategoryOptions.고정비,
+        변동비: nextOptions.변동비.length ? nextOptions.변동비 : defaultCategoryOptions.변동비,
+        내부이동: nextOptions.내부이동.length
+          ? nextOptions.내부이동
+          : defaultCategoryOptions.내부이동,
+      });
+    };
+
+    void loadCategoryOptions();
+  }, []);
+
+  const selectedCategoryOptions = useMemo(() => {
+    const options = categoryOptions[form.type] || [];
+
+    if (form.category && !options.includes(form.category)) {
+      return [form.category, ...options];
+    }
+
+    return options;
+  }, [categoryOptions, form.category, form.type]);
 
   useEffect(() => {
     if (!editData) return;
@@ -259,7 +306,7 @@ expense:
 >
   <option value="">선택</option>
 
-  {(categoryOptions[form.type] || []).map((item) => (
+  {selectedCategoryOptions.map((item) => (
     <option key={item} value={item}>
       {item}
     </option>
