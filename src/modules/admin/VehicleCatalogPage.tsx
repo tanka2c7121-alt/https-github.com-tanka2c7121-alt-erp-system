@@ -54,7 +54,7 @@ const dailyCashTypes = ["수입", "고정비", "변동비", "내부이동"];
 
 const catalogErrorMessage = (action: string, message: string) => {
   const policyHint =
-    "관리부 직원인데도 실패하면 Supabase SQL Editor에서 supabase_fix_admin_dept_rls.sql을 실행해 주세요.";
+    "관리부 직원인데도 실패하면 Supabase SQL Editor에서 supabase_rls_auth.sql과 해당 기초자료 SQL을 다시 실행해 주세요.";
 
   return `${action}: ${message}\n\n${policyHint}`;
 };
@@ -210,6 +210,12 @@ function CatalogManager({ canManage }: { canManage: boolean }) {
     }
 
     if (dailyCashCategoryResult.error) {
+      alert(
+        catalogErrorMessage(
+          "입출금분류 조회 실패",
+          dailyCashCategoryResult.error.message
+        )
+      );
       setDailyCashCategoryRows([]);
     } else {
       setDailyCashCategoryRows(
@@ -351,7 +357,7 @@ function CatalogManager({ canManage }: { canManage: boolean }) {
     setSaving(false);
 
     if (error) {
-      alert("입출금분류 추가 실패: " + error.message);
+      alert(catalogErrorMessage("입출금분류 추가 실패", error.message));
       return;
     }
 
@@ -394,7 +400,7 @@ function CatalogManager({ canManage }: { canManage: boolean }) {
       .eq("id", row.id);
 
     if (error) {
-      alert("입출금분류 상태 변경 실패: " + error.message);
+      alert(catalogErrorMessage("입출금분류 상태 변경 실패", error.message));
       return;
     }
 
@@ -442,7 +448,7 @@ function CatalogManager({ canManage }: { canManage: boolean }) {
       .eq("id", row.id);
 
     if (error) {
-      alert("입출금분류 삭제 실패: " + error.message);
+      alert(catalogErrorMessage("입출금분류 삭제 실패", error.message));
       return;
     }
 

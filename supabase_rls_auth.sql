@@ -188,6 +188,7 @@ alter table if exists public.settlement_expenses enable row level security;
 alter table if exists public.daily_cash enable row level security;
 alter table if exists public.vehicle_catalog enable row level security;
 alter table if exists public.business_catalog enable row level security;
+alter table if exists public.daily_cash_categories enable row level security;
 
 create table if not exists public.home_notices (
   id bigserial primary key,
@@ -212,6 +213,8 @@ drop policy if exists vehicle_catalog_authenticated_read on public.vehicle_catal
 drop policy if exists vehicle_catalog_admin_dept_write on public.vehicle_catalog;
 drop policy if exists business_catalog_authenticated_read on public.business_catalog;
 drop policy if exists business_catalog_admin_dept_write on public.business_catalog;
+drop policy if exists daily_cash_categories_authenticated_read on public.daily_cash_categories;
+drop policy if exists daily_cash_categories_admin_dept_write on public.daily_cash_categories;
 drop policy if exists home_notices_authenticated_read on public.home_notices;
 drop policy if exists home_notices_admin_write on public.home_notices;
 
@@ -278,6 +281,19 @@ using (public.current_app_user_id() is not null);
 
 create policy business_catalog_admin_dept_write
 on public.business_catalog
+for all
+to authenticated
+using (public.current_app_user_is_admin_dept())
+with check (public.current_app_user_is_admin_dept());
+
+create policy daily_cash_categories_authenticated_read
+on public.daily_cash_categories
+for select
+to authenticated
+using (public.current_app_user_id() is not null);
+
+create policy daily_cash_categories_admin_dept_write
+on public.daily_cash_categories
 for all
 to authenticated
 using (public.current_app_user_is_admin_dept())

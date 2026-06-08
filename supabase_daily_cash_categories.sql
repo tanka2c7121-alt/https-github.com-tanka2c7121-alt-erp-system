@@ -69,3 +69,24 @@ values
   ('내부이동', '현금이동', 20),
   ('내부이동', '카드정산', 30)
 on conflict do nothing;
+
+alter table if exists public.daily_cash_categories enable row level security;
+
+drop policy if exists daily_cash_categories_authenticated_read
+on public.daily_cash_categories;
+
+create policy daily_cash_categories_authenticated_read
+on public.daily_cash_categories
+for select
+to authenticated
+using (public.current_app_user_id() is not null);
+
+drop policy if exists daily_cash_categories_admin_dept_write
+on public.daily_cash_categories;
+
+create policy daily_cash_categories_admin_dept_write
+on public.daily_cash_categories
+for all
+to authenticated
+using (public.current_app_user_is_admin_dept())
+with check (public.current_app_user_is_admin_dept());
