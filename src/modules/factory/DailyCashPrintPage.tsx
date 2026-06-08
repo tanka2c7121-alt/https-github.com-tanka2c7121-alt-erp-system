@@ -55,6 +55,15 @@ const fetchRows = useCallback(async (dateValue = printDate) => {
   useEffect(() => {
     void fetchRows();
   }, [fetchRows]);
+
+  useEffect(() => {
+    document.body.classList.add("daily-cash-print-mode");
+
+    return () => {
+      document.body.classList.remove("daily-cash-print-mode");
+    };
+  }, []);
+
   const totalIncome = dailyCashList.reduce((sum, item) => sum + Number(item.income || 0), 0);
   const totalExpense = dailyCashList.reduce((sum, item) => sum + Number(item.expense || 0), 0);
   const pageRows =

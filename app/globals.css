@@ -88,17 +88,28 @@ body {
     margin-top: 15mm !important;
   }
 
-  body:has(.daily-cash-print-root) * {
+  body.daily-cash-print-mode,
+  body.daily-cash-print-mode div,
+  body.daily-cash-print-mode main,
+  body.daily-cash-print-mode section {
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  body.daily-cash-print-mode * {
     visibility: hidden !important;
   }
 
-  body:has(.daily-cash-print-root) .daily-cash-print-root,
-  body:has(.daily-cash-print-root) .daily-cash-print-root * {
+  body.daily-cash-print-mode .daily-cash-print-root,
+  body.daily-cash-print-mode .daily-cash-print-root * {
     visibility: visible !important;
   }
 
   .daily-cash-print-root {
-    position: static !important;
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
     width: auto !important;
     min-height: auto !important;
     padding: 0 !important;
