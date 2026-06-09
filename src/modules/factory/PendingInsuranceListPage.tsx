@@ -22,10 +22,14 @@ type SettlementRow = {
 };
 
 type WorkOrderRow = {
+  id: number;
   work_name: string | null;
+  car_number: string | null;
+  car_model: string | null;
   coverage_type: string | null;
   insurance_company: string | null;
   other_insurance_company: string | null;
+  release_date: string | null;
 };
 
 type PaymentRow = {
@@ -149,7 +153,7 @@ export default function PendingInsuranceListPage({
       ),
       fetchAllRows<WorkOrderRow>(
         "work_orders",
-        "work_name, coverage_type, insurance_company, other_insurance_company"
+        "id, work_name, car_number, car_model, coverage_type, insurance_company, other_insurance_company, release_date"
       ),
       fetchAllRows<PaymentRow>(
         "settlement_payments",
@@ -173,7 +177,35 @@ export default function PendingInsuranceListPage({
       return;
     }
 
-    setSettlementRows(settlements ?? []);
+    const settlementByWorkName = new Map(
+      (settlements ?? [])
+        .map((row) => [normalizeText(row.work_name), row] as const)
+        .filter(([workName]) => Boolean(workName))
+    );
+    const mergedRows = (works ?? [])
+      .filter((work) => normalizeText(work.release_date))
+      .map((work) => {
+        const workName = normalizeText(work.work_name);
+        const settlement = settlementByWorkName.get(workName);
+
+        return {
+          id: settlement?.id ?? work.id,
+          work_name: workName,
+          car_number: settlement?.car_number ?? work.car_number ?? "",
+          car_model: settlement?.car_model ?? work.car_model ?? "",
+          insurance_company:
+            settlement?.insurance_company ?? work.insurance_company ?? "",
+          progress_status: settlement?.progress_status ?? "미결",
+          claim_amount: settlement?.claim_amount ?? 0,
+          claim_date: settlement?.claim_date ?? "",
+          own_claim_amount: settlement?.own_claim_amount ?? 0,
+          other_claim_amount: settlement?.other_claim_amount ?? 0,
+          own_claim_date: settlement?.own_claim_date ?? "",
+          other_claim_date: settlement?.other_claim_date ?? "",
+        };
+      });
+
+    setSettlementRows(mergedRows);
     setWorkOrderRows(works ?? []);
     setPaymentRows(payments ?? []);
   }, []);
@@ -220,6 +252,11 @@ export default function PendingInsuranceListPage({
       .flatMap((row): InsuranceListRow[] => {
         const workName = normalizeText(row.work_name);
         const workOrder = workOrderByName.get(workName);
+
+        if (!workOrder || !normalizeText(workOrder.release_date)) {
+          return [];
+        }
+
         const workPayments = paymentRowsByWork.get(workName) ?? [];
         const status = normalizeStatus(row.progress_status);
         const totalClaimAmount = toAmountNumber(row.claim_amount);

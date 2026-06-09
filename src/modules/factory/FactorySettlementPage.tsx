@@ -78,7 +78,7 @@ const isDeductibleTarget = (
 ) => hasDeductibleCoverage(item.coverage_type) && hasDeductibleValue(item.deductible_amount);
 
 const isPendingSettlement = (item: SettlementItem) =>
-  item.status === "미결";
+  item.status === "미결" && !item.hasReceivable;
 
 const isReceivableSettlement = (item: SettlementItem) =>
   item.status === "미결" && item.hasReceivable;
@@ -276,7 +276,7 @@ const handleSort = (field: keyof SettlementItem) => {
     );
 
     setSettlementList(
-      (data ?? []).map((item) => {
+      (data ?? []).filter((item) => !isEmptyDateValue(item.release_date)).map((item) => {
         const workName = item.work_name ?? "";
         const settlementClaimAmount = settlementClaimAmountMap.get(workName) ?? 0;
         const paymentClaimAmount = paymentClaimAmountMap.get(workName) ?? 0;

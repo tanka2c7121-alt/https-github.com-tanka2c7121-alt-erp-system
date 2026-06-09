@@ -134,27 +134,65 @@ export default function PendingSettlementPage({
       (query) => query.order("id", { ascending: false })
     );
 
+    const { data: workData, error: workError } = await fetchAllRows<any>(
+      "work_orders",
+      "work_name, insurance_company, release_date"
+    );
+
     if (error) {
       setLoadError("미결관리 조회 실패: " + error.message);
       return;
     }
 
+    if (workError) {
+      setLoadError("출고차량 조회 실패: " + workError.message);
+      return;
+    }
+
+    const releasedWorkNames = new Set(
+      (workData ?? [])
+        .filter((row) => !isEmptyDateValue(row.release_date))
+        .map((row) => normalizeText(row.work_name))
+        .filter(Boolean)
+    );
+
     setSourceCounts((prev) => ({
       ...prev,
-      settlements: settlementData?.length ?? 0,
+      settlements: releasedWorkNames.size,
     }));
 
+    const settlementByWorkName = new Map(
+      (settlementData ?? [])
+        .map((row) => [normalizeText(row.work_name), row] as const)
+        .filter(([workName]) => Boolean(workName))
+    );
     const seenWorkNames = new Set<string>();
-    const uniqueRows = (settlementData ?? []).filter((row) => {
-      const workName = normalizeText(row.work_name);
+    const uniqueRows = (workData ?? [])
+      .filter((row) => {
+        const workName = normalizeText(row.work_name);
 
-      if (!workName || seenWorkNames.has(workName)) {
-        return false;
-      }
+        if (!workName || !releasedWorkNames.has(workName) || seenWorkNames.has(workName)) {
+          return false;
+        }
 
-      seenWorkNames.add(workName);
-      return true;
-    });
+        seenWorkNames.add(workName);
+        return true;
+      })
+      .map((row) => {
+        const workName = normalizeText(row.work_name);
+        const settlement = settlementByWorkName.get(workName);
+
+        return {
+          ...row,
+          ...settlement,
+          work_name: workName,
+          insurance_company:
+            settlement?.insurance_company ?? row.insurance_company ?? "",
+          progress_status: settlement?.progress_status ?? "미결",
+          claim_amount: settlement?.claim_amount ?? 0,
+          claim_date: settlement?.claim_date ?? "",
+        };
+      });
 
     setSettlementRows(uniqueRows);
   }, []);
