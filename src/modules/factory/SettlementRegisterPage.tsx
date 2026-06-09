@@ -747,7 +747,7 @@ export default function SettlementRegisterPage({
   };
 
   const handleProgressStatusChange = (value: string) => {
-    if (loadedProgressStatus === "완결" && value === "미결") {
+    if (loadedProgressStatus === "완결" && value === "미결" && !adminUnlocked) {
       alert("완결 처리된 정산은 미결로 되돌릴 수 없습니다.");
       return;
     }
