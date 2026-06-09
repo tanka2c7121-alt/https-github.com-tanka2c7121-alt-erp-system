@@ -122,6 +122,7 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
   const [selectedMenu, setSelectedMenu] = useState<MenuItem>(initialMenu);
   const [menuHistory, setMenuHistory] = useState<MenuItem[]>([]);
   const [cachedMenus, setCachedMenus] = useState<MenuItem[]>([initialMenu]);
+  const [refreshKeys, setRefreshKeys] = useState<Record<string, number>>({});
   const [quickActionMenus, setQuickActionMenus] = useState<MenuItem[]>([]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [mobileMenuPath, setMobileMenuPath] = useState<MenuItem[]>([]);
@@ -242,6 +243,16 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
     setMenuHistory((prev) => prev.slice(0, -1));
     setSelectedMenu(previousMenu);
     setIsSidebarOpen(false);
+  };
+
+  const handleRefreshMenu = () => {
+    const key = menuCacheKey(selectedMenu);
+
+    setRefreshKeys((prev) => ({
+      ...prev,
+      [key]: (prev[key] ?? 0) + 1,
+    }));
+    void loadNotificationCounts();
   };
 
   const handleMobileMenuClick = (menu: MenuItem) => {
@@ -753,6 +764,14 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
                 )}
               </div>
 
+              <div className="flex shrink-0 items-center gap-2">
+              <button
+                type="button"
+                onClick={handleRefreshMenu}
+                className="shrink-0 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-bold text-blue-700 shadow-sm hover:bg-blue-100"
+              >
+                새로고침
+              </button>
               {menuHistory.length > 0 && (
                 <button
                   type="button"
@@ -762,21 +781,25 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
                   뒤로
                 </button>
               )}
+              </div>
             </div>
 
             {isCacheableMenu(selectedMenu) ? (
               cachedMenus.map((menu) => {
                 const cacheKey = menuCacheKey(menu);
                 const isActive = cacheKey === menuCacheKey(selectedMenu);
+                const refreshKey = refreshKeys[cacheKey] ?? 0;
 
                 return (
-                  <div key={cacheKey} className={isActive ? "block" : "hidden"}>
+                  <div key={`${cacheKey}:${refreshKey}`} className={isActive ? "block" : "hidden"}>
                     {renderMenuPage(menu)}
                   </div>
                 );
               })
             ) : (
-              renderMenuPage(selectedMenu)
+              <div key={`${menuCacheKey(selectedMenu)}:${refreshKeys[menuCacheKey(selectedMenu)] ?? 0}`}>
+                {renderMenuPage(selectedMenu)}
+              </div>
             )}
           </section>
         </main>
