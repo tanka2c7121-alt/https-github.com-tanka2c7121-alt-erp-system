@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { MenuItem } from "../../data/menuData";
 import { localDateText } from "../../lib/date";
 import { supabase } from "../../lib/supabase";
@@ -57,6 +57,8 @@ type RiskRow = {
   claimRate: number | null;
 };
 
+type RiskSortField = keyof RiskRow;
+
 const normalizeText = (value: unknown) => String(value ?? "").trim();
 
 const normalizeStatus = (value: unknown) => {
@@ -76,6 +78,17 @@ const isEmptyDateValue = (value: unknown) => {
 
 const toAmountNumber = (value: unknown) =>
   Number(String(value ?? 0).replaceAll(",", "")) || 0;
+
+const isClaimPaymentRow = (row: any) =>
+  normalizeText(row.payment_type) === "청구";
+
+const isDeductiblePaymentRow = (row: any) =>
+  normalizeText(row.payment_type) === "면책금";
+
+const isRepairPaymentAmountRow = (row: any) =>
+  toAmountNumber(row.payment_amount) > 0 &&
+  !isClaimPaymentRow(row) &&
+  !isDeductiblePaymentRow(row);
 
 const dateDiffDays = (fromDate: unknown, toDate = localDateText()) => {
   const fromText = normalizeText(fromDate);
@@ -215,7 +228,7 @@ export default function PendingSettlementPage({
         hasReceivable: false,
       };
 
-      if (["수리비", "부가세"].includes(normalizeText(row.payment_type))) {
+      if (isRepairPaymentAmountRow(row)) {
         current.repairVatPaidAmount += toAmountNumber(row.payment_amount);
       }
 
@@ -278,6 +291,7 @@ export default function PendingSettlementPage({
     (row) =>
       row.status === "완결" &&
       row.claimAmount > 0 &&
+      row.paidAmount > 0 &&
       (row.claimRate ?? 0) < 95
   );
 
@@ -406,6 +420,36 @@ function RiskTable({
   rows: RiskRow[];
   onEdit: (workName: string) => void;
 }) {
+  const [sortField, setSortField] = useState<RiskSortField>("workName");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
+  const sortedRows = useMemo(() => {
+    return [...rows].sort((a, b) => {
+      const left = a[sortField];
+      const right = b[sortField];
+
+      if (typeof left === "number" || typeof right === "number") {
+        const leftNumber = Number(left ?? -1);
+        const rightNumber = Number(right ?? -1);
+
+        return sortOrder === "asc"
+          ? leftNumber - rightNumber
+          : rightNumber - leftNumber;
+      }
+
+      const compare = String(left ?? "").localeCompare(String(right ?? ""), "ko");
+      return sortOrder === "asc" ? compare : -compare;
+    });
+  }, [rows, sortField, sortOrder]);
+  const handleSort = (field: RiskSortField) => {
+    if (sortField === field) {
+      setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"));
+      return;
+    }
+
+    setSortField(field);
+    setSortOrder("asc");
+  };
+
   return (
     <section className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
       <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-3">
@@ -418,6 +462,35 @@ function RiskTable({
       <table className="w-full border-collapse text-sm">
         <thead>
           <tr className="bg-white text-left text-slate-600">
+            <SortableHeader field="workName" sortField={sortField} sortOrder={sortOrder} onSort={handleSort}>
+              작명
+            </SortableHeader>
+            <SortableHeader field="company" sortField={sortField} sortOrder={sortOrder} onSort={handleSort}>
+              보험사
+            </SortableHeader>
+            <SortableHeader field="status" sortField={sortField} sortOrder={sortOrder} onSort={handleSort}>
+              상태
+            </SortableHeader>
+            <SortableHeader field="claimDate" sortField={sortField} sortOrder={sortOrder} onSort={handleSort}>
+              청구일
+            </SortableHeader>
+            <SortableHeader field="elapsedDays" sortField={sortField} sortOrder={sortOrder} onSort={handleSort} align="right">
+              소요일수
+            </SortableHeader>
+            <SortableHeader field="claimAmount" sortField={sortField} sortOrder={sortOrder} onSort={handleSort} align="right">
+              청구금액
+            </SortableHeader>
+            <SortableHeader field="paidAmount" sortField={sortField} sortOrder={sortOrder} onSort={handleSort} align="right">
+              입금금액
+            </SortableHeader>
+            <SortableHeader field="claimRate" sortField={sortField} sortOrder={sortOrder} onSort={handleSort} align="right">
+              청구율
+            </SortableHeader>
+            <SortableHeader field="shortageAmount" sortField={sortField} sortOrder={sortOrder} onSort={handleSort} align="right">
+              부족금액
+            </SortableHeader>
+          </tr>
+          <tr className="hidden">
             <th className="border-b border-slate-200 px-3 py-2">작명</th>
             <th className="border-b border-slate-200 px-3 py-2">보험사</th>
             <th className="border-b border-slate-200 px-3 py-2">상태</th>
@@ -430,14 +503,14 @@ function RiskTable({
           </tr>
         </thead>
         <tbody>
-          {rows.length === 0 ? (
+          {sortedRows.length === 0 ? (
             <tr>
               <td colSpan={9} className="px-3 py-8 text-center text-slate-500">
                 관리 대상이 없습니다.
               </td>
             </tr>
           ) : (
-            rows.map((row, index) => (
+            sortedRows.map((row, index) => (
               <tr key={`${row.workName}-${index}`} className="hover:bg-slate-50">
                 <td className="border-b border-slate-100 px-3 py-2">
                   <button
@@ -486,5 +559,45 @@ function RiskTable({
         </tbody>
       </table>
     </section>
+  );
+}
+
+function SortableHeader({
+  field,
+  sortField,
+  sortOrder,
+  onSort,
+  align = "left",
+  children,
+}: {
+  field: RiskSortField;
+  sortField: RiskSortField;
+  sortOrder: "asc" | "desc";
+  onSort: (field: RiskSortField) => void;
+  align?: "left" | "right";
+  children: ReactNode;
+}) {
+  const active = sortField === field;
+
+  return (
+    <th
+      className={[
+        "border-b border-slate-200 px-3 py-2",
+        align === "right" ? "text-right" : "text-left",
+      ].join(" ")}
+    >
+      <button
+        type="button"
+        onClick={() => onSort(field)}
+        className={[
+          "inline-flex w-full items-center gap-1 font-bold hover:text-blue-700",
+          align === "right" ? "justify-end" : "justify-start",
+          active ? "text-blue-700" : "text-slate-600",
+        ].join(" ")}
+      >
+        <span>{children}</span>
+        <span className="text-[10px]">{active ? (sortOrder === "asc" ? "▲" : "▼") : "↕"}</span>
+      </button>
+    </th>
   );
 }
