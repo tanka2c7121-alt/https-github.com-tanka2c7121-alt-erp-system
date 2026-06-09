@@ -276,7 +276,7 @@ const handleSort = (field: keyof SettlementItem) => {
     );
 
     setSettlementList(
-      (data ?? []).filter((item) => !isEmptyDateValue(item.release_date)).map((item) => {
+      (data ?? []).map((item) => {
         const workName = item.work_name ?? "";
         const settlementClaimAmount = settlementClaimAmountMap.get(workName) ?? 0;
         const paymentClaimAmount = paymentClaimAmountMap.get(workName) ?? 0;
@@ -332,6 +332,7 @@ const handleSort = (field: keyof SettlementItem) => {
       return item.work_name.slice(5, 7) === selectedMonth;
     })
     .filter((item) => {
+      if (activeView !== "deductible" && isEmptyDateValue(item.release_date)) return false;
       if (activeView === "all" && (item.status === "완결" || item.status === "종결")) return false;
       if (activeView === "complete" && !isCompleteSettlement(item)) return false;
       if (activeView === "closed" && !isClosedSettlement(item)) return false;
@@ -361,11 +362,14 @@ const handleSort = (field: keyof SettlementItem) => {
     ).sort((a, b) => b.localeCompare(a));
   }, [settlementList]);
 
-  const totalCount = settlementList.length;
-  const receivableCount = settlementList.filter(isReceivableSettlement).length;
-  const pendingCount = settlementList.filter(isPendingSettlement).length;
-  const completeCount = settlementList.filter(isCompleteSettlement).length;
-  const closedCount = settlementList.filter(isClosedSettlement).length;
+  const releasedSettlementItems = settlementList.filter(
+    (item) => !isEmptyDateValue(item.release_date)
+  );
+  const totalCount = releasedSettlementItems.length;
+  const receivableCount = releasedSettlementItems.filter(isReceivableSettlement).length;
+  const pendingCount = releasedSettlementItems.filter(isPendingSettlement).length;
+  const completeCount = releasedSettlementItems.filter(isCompleteSettlement).length;
+  const closedCount = releasedSettlementItems.filter(isClosedSettlement).length;
   const deductibleTargetItems = settlementList.filter(isDeductibleTarget);
   const deductibleTargetCount = deductibleTargetItems.length;
   const deductibleCompleteCount = deductibleTargetItems.filter((item) =>
