@@ -100,55 +100,15 @@ const fetchBalanceRows = useCallback(async () => {
     return;
   }
 
-  const rows = data ?? [];
-  const workNames = Array.from(
-    new Set(
-      rows
-        .filter((row) => row.source_type === "settlement_payment")
-        .map((row) => row.source_work_name)
-        .filter((workName): workName is string => Boolean(workName))
-    )
-  );
-  let closedWorkNames = new Set<string>();
-
-  if (workNames.length > 0) {
-    const { data: closedData, error: closedError } = await supabase
-      .from("repair_settlements")
-      .select("work_name, progress_status")
-      .in("work_name", workNames);
-
-    if (closedError) {
-      alert("종결 정산 조회 실패: " + closedError.message);
-      return;
-    }
-
-    closedWorkNames = new Set(
-      ((closedData ?? []) as Array<{ work_name: string | null; progress_status: string | null }>)
-        .filter((row) => String(row.progress_status ?? "").includes("종결"))
-        .map((row) => row.work_name)
-        .filter((workName): workName is string => Boolean(workName))
-    );
-  }
-
-  setBalanceRows(
-    rows.filter(
-      (row) =>
-        row.source_type !== "settlement_payment" ||
-        !closedWorkNames.has(row.source_work_name ?? "")
-    )
-  );
+  setBalanceRows(data ?? []);
 }, []);
 
 const filteredRows = dailyRows;
 
-const today = localDateText();
-
-const todayIncome = filteredRows
-  .filter((row) => row.date === today)
+const periodIncome = filteredRows
   .reduce((sum, row) => sum + Number(row.income || 0), 0);
 
-const todayExpense = filteredRows
-  .filter((row) => row.date === today)
+const periodExpense = filteredRows
   .reduce((sum, row) => sum + Number(row.expense || 0), 0);
 
 const accountNames = [
@@ -461,44 +421,11 @@ const fetchSettlementMain = useCallback(async (year: string, month: string) => {
   }
 
   const rows = data ?? [];
-  const workNames = Array.from(
-    new Set(
-      rows
-        .filter((row) => row.source_type === "settlement_payment")
-        .map((row) => row.source_work_name)
-        .filter((workName): workName is string => Boolean(workName))
-    )
-  );
-  let closedWorkNames = new Set<string>();
-
-  if (workNames.length > 0) {
-    const { data: closedData, error: closedError } = await supabase
-      .from("repair_settlements")
-      .select("work_name, progress_status")
-      .in("work_name", workNames);
-
-    if (closedError) {
-      alert("종결 정산 조회 실패: " + closedError.message);
-      return;
-    }
-
-    closedWorkNames = new Set(
-      ((closedData ?? []) as Array<{ work_name: string | null; progress_status: string | null }>)
-        .filter((row) => String(row.progress_status ?? "").includes("종결"))
-        .map((row) => row.work_name)
-        .filter((workName): workName is string => Boolean(workName))
-    );
-  }
-  const activeRows = rows.filter(
-    (row) =>
-      row.source_type !== "settlement_payment" ||
-      !closedWorkNames.has(row.source_work_name ?? "")
-  );
 
   setDailyRows(
     !year && month
-      ? activeRows.filter((row) => String(row.date ?? "").slice(5, 7) === month)
-      : activeRows
+      ? rows.filter((row) => String(row.date ?? "").slice(5, 7) === month)
+      : rows
   );
 }, []);
 
@@ -583,8 +510,8 @@ const fetchSettlementMain = useCallback(async (year: string, month: string) => {
         details={receivableSummary}
         onClick={() => setShowReceivables((value) => !value)}
        />
-       <SummaryCard title="오늘 입금" value={todayIncome} color="text-green-600" />
-       <SummaryCard title="오늘 출금" value={todayExpense} color="text-red-600" />
+       <SummaryCard title="기간 입금" value={periodIncome} color="text-green-600" />
+       <SummaryCard title="기간 출금" value={periodExpense} color="text-red-600" />
       </div>
       {showReceivables && (
         <section className="rounded-2xl border border-orange-200 bg-white p-5 shadow-sm">
