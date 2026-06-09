@@ -17,7 +17,13 @@ type DailyCashRow = {
   memo: string | null;
 };
 const formatWon = (amount: number) => amount.toLocaleString();
-const rowsPerPage = 20;
+const firstPageRows = 19;
+const nextPageRows = 23;
+const formatPrintAccount = (account: string) => {
+  if (account.toUpperCase() === "BLUE POINT") return "BLUE";
+
+  return account.slice(0, 4);
+};
 
 type DailyCashPrintPageProps = {
   user: {
@@ -66,17 +72,22 @@ const fetchRows = useCallback(async (dateValue = printDate) => {
 
   const totalIncome = dailyCashList.reduce((sum, item) => sum + Number(item.income || 0), 0);
   const totalExpense = dailyCashList.reduce((sum, item) => sum + Number(item.expense || 0), 0);
-  const pageRows =
-    dailyCashList.length === 0
-      ? [[]]
-      : Array.from(
-          { length: Math.ceil(dailyCashList.length / rowsPerPage) },
-          (_, pageIndex) =>
-            dailyCashList.slice(
-              pageIndex * rowsPerPage,
-              pageIndex * rowsPerPage + rowsPerPage
-            )
-        );
+  const pageRows = (() => {
+    if (dailyCashList.length === 0) return [[]];
+
+    const pages: DailyCashRow[][] = [];
+    let cursor = 0;
+
+    pages.push(dailyCashList.slice(cursor, cursor + firstPageRows));
+    cursor += firstPageRows;
+
+    while (cursor < dailyCashList.length) {
+      pages.push(dailyCashList.slice(cursor, cursor + nextPageRows));
+      cursor += nextPageRows;
+    }
+
+    return pages;
+  })();
 
   return (
     
@@ -102,9 +113,11 @@ const fetchRows = useCallback(async (dateValue = printDate) => {
 </div>
 
       {pageRows.map((rows, pageIndex) => {
+        const isFirstPage = pageIndex === 0;
+        const pageRowCount = isFirstPage ? firstPageRows : nextPageRows;
         const rowsWithBlanks = [
           ...rows,
-          ...Array.from({ length: Math.max(0, rowsPerPage - rows.length) }).map(() => ({
+          ...Array.from({ length: Math.max(0, pageRowCount - rows.length) }).map(() => ({
             date: "",
             account: "",
             type: "",
@@ -116,20 +129,18 @@ const fetchRows = useCallback(async (dateValue = printDate) => {
           })),
         ];
 
-        const isFirstPage = pageIndex === 0;
-
         return (
       <div
         key={pageIndex}
-        className="daily-cash-print-page mx-auto mb-6 bg-white text-slate-900 shadow-lg print:m-0 print:shadow-none"
+        className={`daily-cash-print-page mx-auto mb-6 bg-white text-slate-900 shadow-lg print:m-0 print:shadow-none ${isFirstPage ? "" : "daily-cash-print-page-next"}`}
         style={{
-          width: "202mm",
-          minHeight: "287mm",
-          padding: "4mm",
+          width: "190mm",
+          minHeight: "275mm",
+          padding: isFirstPage ? "7mm" : "9mm 7mm 5mm",
         }}
       
       >
-        <div className="min-h-[279mm] border-2 border-slate-900 p-3">
+        <div className="min-h-[261mm] border-2 border-slate-900 p-3">
           {isFirstPage ? (
             <>
               <div className="relative mb-3 text-center">
@@ -170,31 +181,43 @@ const fetchRows = useCallback(async (dateValue = printDate) => {
             </div>
           )}
 
-          <table className="w-full border-collapse text-[12px]">
+          <table className="w-full table-fixed border-collapse text-[12px] leading-tight">
+            <colgroup>
+              <col className="w-[20mm]" />
+              <col className="w-[18mm]" />
+              <col className="w-[11mm]" />
+              <col className="w-[16mm]" />
+              <col />
+              <col className="w-[24mm]" />
+              <col className="w-[24mm]" />
+              <col className="w-[20mm]" />
+            </colgroup>
             <thead className="text-center">
               <tr className="bg-slate-50">
-                <th className="w-24 border border-slate-900 px-2 py-2">거래일자</th>
-                <th className="w-[18mm] border border-slate-900 px-2 py-2">계정</th>
-                <th className="w-16 border border-slate-900 px-2 py-2">구분</th>
-                <th className="w-24 border border-slate-900 px-2 py-2">분류</th>
+                <th className="border border-slate-900 px-1 py-2">거래일자</th>
+                <th className="border border-slate-900 px-1 py-2">계정</th>
+                <th className="border border-slate-900 px-1 py-2">구분</th>
+                <th className="border border-slate-900 px-1 py-2">분류</th>
                 <th className="border border-slate-900 px-2 py-2">내용</th>
-                <th className="w-24 border border-slate-900 px-2 py-2">입금</th>
-                <th className="w-24 border border-slate-900 px-2 py-2">출금</th>
-                <th className="w-28 border border-slate-900 px-2 py-2">비고</th>
+                <th className="border border-slate-900 px-1 py-2">입금</th>
+                <th className="border border-slate-900 px-1 py-2">출금</th>
+                <th className="border border-slate-900 px-1 py-2">비고</th>
               </tr>
             </thead>
 
             <tbody>
               {rowsWithBlanks.map((item, index) => (
-                <tr key={index} className="h-[9.5mm]">
-                  <td className="border border-slate-900 px-2 py-1 text-center">{item.date || "\u00A0"}</td>
-                  <td className="border border-slate-900 px-2 py-1 text-center">{item.account || "\u00A0"}</td>
-                  <td className="border border-slate-900 px-2 py-1 text-center">{item.type || "\u00A0"}</td>
-                  <td className="border border-slate-900 px-2 py-1">{item.category || "\u00A0"}</td>
-                  <td className="border border-slate-900 px-2 py-1">{item.content || "\u00A0"}</td>
-                  <td className="border border-slate-900 px-2 py-1 text-right font-semibold text-blue-700">{item.income ? formatWon(item.income) : "\u00A0"}</td>
-                  <td className="border border-slate-900 px-2 py-1 text-right font-semibold text-red-700">{item.expense ? formatWon(item.expense) : "\u00A0"}</td>
-                  <td className="border border-slate-900 px-2 py-1">{item.memo || "\u00A0"}</td>
+                <tr key={index} className="h-[10.5mm]">
+                  <td className="border border-slate-900 px-1 py-1 text-center whitespace-nowrap">{item.date || "\u00A0"}</td>
+                  <td className="border border-slate-900 px-1 py-1 text-center whitespace-nowrap">{item.account ? formatPrintAccount(item.account) : "\u00A0"}</td>
+                  <td className="border border-slate-900 px-1 py-1 text-center whitespace-nowrap">{item.type || "\u00A0"}</td>
+                  <td className="border border-slate-900 px-1 py-1 text-center whitespace-nowrap">{item.category || "\u00A0"}</td>
+                  <td className="border border-slate-900 px-1 py-1 text-center text-[10px] whitespace-nowrap overflow-hidden">
+                    {item.content || "\u00A0"}
+                  </td>
+                  <td className="border border-slate-900 px-1 py-1 text-right font-semibold text-blue-700 whitespace-nowrap">{item.income ? formatWon(item.income) : "\u00A0"}</td>
+                  <td className="border border-slate-900 px-1 py-1 text-right font-semibold text-red-700 whitespace-nowrap">{item.expense ? formatWon(item.expense) : "\u00A0"}</td>
+                  <td className="border border-slate-900 px-1 py-1 text-center text-[10px] whitespace-nowrap overflow-hidden">{item.memo || "\u00A0"}</td>
                 </tr>
               ))}
             </tbody>

@@ -95,14 +95,15 @@ body {
 
   .daily-cash-print-root {
     position: absolute !important;
-    left: 50% !important;
+    left: 0 !important;
     top: 0 !important;
-    transform: translateX(-50%) !important;
-    width: 210mm !important;
+    transform: none !important;
+    width: 200mm !important;
     min-height: auto !important;
-    padding: 0 !important;
+    padding: 5mm !important;
     margin: 0 !important;
     background: white !important;
+    box-sizing: border-box !important;
   }
 
   .daily-cash-print-page {
@@ -110,11 +111,15 @@ body {
     break-after: page !important;
     page-break-inside: avoid !important;
     break-inside: avoid !important;
-    width: 202mm !important;
-    min-height: 287mm !important;
-    padding: 4mm !important;
+    width: 190mm !important;
+    min-height: 275mm !important;
+    padding: 7mm !important;
     margin: 0 auto !important;
     box-shadow: none !important;
+  }
+
+  .daily-cash-print-page-next {
+    padding: 11mm 7mm 3mm !important;
   }
 
   .daily-cash-print-page:last-child {
