@@ -223,7 +223,6 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
     }
 
     setSelectedMenu(menu);
-    setIsSidebarOpen(false);
   };
 
   const handleBackMenu = () => {
@@ -671,23 +670,18 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
       <div className="flex min-w-0 flex-1 overflow-hidden">
         <div
           className={[
-            "group/sidebar relative hidden h-full shrink-0 overflow-hidden bg-slate-900 transition-[width] duration-200 ease-out md:block",
-            isSidebarOpen ? "w-64" : "w-8 hover:w-64",
+            "relative hidden h-full shrink-0 overflow-hidden bg-slate-900 transition-[width] duration-200 ease-out md:block",
+            isSidebarOpen ? "w-64" : "w-10",
           ].join(" ")}
         >
           <button
             type="button"
-            aria-label="메뉴 열기"
             onClick={() => setIsSidebarOpen((prev) => !prev)}
-            className="absolute inset-y-0 left-0 z-20 w-8 bg-slate-900/90 transition-colors group-hover/sidebar:bg-slate-900"
-          />
-          <button
-            type="button"
-            onClick={() => setIsSidebarOpen((prev) => !prev)}
-            className="absolute inset-y-0 left-0 z-30 w-8 bg-slate-900 text-slate-200 shadow-md"
+            aria-label={isSidebarOpen ? "메뉴 닫기" : "메뉴 열기"}
+            className="absolute inset-y-0 left-0 z-30 w-10 bg-slate-900 text-slate-200 shadow-md transition hover:bg-slate-800"
           >
             <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-xs font-bold tracking-widest [writing-mode:vertical-rl]">
-              MENU
+              ERP MENU
             </span>
           </button>
           <div className="h-full w-64 bg-slate-900 shadow-2xl">
