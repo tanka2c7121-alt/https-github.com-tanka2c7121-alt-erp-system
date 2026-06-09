@@ -100,7 +100,43 @@ const fetchBalanceRows = useCallback(async () => {
     return;
   }
 
-  setBalanceRows(data ?? []);
+  const rows = data ?? [];
+  const workNames = Array.from(
+    new Set(
+      rows
+        .filter((row) => row.source_type === "settlement_payment")
+        .map((row) => row.source_work_name)
+        .filter((workName): workName is string => Boolean(workName))
+    )
+  );
+  let closedWorkNames = new Set<string>();
+
+  if (workNames.length > 0) {
+    const { data: closedData, error: closedError } = await supabase
+      .from("repair_settlements")
+      .select("work_name, progress_status")
+      .in("work_name", workNames);
+
+    if (closedError) {
+      alert("종결 정산 조회 실패: " + closedError.message);
+      return;
+    }
+
+    closedWorkNames = new Set(
+      ((closedData ?? []) as Array<{ work_name: string | null; progress_status: string | null }>)
+        .filter((row) => String(row.progress_status ?? "").includes("종결"))
+        .map((row) => row.work_name)
+        .filter((workName): workName is string => Boolean(workName))
+    );
+  }
+
+  setBalanceRows(
+    rows.filter(
+      (row) =>
+        row.source_type !== "settlement_payment" ||
+        !closedWorkNames.has(row.source_work_name ?? "")
+    )
+  );
 }, []);
 
 const filteredRows = dailyRows;
@@ -425,11 +461,44 @@ const fetchSettlementMain = useCallback(async (year: string, month: string) => {
   }
 
   const rows = data ?? [];
+  const workNames = Array.from(
+    new Set(
+      rows
+        .filter((row) => row.source_type === "settlement_payment")
+        .map((row) => row.source_work_name)
+        .filter((workName): workName is string => Boolean(workName))
+    )
+  );
+  let closedWorkNames = new Set<string>();
+
+  if (workNames.length > 0) {
+    const { data: closedData, error: closedError } = await supabase
+      .from("repair_settlements")
+      .select("work_name, progress_status")
+      .in("work_name", workNames);
+
+    if (closedError) {
+      alert("종결 정산 조회 실패: " + closedError.message);
+      return;
+    }
+
+    closedWorkNames = new Set(
+      ((closedData ?? []) as Array<{ work_name: string | null; progress_status: string | null }>)
+        .filter((row) => String(row.progress_status ?? "").includes("종결"))
+        .map((row) => row.work_name)
+        .filter((workName): workName is string => Boolean(workName))
+    );
+  }
+  const activeRows = rows.filter(
+    (row) =>
+      row.source_type !== "settlement_payment" ||
+      !closedWorkNames.has(row.source_work_name ?? "")
+  );
 
   setDailyRows(
     !year && month
-      ? rows.filter((row) => String(row.date ?? "").slice(5, 7) === month)
-      : rows
+      ? activeRows.filter((row) => String(row.date ?? "").slice(5, 7) === month)
+      : activeRows
   );
 }, []);
 

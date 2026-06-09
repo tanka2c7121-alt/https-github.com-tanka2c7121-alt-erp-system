@@ -23,6 +23,7 @@ import DailyCashRegisterPage from "../../modules/factory/DailyCashRegisterPage";
 import SettlementMainPage from "../../modules/factory/SettlementMainPage";
 import PendingSettlementPage from "../../modules/factory/PendingSettlementPage";
 import PendingInsuranceListPage from "../../modules/factory/PendingInsuranceListPage";
+import ClosedSettlementManagementPage from "../../modules/factory/ClosedSettlementManagementPage";
 import DeductibleManagementPage from "../../modules/factory/DeductibleManagementPage";
 import EmployeeManagePage from "../../modules/admin/EmployeeManagePage";
 import VehicleCatalogPage from "../../modules/admin/VehicleCatalogPage";
@@ -499,6 +500,14 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
     }
     if (menu.id === "factory-settlement-pending-insurance") {
       return <PendingInsuranceListPage onSelectMenu={handleSelectMenu} />;
+    }
+    if (menu.id === "factory-settlement-closed-management") {
+      return (
+        <ClosedSettlementManagementPage
+          user={user}
+          onSelectMenu={handleSelectMenu}
+        />
+      );
     }
     if (menu.id === "factory-settlement-repair-register") {
       return (
