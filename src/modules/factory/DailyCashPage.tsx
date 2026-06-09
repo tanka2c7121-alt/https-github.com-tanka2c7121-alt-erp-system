@@ -9,11 +9,12 @@ type DailyCashPageProps = {
   onSelectMenu: (menu: MenuItem) => void;
 };
 
-type PeriodValue = 1 | 3 | 6 | 12 | "all";
+type PeriodValue = 1 | 3 | 6 | 12 | "today" | "all";
 
 type DailyCashRow = {
   id: number;
   date: string;
+  created_on?: string | null;
   account: string;
   type: string;
   category: string | null;
@@ -76,7 +77,7 @@ export default function DailyCashPage({ onSelectMenu }: DailyCashPageProps) {
   const [rows, setRows] = useState<DailyCashRow[]>([]);
   const [balanceRows, setBalanceRows] = useState<DailyCashRow[]>([]);
   const [searchText, setSearchText] = useState("");
-  const [period, setPeriod] = useState<PeriodValue>(1);
+  const [period, setPeriod] = useState<PeriodValue>("today");
 
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -107,7 +108,7 @@ export default function DailyCashPage({ onSelectMenu }: DailyCashPageProps) {
           .order("date", { ascending: false })
           .order("id", { ascending: false });
 
-        if (selectedPeriod !== "all") {
+        if (selectedPeriod !== "all" && selectedPeriod !== "today") {
           const startDate = new Date();
           startDate.setMonth(startDate.getMonth() - selectedPeriod);
           nextQuery = nextQuery.gte("date", localDateText(startDate));
@@ -178,7 +179,7 @@ export default function DailyCashPage({ onSelectMenu }: DailyCashPageProps) {
       "daily_cash",
       "*",
       (query) => query
-        .eq("date", today)
+        .eq("created_on", today)
         .order("id", { ascending: false })
     );
 
@@ -347,14 +348,12 @@ export default function DailyCashPage({ onSelectMenu }: DailyCashPageProps) {
         // 금일 조회
         if (item.value === "today") {
 
-          const today = new Date()
-            .toISOString()
-            .slice(0, 10);
+          const today = localDateText();
 
           const { data, error } = await supabase
             .from("daily_cash")
             .select("*")
-            .eq("date", today)
+            .eq("created_on", today)
             .order("id", { ascending: false });
 
           if (error) {
@@ -363,7 +362,7 @@ export default function DailyCashPage({ onSelectMenu }: DailyCashPageProps) {
           }
 
           setRows(data ?? []);
-          setPeriod("today" as PeriodValue);
+          setPeriod("today");
 
           return;
         }
