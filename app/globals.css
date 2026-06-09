@@ -96,9 +96,9 @@ body {
   .daily-cash-print-root {
     position: absolute !important;
     left: 50% !important;
-    top: 6mm !important;
+    top: 0 !important;
     transform: translateX(-50%) !important;
-    width: 200mm !important;
+    width: 210mm !important;
     min-height: auto !important;
     padding: 0 !important;
     margin: 0 !important;
@@ -110,9 +110,9 @@ body {
     break-after: page !important;
     page-break-inside: avoid !important;
     break-inside: avoid !important;
-    width: 190mm !important;
-    min-height: 275mm !important;
-    padding: 7mm !important;
+    width: 202mm !important;
+    min-height: 287mm !important;
+    padding: 4mm !important;
     margin: 0 auto !important;
     box-shadow: none !important;
   }

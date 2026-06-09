@@ -116,75 +116,85 @@ const fetchRows = useCallback(async (dateValue = printDate) => {
           })),
         ];
 
+        const isFirstPage = pageIndex === 0;
+
         return (
       <div
         key={pageIndex}
         className="daily-cash-print-page mx-auto mb-6 bg-white text-slate-900 shadow-lg print:m-0 print:shadow-none"
         style={{
-          width: "190mm",
-          minHeight: "275mm",
-          padding: "7mm",
+          width: "202mm",
+          minHeight: "287mm",
+          padding: "4mm",
         }}
       
       >
-        <div className="border-2 border-slate-900 p-4">
-          <div className="relative mb-4 text-center">
-            <h1 className="text-2xl font-bold tracking-widest">
-              일일입출금내역
-            </h1>
-            <p className="mt-1 text-xs font-semibold">신흥현대서비스 ERP</p>
-            <p className="absolute right-0 top-1 text-xs font-semibold text-slate-600">
+        <div className="min-h-[279mm] border-2 border-slate-900 p-3">
+          {isFirstPage ? (
+            <>
+              <div className="relative mb-3 text-center">
+                <h1 className="text-3xl font-bold tracking-widest">
+                  일일입출금내역
+                </h1>
+                <p className="mt-1 text-sm font-semibold">신흥현대서비스 ERP</p>
+                <p className="absolute right-0 top-1 text-xs font-semibold text-slate-600">
+                  {pageIndex + 1} / {pageRows.length}
+                </p>
+              </div>
+
+              <table className="mb-4 w-full border-collapse text-[13px] font-semibold">
+                <tbody>
+                  <tr>
+                    <th className="w-24 border border-slate-900 bg-slate-50 px-2 py-2">입력일자</th>
+                    <td className="border border-slate-900 px-2 py-2">{printDate}</td>
+                    <th className="w-24 border border-slate-900 bg-slate-50 px-2 py-2">입금합계</th>
+                    <td className="border border-slate-900 px-2 py-2 text-right font-bold text-blue-700">{formatWon(totalIncome)}</td>
+                    <th className="w-24 border border-slate-900 bg-slate-50 px-2 py-2">출금합계</th>
+                    <td className="border border-slate-900 px-2 py-2 text-right font-bold text-red-700">{formatWon(totalExpense)}</td>
+                  </tr>
+
+                  <tr>
+                    <th className="border border-slate-900 bg-slate-50 px-2 py-2">작성자</th>
+                    <td className="border border-slate-900 px-2 py-2" colSpan={2}>
+                      {user.user_name || user.user_id}
+                    </td>
+                    <th className="border border-slate-900 bg-slate-50 px-2 py-2">비고</th>
+                    <td className="border border-slate-900 px-2 py-2" colSpan={2}>일일 정산</td>
+                  </tr>
+                </tbody>
+              </table>
+            </>
+          ) : (
+            <div className="mb-2 text-right text-xs font-semibold text-slate-600">
               {pageIndex + 1} / {pageRows.length}
-            </p>
-          </div>
+            </div>
+          )}
 
-          <table className="mb-5 w-full border-collapse text-[12px] font-semibold">
-            <tbody>
-              <tr>
-                <th className="w-24 border border-slate-900 bg-slate-50 px-2 py-1">입력일자</th>
-                <td className="border border-slate-900 px-2 py-1">{printDate}</td>
-                <th className="w-24 border border-slate-900 bg-slate-50 px-2 py-1">입금합계</th>
-                <td className="border border-slate-900 px-2 py-1 text-right font-bold text-blue-700">{formatWon(totalIncome)}</td>
-                <th className="w-24 border border-slate-900 bg-slate-50 px-2 py-1">출금합계</th>
-                <td className="border border-slate-900 px-2 py-1 text-right font-bold text-red-700">{formatWon(totalExpense)}</td>
-              </tr>
-
-              <tr>
-                <th className="border border-slate-900 bg-slate-50 px-2 py-1">작성자</th>
-                <td className="border border-slate-900 px-2 py-1" colSpan={2}>
-                  {user.user_name || user.user_id}
-                </td>
-                <th className="border border-slate-900 bg-slate-50 px-2 py-1">비고</th>
-                <td className="border border-slate-900 px-2 py-1" colSpan={2}>일일 정산</td>
-              </tr>
-            </tbody>
-          </table>
-
-          <table className="w-full border-collapse text-[10px]">
+          <table className="w-full border-collapse text-[12px]">
             <thead className="text-center">
               <tr className="bg-slate-50">
-                <th className="w-20 border border-slate-900 px-2 py-1">거래일자</th>
-                <th className="w-16 border border-slate-900 px-2 py-1">계정</th>
-                <th className="w-14 border border-slate-900 px-2 py-1">구분</th>
-                <th className="w-20 border border-slate-900 px-2 py-1">분류</th>
-                <th className="border border-slate-900 px-2 py-1">내용</th>
-                <th className="w-20 border border-slate-900 px-2 py-1">입금</th>
-                <th className="w-20 border border-slate-900 px-2 py-1">출금</th>
-                <th className="w-24 border border-slate-900 px-2 py-1">비고</th>
+                <th className="w-24 border border-slate-900 px-2 py-2">거래일자</th>
+                <th className="w-[18mm] border border-slate-900 px-2 py-2">계정</th>
+                <th className="w-16 border border-slate-900 px-2 py-2">구분</th>
+                <th className="w-24 border border-slate-900 px-2 py-2">분류</th>
+                <th className="border border-slate-900 px-2 py-2">내용</th>
+                <th className="w-24 border border-slate-900 px-2 py-2">입금</th>
+                <th className="w-24 border border-slate-900 px-2 py-2">출금</th>
+                <th className="w-28 border border-slate-900 px-2 py-2">비고</th>
               </tr>
             </thead>
 
             <tbody>
               {rowsWithBlanks.map((item, index) => (
-                <tr key={index}>
-                  <td className="border border-slate-900 px-1 py-[2px] text-center">{item.date || "\u00A0"}</td>
-                  <td className="border border-slate-900 px-1 py-[2px] text-center">{item.account || "\u00A0"}</td>
-                  <td className="border border-slate-900 px-1 py-[2px] text-center">{item.type || "\u00A0"}</td>
-                  <td className="border border-slate-900 px-1 py-[2px]">{item.category || "\u00A0"}</td>
-                  <td className="border border-slate-900 px-1 py-[2px]">{item.content || "\u00A0"}</td>
-                  <td className="border border-slate-900 px-1 py-[2px] text-right font-semibold text-blue-700">{item.income ? formatWon(item.income) : "\u00A0"}</td>
-                  <td className="border border-slate-900 px-1 py-[2px] text-right font-semibold text-red-700">{item.expense ? formatWon(item.expense) : "\u00A0"}</td>
-                  <td className="border border-slate-900 px-1 py-[2px]">{item.memo || "\u00A0"}</td>
+                <tr key={index} className="h-[9.5mm]">
+                  <td className="border border-slate-900 px-2 py-1 text-center">{item.date || "\u00A0"}</td>
+                  <td className="border border-slate-900 px-2 py-1 text-center">{item.account || "\u00A0"}</td>
+                  <td className="border border-slate-900 px-2 py-1 text-center">{item.type || "\u00A0"}</td>
+                  <td className="border border-slate-900 px-2 py-1">{item.category || "\u00A0"}</td>
+                  <td className="border border-slate-900 px-2 py-1">{item.content || "\u00A0"}</td>
+                  <td className="border border-slate-900 px-2 py-1 text-right font-semibold text-blue-700">{item.income ? formatWon(item.income) : "\u00A0"}</td>
+                  <td className="border border-slate-900 px-2 py-1 text-right font-semibold text-red-700">{item.expense ? formatWon(item.expense) : "\u00A0"}</td>
+                  <td className="border border-slate-900 px-2 py-1">{item.memo || "\u00A0"}</td>
                 </tr>
               ))}
             </tbody>
