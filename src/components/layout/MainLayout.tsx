@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Sidebar from "../sidebar/Sidebar";
-import Topbar from "../topbar/Topbar";
+import Topbar, { type NotificationItem } from "../topbar/Topbar";
 import Statusbar from "../statusbar/Statusbar";
 import { menuData, type MenuItem } from "../../data/menuData";
 import { supabase } from "../../lib/supabase";
@@ -22,6 +22,7 @@ import DailyCashPrintPage from "../../modules/factory/DailyCashPrintPage";
 import DailyCashRegisterPage from "../../modules/factory/DailyCashRegisterPage";
 import SettlementMainPage from "../../modules/factory/SettlementMainPage";
 import PendingSettlementPage from "../../modules/factory/PendingSettlementPage";
+import PendingInsuranceListPage from "../../modules/factory/PendingInsuranceListPage";
 import DeductibleManagementPage from "../../modules/factory/DeductibleManagementPage";
 import EmployeeManagePage from "../../modules/admin/EmployeeManagePage";
 import VehicleCatalogPage from "../../modules/admin/VehicleCatalogPage";
@@ -48,30 +49,25 @@ type LoginUser = {
   is_active: boolean;
 };
 
-const notificationLookbackDays = 7;
-
-type MyDocumentNotificationType = "expenses" | "attendances" | "incidents";
-
-const myDocumentReadKey = (userId: string, type: MyDocumentNotificationType) =>
-  `erp:my-document-notification-read:${userId}:${type}`;
-
-const fallbackNotificationReadAt = () =>
-  new Date(Date.now() - notificationLookbackDays * 24 * 60 * 60 * 1000).toISOString();
-
-const getMyDocumentReadAt = (userId: string, type: MyDocumentNotificationType) => {
-  if (typeof window === "undefined") return fallbackNotificationReadAt();
-
-  return localStorage.getItem(myDocumentReadKey(userId, type)) ?? fallbackNotificationReadAt();
+type MainLayoutProps = {
+  user: LoginUser;
+  onLogout: () => void;
 };
 
-const markMyDocumentRead = (userId: string, type: MyDocumentNotificationType) => {
-  if (typeof window === "undefined") return;
-
-  localStorage.setItem(myDocumentReadKey(userId, type), new Date().toISOString());
+type PageData = {
+  workName?: string;
+  nextWorkName?: string;
+  openCamera?: boolean;
+  autoPrint?: boolean;
+  expenseRequest?: any;
+  attendanceRequest?: any;
+  incidentReport?: any;
 };
 
-const quickActionStorageKey = (userId: string) =>
-  `erp:quick-actions:${userId}`;
+const initialMenu: MenuItem = {
+  id: "dashboard",
+  title: "업무홈",
+};
 
 const defaultCameraQuickAction: MenuItem = {
   id: "factory-work-register",
@@ -79,35 +75,56 @@ const defaultCameraQuickAction: MenuItem = {
   data: { openCamera: true },
 };
 
-const isSameQuickAction = (left: MenuItem, right: MenuItem) =>
-  left.id === right.id && JSON.stringify(left.data ?? {}) === JSON.stringify(right.data ?? {});
+const notificationLookbackDays = 7;
 
-const getMyDocumentNotificationType = (menuId: string): MyDocumentNotificationType | null => {
+const quickActionStorageKey = (userId: string) =>
+  `erp:quick-actions:${userId}`;
+
+const myDocumentReadKey = (userId: string, type: string) =>
+  `erp:my-document-notification-read:${userId}:${type}`;
+
+const fallbackNotificationReadAt = () =>
+  new Date(Date.now() - notificationLookbackDays * 24 * 60 * 60 * 1000).toISOString();
+
+const getMyDocumentReadAt = (userId: string, type: string) => {
+  if (typeof window === "undefined") return fallbackNotificationReadAt();
+
+  return localStorage.getItem(myDocumentReadKey(userId, type)) ?? fallbackNotificationReadAt();
+};
+
+const markMyDocumentRead = (userId: string, type: string) => {
+  if (typeof window === "undefined") return;
+
+  localStorage.setItem(myDocumentReadKey(userId, type), new Date().toISOString());
+};
+
+const getMyDocumentNotificationType = (menuId: string) => {
   if (menuId.startsWith("documents-expense-request")) return "expenses";
   if (menuId.startsWith("documents-attendance-request")) return "attendances";
   if (menuId.startsWith("documents-incident-report")) return "incidents";
   return null;
 };
-type MainLayoutProps = {
-  user: LoginUser;
-  onLogout: () => void;
-};
+
+const isSameQuickAction = (left: MenuItem, right: MenuItem) =>
+  left.id === right.id && JSON.stringify(left.data ?? {}) === JSON.stringify(right.data ?? {});
+
+const menuCacheKey = (menu: MenuItem) =>
+  `${menu.id}:${JSON.stringify(menu.data ?? {})}`;
+
+const isCacheableMenu = (menu: MenuItem) => !menu.id.includes("print");
 
 export default function MainLayout({ user, onLogout }: MainLayoutProps) {
-  const isAdmin = user?.role === "ADMIN";
-  const userRole = user?.role ?? "STAFF";
+  const isAdmin = user.role === "ADMIN";
+  const userRole = user.role ?? "STAFF";
   const canViewSales = ["ADMIN", "CHIEF"].includes(userRole);
-  const approvalRole =
-    user?.approval_role ?? (isAdmin ? "관리자" : "직원");
+  const approvalRole = user.approval_role ?? (isAdmin ? "관리자" : "직원");
 
-  const [selectedMenu, setSelectedMenu] = useState<MenuItem>({
-    id: "dashboard",
-    title: "업무홈",
-  });
+  const [selectedMenu, setSelectedMenu] = useState<MenuItem>(initialMenu);
+  const [menuHistory, setMenuHistory] = useState<MenuItem[]>([]);
+  const [cachedMenus, setCachedMenus] = useState<MenuItem[]>([initialMenu]);
   const [quickActionMenus, setQuickActionMenus] = useState<MenuItem[]>([]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [mobileMenuPath, setMobileMenuPath] = useState<MenuItem[]>([]);
-  const isSalesMenu = selectedMenu.id === "sales" || selectedMenu.id.startsWith("sales-");
   const [notificationCounts, setNotificationCounts] = useState({
     employees: 0,
     expenses: 0,
@@ -118,27 +135,17 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
     myIncidents: 0,
   });
 
-  const selectedData = selectedMenu.data as
-    | {
-        workName?: string;
-        nextWorkName?: string;
-        openCamera?: boolean;
-        autoPrint?: boolean;
-        expenseRequest?: any;
-        attendanceRequest?: any;
-        incidentReport?: any;
-      }
-    | undefined;  const mobileMenuParent = mobileMenuPath[mobileMenuPath.length - 1];
+  const canFavoriteCurrentMenu = selectedMenu.id !== "dashboard";
+  const isCurrentMenuFavorited = quickActionMenus.some((menu) =>
+    isSameQuickAction(menu, selectedMenu)
+  );
+  const mobileMenuParent = mobileMenuPath[mobileMenuPath.length - 1];
   const displayedMobileMenus = getVisibleMenuItems(
     mobileMenuParent?.children ?? menuData,
     userRole,
     user.department
   );
   const mobileMenuTitle = mobileMenuParent?.title ?? "메뉴";
-  const canFavoriteCurrentMenu = selectedMenu.id !== "dashboard";
-  const isCurrentMenuFavorited = quickActionMenus.some((menu) =>
-    isSameQuickAction(menu, selectedMenu)
-  );
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -186,6 +193,57 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
     ]);
   };
 
+  const handleSelectMenu = (menu: MenuItem) => {
+    const currentKey = menuCacheKey(selectedMenu);
+    const nextKey = menuCacheKey(menu);
+    const myDocumentType = getMyDocumentNotificationType(menu.id);
+
+    if (myDocumentType) {
+      markMyDocumentRead(user.user_id, myDocumentType);
+      setNotificationCounts((prev) => ({
+        ...prev,
+        ...(myDocumentType === "expenses" ? { myExpenses: 0 } : {}),
+        ...(myDocumentType === "attendances" ? { myAttendances: 0 } : {}),
+        ...(myDocumentType === "incidents" ? { myIncidents: 0 } : {}),
+      }));
+    }
+
+    if (currentKey !== nextKey) {
+      setMenuHistory((prev) => [...prev, selectedMenu].slice(-30));
+    }
+
+    if (isCacheableMenu(menu)) {
+      setCachedMenus((prev) =>
+        prev.some((cachedMenu) => menuCacheKey(cachedMenu) === nextKey)
+          ? prev
+          : [...prev, menu]
+      );
+    }
+
+    setSelectedMenu(menu);
+    setIsSidebarOpen(false);
+  };
+
+  const handleBackMenu = () => {
+    const previousMenu = menuHistory[menuHistory.length - 1];
+
+    if (!previousMenu) return;
+
+    if (isCacheableMenu(previousMenu)) {
+      const previousKey = menuCacheKey(previousMenu);
+
+      setCachedMenus((prev) =>
+        prev.some((cachedMenu) => menuCacheKey(cachedMenu) === previousKey)
+          ? prev
+          : [...prev, previousMenu]
+      );
+    }
+
+    setMenuHistory((prev) => prev.slice(0, -1));
+    setSelectedMenu(previousMenu);
+    setIsSidebarOpen(false);
+  };
+
   const handleMobileMenuClick = (menu: MenuItem) => {
     const visibleChildren = getVisibleMenuItems(
       menu.children ?? [],
@@ -201,52 +259,9 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
     handleSelectMenu(menu);
   };
 
-  const handleMobileMenuBack = () => {
-    setMobileMenuPath((prev) => prev.slice(0, -1));
-  };
-
-  const handleSelectMenu = (menu: MenuItem) => {
-    const myDocumentType = getMyDocumentNotificationType(menu.id);
-
-    if (myDocumentType) {
-      markMyDocumentRead(user.user_id, myDocumentType);
-      setNotificationCounts((prev) => ({
-        ...prev,
-        ...(myDocumentType === "expenses" ? { myExpenses: 0 } : {}),
-        ...(myDocumentType === "attendances" ? { myAttendances: 0 } : {}),
-        ...(myDocumentType === "incidents" ? { myIncidents: 0 } : {}),
-      }));
-    }
-
-    setSelectedMenu(menu);
-    setIsSidebarOpen(false);
-  };
-
   const loadNotificationCounts = useCallback(async () => {
     const canSeeApprovalNotice =
-      isAdmin || ["부서장", "관리부", "관리자"].includes(approvalRole);
-
-    const attendanceStatus =
-      approvalRole === "부서장"
-        ? "부서장 승인대기"
-        : approvalRole === "관리부"
-          ? "관리부 확인대기"
-          : "관리자 승인대기";
-
-    let attendanceQuery = canSeeApprovalNotice
-      ? supabase
-      .from("attendance_requests")
-      .select("id", { count: "exact", head: true })
-          .eq("status", attendanceStatus)
-      : null;
-
-    if (attendanceQuery && approvalRole === "부서장") {
-      attendanceQuery = attendanceQuery.eq(
-        "requested_department",
-        user.department ?? ""
-      );
-    }
-
+      isAdmin || ["부서장", "관리팀", "관리자"].includes(approvalRole);
     const canCheckIncident = isAdmin;
     const myExpenseReadAt = getMyDocumentReadAt(user.user_id, "expenses");
     const myAttendanceReadAt = getMyDocumentReadAt(user.user_id, "attendances");
@@ -260,46 +275,50 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
       myExpensesResult,
       myAttendancesResult,
       myIncidentsResult,
-    ] =
-      await Promise.all([
-        canSeeApprovalNotice && isAdmin
-          ? supabase
-              .from("app_users")
-              .select("id", { count: "exact", head: true })
-              .eq("is_active", false)
-          : Promise.resolve({ count: 0, error: null }),
-        canSeeApprovalNotice && isAdmin
-          ? supabase
-              .from("expense_requests")
-              .select("id", { count: "exact", head: true })
-              .eq("status", "승인대기")
-          : Promise.resolve({ count: 0, error: null }),
-        attendanceQuery ?? Promise.resolve({ count: 0, error: null }),
-        canCheckIncident
-          ? supabase
-              .from("incident_reports")
-              .select("id", { count: "exact", head: true })
-              .eq("status", "확인대기")
-          : Promise.resolve({ count: 0, error: null }),
-        supabase
-          .from("expense_requests")
-          .select("id", { count: "exact", head: true })
-          .eq("requested_by", user.user_id)
-          .in("status", ["승인완료", "반려"])
-          .gt("approved_at", myExpenseReadAt),
-        supabase
-          .from("attendance_requests")
-          .select("id", { count: "exact", head: true })
-          .eq("requested_by", user.user_id)
-          .in("status", ["승인완료", "반려"])
-          .gt("approved_at", myAttendanceReadAt),
-        supabase
-          .from("incident_reports")
-          .select("id", { count: "exact", head: true })
-          .eq("requested_by", user.user_id)
-          .in("status", ["확인완료", "반려"])
-          .gt("checked_at", myIncidentReadAt),
-      ]);
+    ] = await Promise.all([
+      isAdmin
+        ? supabase
+            .from("app_users")
+            .select("id", { count: "exact", head: true })
+            .eq("is_active", false)
+        : Promise.resolve({ count: 0, error: null }),
+      canSeeApprovalNotice && isAdmin
+        ? supabase
+            .from("expense_requests")
+            .select("id", { count: "exact", head: true })
+            .eq("status", "승인대기")
+        : Promise.resolve({ count: 0, error: null }),
+      canSeeApprovalNotice
+        ? supabase
+            .from("attendance_requests")
+            .select("id", { count: "exact", head: true })
+            .in("status", ["부서장 승인대기", "관리팀 확인대기", "관리자 승인대기"])
+        : Promise.resolve({ count: 0, error: null }),
+      canCheckIncident
+        ? supabase
+            .from("incident_reports")
+            .select("id", { count: "exact", head: true })
+            .eq("status", "확인대기")
+        : Promise.resolve({ count: 0, error: null }),
+      supabase
+        .from("expense_requests")
+        .select("id", { count: "exact", head: true })
+        .eq("requested_by", user.user_id)
+        .in("status", ["승인완료", "반려"])
+        .gt("approved_at", myExpenseReadAt),
+      supabase
+        .from("attendance_requests")
+        .select("id", { count: "exact", head: true })
+        .eq("requested_by", user.user_id)
+        .in("status", ["승인완료", "반려"])
+        .gt("approved_at", myAttendanceReadAt),
+      supabase
+        .from("incident_reports")
+        .select("id", { count: "exact", head: true })
+        .eq("requested_by", user.user_id)
+        .in("status", ["확인완료", "반려"])
+        .gt("checked_at", myIncidentReadAt),
+    ]);
 
     setNotificationCounts({
       employees: employeesResult.error ? 0 : employeesResult.count ?? 0,
@@ -310,7 +329,7 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
       myAttendances: myAttendancesResult.error ? 0 : myAttendancesResult.count ?? 0,
       myIncidents: myIncidentsResult.error ? 0 : myIncidentsResult.count ?? 0,
     });
-  }, [approvalRole, isAdmin, user.department, user.user_id]);
+  }, [approvalRole, isAdmin, user.user_id]);
 
   useEffect(() => {
     void loadNotificationCounts();
@@ -330,83 +349,271 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
     };
   }, [loadNotificationCounts]);
 
-  const notifications = [
+  const notifications: NotificationItem[] = [
     ...(isAdmin
       ? [
           {
-        id: "employees",
-        title: "직원 승인대기",
-        count: notificationCounts.employees,
-        menu: {
-          id: "employee-manage",
-          title: "직원관리",
-        },
+            id: "employees",
+            title: "직원 승인대기",
+            count: notificationCounts.employees,
+            menu: { id: "employee-manage", title: "직원관리" },
           },
           {
-        id: "expenses",
-        title: "지출결의서 승인대기",
-        count: notificationCounts.expenses,
-        menu: {
-          id: "documents-expense-request",
-          title: "지출결의서",
-        },
+            id: "expenses",
+            title: "지출결의서 승인대기",
+            count: notificationCounts.expenses,
+            menu: { id: "documents-expense-request", title: "지출결의서" },
           },
-        ]
-      : []),
-    ...(["부서장", "관리부", "관리자"].includes(approvalRole) || isAdmin
-      ? [
-          {
-            id: "attendances",
-            title: "근태신청서 승인대기",
-            count: notificationCounts.attendances,
-            menu: {
-              id: "documents-attendance-request",
-              title: "근태신청서",
-            },
-          },
-        ]
-      : []),
-    ...(isAdmin
-      ? [
           {
             id: "incidents",
             title: "경위서 확인대기",
             count: notificationCounts.incidents,
-            menu: {
-              id: "documents-incident-report",
-              title: "경위서",
-            },
+            menu: { id: "documents-incident-report", title: "경위서" },
           },
         ]
       : []),
     {
+      id: "attendances",
+      title: "근태신청서 확인대기",
+      count: notificationCounts.attendances,
+      menu: { id: "documents-attendance-request", title: "근태신청서" },
+    },
+    {
       id: "my-expenses",
       title: "내 지출결의서 처리완료",
       count: notificationCounts.myExpenses,
-      menu: {
-        id: "documents-expense-request",
-        title: "지출결의서",
-      },
+      menu: { id: "documents-expense-request", title: "지출결의서" },
     },
     {
       id: "my-attendances",
       title: "내 근태신청서 처리완료",
       count: notificationCounts.myAttendances,
-      menu: {
-        id: "documents-attendance-request",
-        title: "근태신청서",
-      },
+      menu: { id: "documents-attendance-request", title: "근태신청서" },
     },
     {
       id: "my-incidents",
       title: "내 경위서 처리완료",
       count: notificationCounts.myIncidents,
-      menu: {
-        id: "documents-incident-report",
-        title: "경위서",
-      },
+      menu: { id: "documents-incident-report", title: "경위서" },
     },
   ];
+
+  const renderMenuPage = (menu: MenuItem) => {
+    const pageData = menu.data as PageData | undefined;
+    const isSalesMenu = menu.id === "sales" || menu.id.startsWith("sales-");
+
+    if (menu.id === "dashboard") {
+      return (
+        <HomeDashboardPage
+          isAdmin={isAdmin}
+          user={user}
+          userName={user.user_name}
+          quickActionMenus={[defaultCameraQuickAction, ...quickActionMenus]}
+          onSelectMenu={handleSelectMenu}
+        />
+      );
+    }
+
+    if (
+      menu.id === "employee" ||
+      menu.id === "employee-admin" ||
+      menu.id === "employee-body" ||
+      menu.id === "employee-paint" ||
+      menu.id === "employee-repair"
+    ) {
+      return (
+        <EmployeeStatusPage
+          canManage={isAdmin}
+          userRole={userRole}
+          departmentFilter={
+            menu.id === "employee-admin"
+              ? "관리"
+              : menu.id === "employee-body"
+                ? "판금"
+                : menu.id === "employee-paint"
+                  ? "도장"
+                  : menu.id === "employee-repair"
+                    ? "정비"
+                    : undefined
+          }
+          onOpenManage={() =>
+            handleSelectMenu({ id: "employee-manage", title: "직원관리" })
+          }
+        />
+      );
+    }
+
+    if (menu.id === "settings") {
+      return <SettingsDashboardPage userRole={userRole} onSelectMenu={handleSelectMenu} />;
+    }
+    if (menu.id === "employee-manage" && !isAdmin) {
+      return (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-red-700">
+          직원관리는 관리자만 접근할 수 있습니다.
+        </div>
+      );
+    }
+    if (menu.id === "employee-manage") return <EmployeeManagePage />;
+    if (menu.id === "vehicle-catalog") return <VehicleCatalogPage user={user} />;
+    if (menu.id === "factory") return <FactoryDashboardPage onSelectMenu={handleSelectMenu} />;
+    if (menu.id === "factory-settlement") {
+      return <SettlementMainPage onSelectMenu={handleSelectMenu} />;
+    }
+    if (menu.id === "factory-settlement-pending") {
+      return <PendingSettlementPage onSelectMenu={handleSelectMenu} />;
+    }
+    if (menu.id === "factory-settlement-pending-insurance") {
+      return <PendingInsuranceListPage onSelectMenu={handleSelectMenu} />;
+    }
+    if (menu.id === "factory-settlement-repair-register") {
+      return (
+        <SettlementRegisterPage
+          initialWorkName={pageData?.workName}
+          user={user}
+          onSelectMenu={handleSelectMenu}
+        />
+      );
+    }
+    if (menu.id === "factory-settlement-complete-print") {
+      return (
+        <SettlementCompletePrintPage
+          workName={pageData?.workName}
+          autoPrint={Boolean(pageData?.autoPrint)}
+          onSelectMenu={handleSelectMenu}
+        />
+      );
+    }
+    if (menu.id === "factory-settlement-repair") {
+      return <FactorySettlementPage onSelectMenu={handleSelectMenu} view="all" />;
+    }
+    if (menu.id === "factory-settlement-daily-cash-register") {
+      return <DailyCashRegisterPage editData={menu.data as any} />;
+    }
+    if (menu.id === "factory-settlement-daily-cash-print") {
+      return <DailyCashPrintPage user={user} />;
+    }
+    if (menu.id === "factory-settlement-daily-cash") {
+      return <DailyCashPage onSelectMenu={handleSelectMenu} />;
+    }
+    if (menu.id === "factory-inbound") {
+      return <InboundStatusPage onSelectMenu={handleSelectMenu} />;
+    }
+    if (menu.id === "factory-release-list") {
+      return <ReleaseListPage onSelectMenu={handleSelectMenu} />;
+    }
+    if (menu.id === "factory-outbound" || menu.id === "factory-outbound-list") {
+      return <OutboundStatusPage onSelectMenu={handleSelectMenu} />;
+    }
+    if (menu.id === "factory-deductible-management") {
+      return <DeductibleManagementPage onSelectMenu={handleSelectMenu} />;
+    }
+    if (menu.id === "factory-work-register") {
+      return (
+        <WorkRegisterPage
+          onSelectMenu={handleSelectMenu}
+          initialWorkName={pageData?.workName ?? pageData?.nextWorkName}
+          openCameraOnMount={Boolean(pageData?.openCamera)}
+        />
+      );
+    }
+    if (menu.id === "factory-work-print") {
+      return <WorkPrintPage workName={pageData?.workName ?? pageData?.nextWorkName} />;
+    }
+
+    if (isSalesMenu && !canViewSales) {
+      return (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-red-700">
+          매출현황은 관리자와 총괄관리만 접근할 수 있습니다.
+        </div>
+      );
+    }
+    if (menu.id === "sales") return <SalesDashboardPage onSelectMenu={handleSelectMenu} />;
+    if (menu.id === "sales-insurance") {
+      return <SalesRevenuePage kind="insurance" title="보험매출" />;
+    }
+    if (menu.id === "sales-capital") {
+      return <SalesRevenuePage kind="capital" title="캐피탈매출" />;
+    }
+    if (menu.id === "sales-general") {
+      return <SalesRevenuePage kind="general" title="일반매출" />;
+    }
+    if (menu.id === "sales-partner") {
+      return <SalesRevenuePage kind="partner" title="거래처매출" />;
+    }
+    if (menu.id === "sales-card") {
+      return <SalesRevenuePage kind="card" title="카드승인" />;
+    }
+    if (menu.id === "sales-blue") {
+      return <SalesRevenuePage kind="blue" title="BLUE POINT" />;
+    }
+
+    if (menu.id === "documents") {
+      return <DocumentsDashboardPage onSelectMenu={handleSelectMenu} />;
+    }
+    if (menu.id === "documents-expense-request") {
+      return (
+        <ExpenseRequestPage
+          user={user}
+          isAdmin={isAdmin}
+          onSelectMenu={handleSelectMenu}
+        />
+      );
+    }
+    if (menu.id === "documents-expense-request-print") {
+      return (
+        <ExpenseRequestPrintPage
+          expenseRequest={pageData?.expenseRequest}
+          user={user}
+          isAdmin={isAdmin}
+          onSelectMenu={handleSelectMenu}
+        />
+      );
+    }
+    if (menu.id === "documents-attendance-request") {
+      return (
+        <AttendanceRequestPage
+          user={user}
+          isAdmin={isAdmin}
+          onSelectMenu={handleSelectMenu}
+        />
+      );
+    }
+    if (menu.id === "documents-attendance-request-print") {
+      return (
+        <AttendanceRequestPrintPage
+          attendanceRequest={pageData?.attendanceRequest}
+          user={user}
+          isAdmin={isAdmin}
+          onSelectMenu={handleSelectMenu}
+        />
+      );
+    }
+    if (menu.id === "documents-incident-report") {
+      return (
+        <IncidentReportPage
+          user={user}
+          isAdmin={isAdmin}
+          onSelectMenu={handleSelectMenu}
+        />
+      );
+    }
+    if (menu.id === "documents-incident-report-print") {
+      return (
+        <IncidentReportPrintPage
+          incidentReport={pageData?.incidentReport}
+          user={user}
+          isAdmin={isAdmin}
+          onSelectMenu={handleSelectMenu}
+        />
+      );
+    }
+
+    return (
+      <div className="rounded-xl border border-dashed p-10 text-center text-slate-600">
+        선택한 메뉴: <span className="font-semibold text-slate-900">{menu.title}</span>
+      </div>
+    );
+  };
 
   return (
     <div className="flex h-screen w-full flex-col overflow-x-hidden bg-slate-100">
@@ -426,7 +633,7 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
         >
           <button
             type="button"
-            aria-label="硫붾돱 ?닿린"
+            aria-label="메뉴 열기"
             onClick={() => setIsSidebarOpen((prev) => !prev)}
             className="absolute inset-y-0 left-0 z-20 w-8 bg-slate-900/90 transition-colors group-hover/sidebar:bg-slate-900"
           />
@@ -463,7 +670,7 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
               {mobileMenuPath.length > 0 && (
                 <button
                   type="button"
-                  onClick={handleMobileMenuBack}
+                  onClick={() => setMobileMenuPath((prev) => prev.slice(0, -1))}
                   className="shrink-0 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50"
                 >
                   뒤로
@@ -504,18 +711,10 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
           </div>
 
           <section className="min-h-[500px] min-w-0 overflow-x-hidden rounded-xl border bg-white p-3 shadow-sm md:rounded-2xl md:p-6">
-            {selectedMenu.id === "dashboard" ? (
-              <HomeDashboardPage
-                isAdmin={isAdmin}
-                user={user}
-                userName={user?.user_name}
-                quickActionMenus={[defaultCameraQuickAction, ...quickActionMenus]}
-                onSelectMenu={handleSelectMenu}
-              />
-            ) : (
-              <>
+            <div className="mb-4 flex items-center justify-between gap-2">
+              <div>
                 {canFavoriteCurrentMenu && (
-                  <label className="mb-4 inline-flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-blue-50">
+                  <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-blue-50">
                     <input
                       type="checkbox"
                       checked={isCurrentMenuFavorited}
@@ -528,163 +727,32 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
                     <span>빠른작업</span>
                   </label>
                 )}
-
-                {selectedMenu.id === "employee" ||
-            selectedMenu.id === "employee-admin" ||
-            selectedMenu.id === "employee-body" ||
-            selectedMenu.id === "employee-paint" ||
-            selectedMenu.id === "employee-repair" ? (
-              <EmployeeStatusPage
-                canManage={isAdmin}
-                userRole={userRole}
-                departmentFilter={
-                  selectedMenu.id === "employee-admin"
-                    ? "愿由щ?"
-                    : selectedMenu.id === "employee-body"
-                      ? "?먭툑遺"
-                      : selectedMenu.id === "employee-paint"
-                        ? "?꾩옣遺"
-                        : selectedMenu.id === "employee-repair"
-                          ? "?뺣퉬遺"
-                          : undefined
-                }
-                onOpenManage={() =>
-                  handleSelectMenu({
-                    id: "employee-manage",
-                    title: "직원관리",
-                  })
-                }
-              />
-            ) : selectedMenu.id === "settings" ? (
-              <SettingsDashboardPage
-                userRole={userRole}
-                onSelectMenu={handleSelectMenu}
-              />
-            ) : selectedMenu.id === "employee-manage" && !isAdmin ? (
-              <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-red-700">
-                직원관리 페이지는 관리자만 접근할 수 있습니다.
               </div>
-            ) : selectedMenu.id === "employee-manage" ? (
-              <EmployeeManagePage />
-            ) : selectedMenu.id === "vehicle-catalog" ? (
-              <VehicleCatalogPage user={user} />
-            ) : selectedMenu.id === "factory" ? (
-              <FactoryDashboardPage onSelectMenu={handleSelectMenu} />
-            ) : selectedMenu.id === "factory-settlement" ? (
-              <SettlementMainPage onSelectMenu={handleSelectMenu} />
-            ) : selectedMenu.id === "factory-settlement-pending" ? (
-              <PendingSettlementPage onSelectMenu={handleSelectMenu} />
-            ) : selectedMenu.id === "factory-settlement-repair-register" ? (
-              <SettlementRegisterPage
-                initialWorkName={selectedData?.workName}
-                user={user}
-                onSelectMenu={handleSelectMenu}
-              />            ) : selectedMenu.id === "factory-settlement-complete-print" ? (
-              <SettlementCompletePrintPage
-                workName={selectedData?.workName}
-                autoPrint={Boolean(selectedData?.autoPrint)}
-                onSelectMenu={handleSelectMenu}
-              />
 
-            ) : selectedMenu.id === "factory-settlement-repair" ? (
-              <FactorySettlementPage onSelectMenu={handleSelectMenu} view="all" />
-            ) : selectedMenu.id === "factory-settlement-daily-cash-register" ? (
-              <DailyCashRegisterPage editData={selectedMenu.data as any} />
-            ) : selectedMenu.id === "factory-settlement-daily-cash-print" ? (
-              <DailyCashPrintPage user={user} />
-            ) : selectedMenu.id === "factory-settlement-daily-cash" ? (
-              <DailyCashPage onSelectMenu={handleSelectMenu} />
-            ) : selectedMenu.id === "factory-inbound" ? (
-              <InboundStatusPage onSelectMenu={handleSelectMenu} />
-            ) : selectedMenu.id === "factory-release-list" ? (
-              <ReleaseListPage onSelectMenu={handleSelectMenu} />
-            ) : selectedMenu.id === "factory-outbound" ||
-              selectedMenu.id === "factory-outbound-list" ? (
-              <OutboundStatusPage onSelectMenu={handleSelectMenu} />
-            ) : selectedMenu.id === "factory-deductible-management" ? (
-              <DeductibleManagementPage onSelectMenu={handleSelectMenu} />
-            ) : selectedMenu.id === "factory-work-register" ? (
-              <WorkRegisterPage
-                onSelectMenu={handleSelectMenu}
-                initialWorkName={selectedData?.workName ?? selectedData?.nextWorkName}
-                openCameraOnMount={Boolean(selectedData?.openCamera)}
-              />
-            ) : selectedMenu.id === "factory-work-print" ? (
-              <WorkPrintPage
-                workName={selectedData?.workName ?? selectedData?.nextWorkName}
-              />
-            ) : isSalesMenu && !canViewSales ? (
-              <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-red-700">
-                매출현황 페이지는 관리자와 총괄관리만 접근할 수 있습니다.
-              </div>
-            ) : selectedMenu.id === "sales" ? (
-              <SalesDashboardPage onSelectMenu={handleSelectMenu} />
-            ) : selectedMenu.id === "sales-insurance" ? (
-              <SalesRevenuePage kind="insurance" title="보험매출" />
-            ) : selectedMenu.id === "sales-capital" ? (
-              <SalesRevenuePage kind="capital" title="캐피탈매출" />
-            ) : selectedMenu.id === "sales-general" ? (
-              <SalesRevenuePage kind="general" title="일반매출" />
-            ) : selectedMenu.id === "sales-partner" ? (
-              <SalesRevenuePage kind="partner" title="거래처매출" />
-            ) : selectedMenu.id === "sales-card" ? (
-              <SalesRevenuePage kind="card" title="카드승인" />
-            ) : selectedMenu.id === "sales-blue" ? (
-              <SalesRevenuePage kind="blue" title="BLUE POINT" />
-            ) : selectedMenu.id === "documents" ? (
-              <DocumentsDashboardPage onSelectMenu={handleSelectMenu} />
-            ) : selectedMenu.id === "documents-expense-request" ? (
-              <ExpenseRequestPage
-                user={user}
-                isAdmin={isAdmin}
-                onSelectMenu={handleSelectMenu}
-              />
-            ) : selectedMenu.id === "documents-expense-request-print" ? (
-              <ExpenseRequestPrintPage
-                expenseRequest={selectedData?.expenseRequest}
-                user={user}
-                isAdmin={isAdmin}
-                onSelectMenu={handleSelectMenu}
-              />
-            ) : selectedMenu.id === "documents-attendance-request" ? (
-              <AttendanceRequestPage
-                user={user}
-                isAdmin={isAdmin}
-                onSelectMenu={handleSelectMenu}
-              />
-            ) : selectedMenu.id === "documents-attendance-request-print" ? (
-              <AttendanceRequestPrintPage
-                attendanceRequest={selectedData?.attendanceRequest}
-                user={user}
-                isAdmin={isAdmin}
-                onSelectMenu={handleSelectMenu}
-              />
-            ) : selectedMenu.id === "documents-incident-report" ? (
-              <IncidentReportPage
-                user={user}
-                isAdmin={isAdmin}
-                onSelectMenu={handleSelectMenu}
-              />
-            ) : selectedMenu.id === "documents-incident-report-print" ? (
-              <IncidentReportPrintPage
-                incidentReport={selectedData?.incidentReport}
-                user={user}
-                isAdmin={isAdmin}
-                onSelectMenu={handleSelectMenu}
-              />
+              {menuHistory.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleBackMenu}
+                  className="shrink-0 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 shadow-sm hover:bg-slate-50"
+                >
+                  뒤로
+                </button>
+              )}
+            </div>
+
+            {isCacheableMenu(selectedMenu) ? (
+              cachedMenus.map((menu) => {
+                const cacheKey = menuCacheKey(menu);
+                const isActive = cacheKey === menuCacheKey(selectedMenu);
+
+                return (
+                  <div key={cacheKey} className={isActive ? "block" : "hidden"}>
+                    {renderMenuPage(menu)}
+                  </div>
+                );
+              })
             ) : (
-              <>
-                <div className="text-sm text-slate-500">?묒뾽 ?붾㈃ ?곸뿭</div>
-
-                <div className="mt-6 rounded-xl border border-dashed p-10 text-center text-slate-600">
-                  ?꾩옱 ?좏깮??硫붾돱:{" "}
-                  <span className="font-semibold text-slate-900">
-                    {selectedMenu.title}
-                  </span>
-                </div>
-              </>
-            )}
-              </>
+              renderMenuPage(selectedMenu)
             )}
           </section>
         </main>
@@ -712,4 +780,3 @@ function getVisibleMenuItems(
     return true;
   });
 }
-
