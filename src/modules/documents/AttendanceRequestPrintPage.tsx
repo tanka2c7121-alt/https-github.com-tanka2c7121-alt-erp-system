@@ -108,7 +108,7 @@ export default function AttendanceRequestPrintPage({
     });
 
   const nextApprovalStatus = (): AttendanceRequest["status"] => {
-    if (attendanceRequest.status === "부서장 승인대기") return "관리부 확인대기";
+    if (attendanceRequest.status === "부서장 승인대기") return "관리자 승인대기";
     if (attendanceRequest.status === "관리부 확인대기") return "관리자 승인대기";
     return "승인완료";
   };

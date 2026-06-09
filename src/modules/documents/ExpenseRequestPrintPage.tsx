@@ -27,7 +27,12 @@ type ExpenseRequest = {
   payment_method: string | null;
   receipt_url: string;
   memo: string | null;
-  status: "승인대기" | "승인완료" | "반려";
+  status:
+    | "승인대기"
+    | "총괄관리 승인대기"
+    | "관리자 승인대기"
+    | "승인완료"
+    | "반려";
   requested_by: string;
   requested_name: string | null;
   approved_by: string | null;
@@ -53,6 +58,9 @@ const formatDateTime = (value?: string | null) => {
   return value.slice(0, 16).replace("T", " ");
 };
 
+const isChiefUser = (user: LoginUser) =>
+  user.role === "CHIEF" || user.approval_role === "총괄관리";
+
 export default function ExpenseRequestPrintPage({
   expenseRequest,
   user,
@@ -73,12 +81,47 @@ export default function ExpenseRequestPrintPage({
       title: "지출결의서",
     });
 
+  const canApprove =
+    isAdmin
+      ? ["승인대기", "관리자 승인대기"].includes(expenseRequest.status)
+      : isChiefUser(user) &&
+        ["승인대기", "총괄관리 승인대기"].includes(expenseRequest.status) &&
+        expenseRequest.requested_by !== user.user_id;
+
   const approveRequest = async () => {
-    if (!isAdmin || expenseRequest.status !== "승인대기") {
+    if (!canApprove) {
       return;
     }
 
-    if (!confirm("이 지출결의서를 승인하고 일일입출금에 반영할까요?")) {
+    if (
+      !confirm(
+        isAdmin
+          ? "이 지출결의서를 승인하고 일일입출금에 반영할까요?"
+          : "이 지출결의서를 총괄관리 승인 후 관리자 단계로 넘길까요?"
+      )
+    ) {
+      return;
+    }
+
+    if (!isAdmin) {
+      const { error } = await supabase
+        .from("expense_requests")
+        .update({
+          status: "관리자 승인대기",
+          approved_by: user.user_id,
+          approved_name: user.user_name,
+          approved_at: new Date().toISOString(),
+          reject_reason: null,
+        })
+        .eq("id", expenseRequest.id);
+
+      if (error) {
+        alert("승인 처리 실패: " + error.message);
+        return;
+      }
+
+      alert("총괄관리 승인 후 관리자 단계로 넘겼습니다.");
+      goList();
       return;
     }
 
@@ -126,7 +169,7 @@ export default function ExpenseRequestPrintPage({
   };
 
   const rejectRequest = async () => {
-    if (!isAdmin || expenseRequest.status !== "승인대기") {
+    if (!canApprove) {
       return;
     }
 
@@ -159,7 +202,7 @@ export default function ExpenseRequestPrintPage({
   return (
     <div className="print-area min-h-screen bg-slate-200 p-4 text-slate-900 print:bg-white print:p-0">
       <div className="no-print mb-4 flex justify-end gap-2">
-        {isAdmin && expenseRequest.status === "승인대기" && (
+        {canApprove && (
           <>
             <button
               type="button"

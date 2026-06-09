@@ -11,6 +11,7 @@ type LoginUser = {
   user_id: string;
   user_name: string;
   department?: string | null;
+  approval_role?: string | null;
   role: UserRole;
 };
 
@@ -32,7 +33,12 @@ type ExpenseRequest = {
   payment_method: string | null;
   receipt_url: string;
   memo: string | null;
-  status: "승인대기" | "승인완료" | "반려";
+  status:
+    | "승인대기"
+    | "총괄관리 승인대기"
+    | "관리자 승인대기"
+    | "승인완료"
+    | "반려";
   requested_by: string;
   requested_name: string | null;
   approved_by: string | null;
@@ -73,6 +79,15 @@ const formatRequesterName = (user: LoginUser) => {
 
   return department ? `${department} / ${user.user_name}` : user.user_name;
 };
+
+const isChiefUser = (user: LoginUser) =>
+  user.role === "CHIEF" || user.approval_role === "총괄관리";
+
+const expensePendingStatuses: ExpenseRequest["status"][] = [
+  "승인대기",
+  "총괄관리 승인대기",
+  "관리자 승인대기",
+];
 
 const categoryOptions: Record<string, string[]> = {
   고정비: [
@@ -167,7 +182,17 @@ export default function ExpenseRequestPage({
     const keyword = searchText.trim().toLowerCase();
 
     return rows
-      .filter((row) => isAdmin || row.requested_by === user.user_id)
+      .filter((row) => {
+        if (isAdmin) return true;
+        if (
+          isChiefUser(user) &&
+          ["승인대기", "총괄관리 승인대기"].includes(row.status)
+        ) {
+          return true;
+        }
+
+        return row.requested_by === user.user_id;
+      })
       .filter((row) => !statusFilter || row.status === statusFilter)
       .filter((row) => {
         if (!keyword) return true;
@@ -186,9 +211,11 @@ export default function ExpenseRequestPage({
           .toLowerCase()
           .includes(keyword);
       });
-  }, [isAdmin, rows, searchText, statusFilter, user.user_id]);
+  }, [isAdmin, rows, searchText, statusFilter, user]);
 
-  const pendingCount = rows.filter((row) => row.status === "승인대기").length;
+  const pendingCount = rows.filter((row) =>
+    expensePendingStatuses.includes(row.status)
+  ).length;
   const approvedTotal = visibleRows
     .filter((row) => row.status === "승인완료")
     .reduce((sum, row) => sum + Number(row.amount || 0), 0);
@@ -264,7 +291,7 @@ export default function ExpenseRequestPage({
         payment_method: form.paymentMethod,
         receipt_url: "",
         memo: form.memo,
-        status: "승인대기",
+        status: isChiefUser(user) ? "관리자 승인대기" : "총괄관리 승인대기",
         requested_by: user.user_id,
         requested_name: formatRequesterName(user),
       })
@@ -304,8 +331,55 @@ export default function ExpenseRequestPage({
     void loadRows();
   };
 
+  const canApproveRequest = (row: ExpenseRequest) => {
+    if (isAdmin) {
+      return ["승인대기", "관리자 승인대기"].includes(row.status);
+    }
+
+    return (
+      isChiefUser(user) &&
+      ["승인대기", "총괄관리 승인대기"].includes(row.status) &&
+      row.requested_by !== user.user_id
+    );
+  };
+
   const approveRequest = async (row: ExpenseRequest) => {
-    if (!confirm("이 지출결의서를 승인하고 일일입출금에 반영할까요?")) {
+    if (!canApproveRequest(row)) {
+      alert("현재 단계의 승인 권한이 없습니다.");
+      return;
+    }
+
+    const isFinalApproval = isAdmin;
+
+    if (
+      !confirm(
+        isFinalApproval
+          ? "이 지출결의서를 승인하고 일일입출금에 반영할까요?"
+          : "이 지출결의서를 총괄관리 승인 후 관리자 단계로 넘길까요?"
+      )
+    ) {
+      return;
+    }
+
+    if (!isFinalApproval) {
+      const { error } = await supabase
+        .from("expense_requests")
+        .update({
+          status: "관리자 승인대기",
+          approved_by: user.user_id,
+          approved_name: user.user_name,
+          approved_at: new Date().toISOString(),
+          reject_reason: null,
+        })
+        .eq("id", row.id);
+
+      if (error) {
+        alert("승인 처리 실패: " + error.message);
+        return;
+      }
+
+      alert("총괄관리 승인 후 관리자 단계로 넘겼습니다.");
+      void loadRows();
       return;
     }
 
@@ -351,6 +425,11 @@ export default function ExpenseRequestPage({
   };
 
   const rejectRequest = async (row: ExpenseRequest) => {
+    if (!canApproveRequest(row)) {
+      alert("현재 단계의 반려 권한이 없습니다.");
+      return;
+    }
+
     const reason = prompt("반려 사유를 입력하세요.");
 
     if (reason === null) {
@@ -559,6 +638,8 @@ export default function ExpenseRequestPage({
             >
               <option value="">전체 상태</option>
               <option>승인대기</option>
+              <option>총괄관리 승인대기</option>
+              <option>관리자 승인대기</option>
               <option>승인완료</option>
               <option>반려</option>
             </select>
@@ -575,7 +656,8 @@ export default function ExpenseRequestPage({
         <div className="hidden overflow-x-auto md:block">
           <ExpenseTable
             rows={visibleRows}
-            isAdmin={isAdmin}
+            showApprovalColumn={isAdmin || isChiefUser(user)}
+            canApprove={canApproveRequest}
             onApprove={approveRequest}
             onReject={rejectRequest}
             onPrint={(row) =>
@@ -590,7 +672,7 @@ export default function ExpenseRequestPage({
 
         <MobileExpenseCards
           rows={visibleRows}
-          isAdmin={isAdmin}
+          canApprove={canApproveRequest}
           onApprove={approveRequest}
           onReject={rejectRequest}
           onPrint={(row) =>
@@ -659,13 +741,15 @@ function StatusBadge({ status }: { status: ExpenseRequest["status"] }) {
 
 function ExpenseTable({
   rows,
-  isAdmin,
+  showApprovalColumn,
+  canApprove,
   onApprove,
   onReject,
   onPrint,
 }: {
   rows: ExpenseRequest[];
-  isAdmin: boolean;
+  showApprovalColumn: boolean;
+  canApprove: (row: ExpenseRequest) => boolean;
   onApprove: (row: ExpenseRequest) => void;
   onReject: (row: ExpenseRequest) => void;
   onPrint: (row: ExpenseRequest) => void;
@@ -683,7 +767,7 @@ function ExpenseTable({
           <th className="border border-slate-200 px-3 py-2 text-right">금액</th>
           <th className="border border-slate-200 px-3 py-2 text-center">영수증</th>
           <th className="border border-slate-200 px-3 py-2 text-center">출력</th>
-          {isAdmin && (
+          {showApprovalColumn && (
             <th className="border border-slate-200 px-3 py-2 text-center">관리</th>
           )}
         </tr>
@@ -693,7 +777,7 @@ function ExpenseTable({
         {rows.length === 0 ? (
           <tr>
             <td
-              colSpan={isAdmin ? 10 : 9}
+              colSpan={showApprovalColumn ? 10 : 9}
               className="border border-slate-200 px-3 py-8 text-center text-slate-500"
             >
               등록된 지출결의서가 없습니다.
@@ -752,9 +836,9 @@ function ExpenseTable({
                   출력
                 </button>
               </td>
-              {isAdmin && (
+              {showApprovalColumn && (
                 <td className="border border-slate-200 px-3 py-2 text-center">
-                  {row.status === "승인대기" ? (
+                  {canApprove(row) ? (
                     <div className="flex justify-center gap-2">
                       <button
                         type="button"
@@ -788,13 +872,13 @@ function ExpenseTable({
 
 function MobileExpenseCards({
   rows,
-  isAdmin,
+  canApprove,
   onApprove,
   onReject,
   onPrint,
 }: {
   rows: ExpenseRequest[];
-  isAdmin: boolean;
+  canApprove: (row: ExpenseRequest) => boolean;
   onApprove: (row: ExpenseRequest) => void;
   onReject: (row: ExpenseRequest) => void;
   onPrint: (row: ExpenseRequest) => void;
@@ -857,7 +941,7 @@ function MobileExpenseCards({
               출력
             </button>
 
-            {isAdmin && row.status === "승인대기" && (
+            {canApprove(row) && (
               <div className="mt-3 flex gap-2">
                 <button
                   type="button"

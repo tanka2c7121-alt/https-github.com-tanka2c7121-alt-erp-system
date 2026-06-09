@@ -260,8 +260,11 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
   };
 
   const loadNotificationCounts = useCallback(async () => {
-    const canSeeApprovalNotice =
-      isAdmin || ["부서장", "관리팀", "관리자"].includes(approvalRole);
+    const canSeeExpenseApprovalNotice =
+      isAdmin || userRole === "CHIEF" || approvalRole === "총괄관리";
+    const isFinalAttendanceApprover = isAdmin || approvalRole === "관리자";
+    const canSeeAttendanceApprovalNotice =
+      isFinalAttendanceApprover || approvalRole === "부서장";
     const canCheckIncident = isAdmin;
     const myExpenseReadAt = getMyDocumentReadAt(user.user_id, "expenses");
     const myAttendanceReadAt = getMyDocumentReadAt(user.user_id, "attendances");
@@ -282,17 +285,28 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
             .select("id", { count: "exact", head: true })
             .eq("is_active", false)
         : Promise.resolve({ count: 0, error: null }),
-      canSeeApprovalNotice && isAdmin
-        ? supabase
-            .from("expense_requests")
-            .select("id", { count: "exact", head: true })
-            .eq("status", "승인대기")
+      canSeeExpenseApprovalNotice
+        ? isAdmin
+          ? supabase
+              .from("expense_requests")
+              .select("id", { count: "exact", head: true })
+              .in("status", ["승인대기", "관리자 승인대기"])
+          : supabase
+              .from("expense_requests")
+              .select("id", { count: "exact", head: true })
+              .in("status", ["승인대기", "총괄관리 승인대기"])
         : Promise.resolve({ count: 0, error: null }),
-      canSeeApprovalNotice
-        ? supabase
-            .from("attendance_requests")
-            .select("id", { count: "exact", head: true })
-            .in("status", ["부서장 승인대기", "관리팀 확인대기", "관리자 승인대기"])
+      canSeeAttendanceApprovalNotice
+        ? isFinalAttendanceApprover
+          ? supabase
+              .from("attendance_requests")
+              .select("id", { count: "exact", head: true })
+              .in("status", ["관리부 확인대기", "관리자 승인대기"])
+          : supabase
+              .from("attendance_requests")
+              .select("id", { count: "exact", head: true })
+              .eq("status", "부서장 승인대기")
+              .eq("requested_department", user.department ?? "")
         : Promise.resolve({ count: 0, error: null }),
       canCheckIncident
         ? supabase
@@ -329,7 +343,7 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
       myAttendances: myAttendancesResult.error ? 0 : myAttendancesResult.count ?? 0,
       myIncidents: myIncidentsResult.error ? 0 : myIncidentsResult.count ?? 0,
     });
-  }, [approvalRole, isAdmin, user.user_id]);
+  }, [approvalRole, isAdmin, user.department, user.user_id, userRole]);
 
   useEffect(() => {
     void loadNotificationCounts();
@@ -369,6 +383,16 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
             title: "경위서 확인대기",
             count: notificationCounts.incidents,
             menu: { id: "documents-incident-report", title: "경위서" },
+          },
+        ]
+      : []),
+    ...(!isAdmin && (userRole === "CHIEF" || approvalRole === "총괄관리")
+      ? [
+          {
+            id: "expenses",
+            title: "지출결의서 승인대기",
+            count: notificationCounts.expenses,
+            menu: { id: "documents-expense-request", title: "지출결의서" },
           },
         ]
       : []),

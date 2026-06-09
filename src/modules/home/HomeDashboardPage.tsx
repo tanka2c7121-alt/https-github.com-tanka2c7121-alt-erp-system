@@ -103,8 +103,11 @@ export default function HomeDashboardPage({
   onSelectMenu,
 }: HomeDashboardPageProps) {
   const approvalRole = user?.approval_role ?? (isAdmin ? "관리자" : "직원");
+  const isFinalAttendanceApprover = isAdmin || approvalRole === "관리자";
   const canApproveAttendance =
-    isAdmin || ["부서장", "관리부", "관리자"].includes(approvalRole);
+    isFinalAttendanceApprover || approvalRole === "부서장";
+  const canApproveExpenses =
+    isAdmin || user?.role === "CHIEF" || approvalRole === "총괄관리";
   const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
   const [pendingUsers, setPendingUsers] = useState<PendingUser[]>([]);
   const [pendingExpenseRequests, setPendingExpenseRequests] = useState<
@@ -129,17 +132,14 @@ export default function HomeDashboardPage({
   const loadDashboard = useCallback(async () => {
     setLoading(true);
 
-    const attendanceStatus =
-      approvalRole === "부서장"
-        ? "부서장 승인대기"
-        : approvalRole === "관리부"
-          ? "관리부 확인대기"
-          : "관리자 승인대기";
+    const attendanceStatuses = isFinalAttendanceApprover
+      ? ["관리부 확인대기", "관리자 승인대기"]
+      : ["부서장 승인대기"];
 
     let attendanceQuery = supabase
       .from("attendance_requests")
       .select("id, request_type, start_date, end_date, requested_name, requested_by, reason")
-      .eq("status", attendanceStatus)
+      .in("status", attendanceStatuses)
       .order("id", { ascending: false });
 
     if (approvalRole === "부서장") {
@@ -169,12 +169,18 @@ export default function HomeDashboardPage({
             .eq("is_active", false)
             .order("id", { ascending: false })
         : Promise.resolve({ data: [], error: null }),
-      isAdmin
-        ? supabase
-            .from("expense_requests")
-            .select("id, request_date, vendor, content, amount, requested_name, requested_by")
-            .eq("status", "승인대기")
-            .order("id", { ascending: false })
+      canApproveExpenses
+        ? isAdmin
+          ? supabase
+              .from("expense_requests")
+              .select("id, request_date, vendor, content, amount, requested_name, requested_by")
+              .in("status", ["승인대기", "관리자 승인대기"])
+              .order("id", { ascending: false })
+          : supabase
+              .from("expense_requests")
+              .select("id, request_date, vendor, content, amount, requested_name, requested_by")
+              .in("status", ["승인대기", "총괄관리 승인대기"])
+              .order("id", { ascending: false })
         : Promise.resolve({ data: [], error: null }),
       canApproveAttendance
         ? attendanceQuery
@@ -233,7 +239,14 @@ export default function HomeDashboardPage({
     } else {
       setHomeNotice(null);
     }
-  }, [approvalRole, canApproveAttendance, isAdmin, user?.department]);
+  }, [
+    approvalRole,
+    canApproveAttendance,
+    canApproveExpenses,
+    isAdmin,
+    isFinalAttendanceApprover,
+    user?.department,
+  ]);
 
   useEffect(() => {
     void loadDashboard();
@@ -579,10 +592,10 @@ export default function HomeDashboardPage({
         <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
           <QuickActions actions={quickActionMenus} onSelectMenu={onSelectMenu} />
 
-          {(isAdmin || canApproveAttendance) && (
+          {(isAdmin || canApproveAttendance || canApproveExpenses) && (
             <AdminApprovalPanel
               showEmployeeApprovals={isAdmin}
-              showExpenseApprovals={isAdmin}
+              showExpenseApprovals={canApproveExpenses}
               showAttendanceApprovals={canApproveAttendance}
               showIncidentApprovals={isAdmin}
               pendingUsers={pendingUsers.slice(0, 6)}
