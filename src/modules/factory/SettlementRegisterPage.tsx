@@ -188,7 +188,15 @@ export default function SettlementRegisterPage({
       : ["미결", "완결"];
 
   const handleChange = (key: string, value: string) => {
-    if (isLocked && key !== "workName") return;
+    if (isLocked && key !== "workName") {
+      const canMoveCompletedToClosed =
+        key === "progressStatus" &&
+        loadedProgressStatus === "완결" &&
+        value === "종결" &&
+        canCloseSettlement;
+
+      if (!canMoveCompletedToClosed) return;
+    }
     setForm((prev) => ({ ...prev, [key]: value }));
   };
 
@@ -623,20 +631,11 @@ export default function SettlementRegisterPage({
     const hasDatedPaymentAmount = paymentRows.some(
       (row) => toNumber(row.amount) > 0 && Boolean(row.date)
     );
-    const hasExpense = expenseRows.some(
-      (row) => toNumber(row.amount) > 0 || Boolean(row.date) || Boolean(row.type)
-    );
-
     if (
       (saveForm.progressStatus === "완결" || saveForm.progressStatus === "종결") &&
       (claimTotal <= 0 || !hasDatedPaymentAmount)
     ) {
       alert("완결/종결은 청구금액, 입금일, 입금금액이 모두 있어야 저장할 수 있습니다.");
-      return;
-    }
-
-    if (saveForm.progressStatus === "종결" && !hasExpense) {
-      alert("종결은 청구/입금 정보와 지출내역이 모두 있어야 저장할 수 있습니다.");
       return;
     }
 
@@ -748,6 +747,11 @@ export default function SettlementRegisterPage({
   };
 
   const handleProgressStatusChange = (value: string) => {
+    if (loadedProgressStatus === "완결" && value === "미결") {
+      alert("완결 처리된 정산은 미결로 되돌릴 수 없습니다.");
+      return;
+    }
+
     if (value === "종결") {
       if (!canCloseSettlement) {
         alert("종결은 관리자와 총괄관리만 처리할 수 있습니다.");

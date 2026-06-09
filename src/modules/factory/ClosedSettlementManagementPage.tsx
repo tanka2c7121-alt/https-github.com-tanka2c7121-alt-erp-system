@@ -286,11 +286,11 @@ export default function ClosedSettlementManagementPage({
                   </td>
                 </tr>
               ) : (
-                filteredRows.map((row) => {
+                filteredRows.map((row, index) => {
                   const workName = normalizeText(row.work_name);
 
                   return (
-                    <tr key={row.id} className="hover:bg-slate-50">
+                    <tr key={`${row.id}-${workName}-${index}`} className="hover:bg-slate-50">
                       <td className="border border-slate-200 px-3 py-2 font-bold">{workName}</td>
                       <td className="border border-slate-200 px-3 py-2">{row.car_number ?? ""}</td>
                       <td className="border border-slate-200 px-3 py-2">{row.car_model ?? ""}</td>
@@ -327,11 +327,11 @@ export default function ClosedSettlementManagementPage({
         </div>
 
         <div className="space-y-3 md:hidden">
-          {filteredRows.map((row) => {
+          {filteredRows.map((row, index) => {
             const workName = normalizeText(row.work_name);
 
             return (
-              <div key={row.id} className="rounded-xl border border-slate-200 p-4">
+              <div key={`${row.id}-${workName}-${index}`} className="rounded-xl border border-slate-200 p-4">
                 <div className="font-bold text-slate-900">{workName}</div>
                 <div className="mt-1 text-sm text-slate-600">
                   {row.car_number ?? ""} / {row.car_model ?? ""}

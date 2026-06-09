@@ -89,8 +89,7 @@ const isCompleteSettlement = (item: SettlementItem) =>
 const isClosedSettlement = (item: SettlementItem) =>
   item.status === "종결" &&
   item.chargeAmount > 0 &&
-  item.paidAmount > 0 &&
-  item.hasExpense;
+  item.paidAmount > 0;
 
 
 async function fetchAllRows<T>(
@@ -627,9 +626,9 @@ const pagedList = filteredList.slice(
             </thead>
 
             <tbody>
-              {pagedList.map((item) => {
+              {pagedList.map((item, index) => {
                 return (
-                  <tr key={item.id} className="hover:bg-blue-50">
+                  <tr key={`${item.id}-${item.work_name}-${index}`} className="hover:bg-blue-50">
                     <td className="border border-slate-300 px-3 py-2 font-semibold">
                       <button
                         type="button"

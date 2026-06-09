@@ -504,8 +504,11 @@ export default function PendingInsuranceListPage({
                 </td>
               </tr>
             ) : (
-              filteredRows.map((row) => (
-                <tr key={row.id} className="hover:bg-blue-50">
+              filteredRows.map((row, index) => (
+                <tr
+                  key={`${row.id}-${row.workName}-${row.insuranceCompany}-${row.claimSide}-${index}`}
+                  className="hover:bg-blue-50"
+                >
                   <td className="border-b border-slate-100 px-3 py-2">
                     <button
                       type="button"
