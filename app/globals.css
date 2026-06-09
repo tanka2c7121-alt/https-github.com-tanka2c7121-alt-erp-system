@@ -95,8 +95,9 @@ body {
 
   .daily-cash-print-root {
     position: absolute !important;
-    left: 0 !important;
-    top: 0 !important;
+    left: 50% !important;
+    top: 6mm !important;
+    transform: translateX(-50%) !important;
     width: 200mm !important;
     min-height: auto !important;
     padding: 0 !important;

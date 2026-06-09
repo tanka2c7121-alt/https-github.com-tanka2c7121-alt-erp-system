@@ -17,7 +17,7 @@ type DailyCashRow = {
   memo: string | null;
 };
 const formatWon = (amount: number) => amount.toLocaleString();
-const rowsPerPage = 32;
+const rowsPerPage = 20;
 
 type DailyCashPrintPageProps = {
   user: {
@@ -127,28 +127,6 @@ const fetchRows = useCallback(async (dateValue = printDate) => {
         }}
       
       >
-       <div className="mb-6 grid grid-cols-2 gap-4 text-sm">
-  <div className="rounded-lg border border-slate-800 p-3">
-    <div className="font-semibold text-slate-600">
-      입금합계
-    </div>
-
-    <div className="mt-2 text-xl font-bold text-blue-600">
-      {totalIncome.toLocaleString()} 원
-    </div>
-  </div>
-
-  <div className="rounded-lg border border-slate-800 p-3">
-    <div className="font-semibold text-slate-600">
-      출금합계
-    </div>
-
-    <div className="mt-2 text-xl font-bold text-red-600">
-      {totalExpense.toLocaleString()} 원
-    </div>
-  </div>
-
-</div>
         <div className="border-2 border-slate-900 p-4">
           <div className="relative mb-4 text-center">
             <h1 className="text-2xl font-bold tracking-widest">
@@ -166,9 +144,9 @@ const fetchRows = useCallback(async (dateValue = printDate) => {
                 <th className="w-24 border border-slate-900 bg-slate-50 px-2 py-1">입력일자</th>
                 <td className="border border-slate-900 px-2 py-1">{printDate}</td>
                 <th className="w-24 border border-slate-900 bg-slate-50 px-2 py-1">입금합계</th>
-                <td className="border border-slate-900 px-2 py-1 text-right">{formatWon(totalIncome)}</td>
+                <td className="border border-slate-900 px-2 py-1 text-right font-bold text-blue-700">{formatWon(totalIncome)}</td>
                 <th className="w-24 border border-slate-900 bg-slate-50 px-2 py-1">출금합계</th>
-                <td className="border border-slate-900 px-2 py-1 text-right">{formatWon(totalExpense)}</td>
+                <td className="border border-slate-900 px-2 py-1 text-right font-bold text-red-700">{formatWon(totalExpense)}</td>
               </tr>
 
               <tr>
@@ -204,8 +182,8 @@ const fetchRows = useCallback(async (dateValue = printDate) => {
                   <td className="border border-slate-900 px-1 py-[2px] text-center">{item.type || "\u00A0"}</td>
                   <td className="border border-slate-900 px-1 py-[2px]">{item.category || "\u00A0"}</td>
                   <td className="border border-slate-900 px-1 py-[2px]">{item.content || "\u00A0"}</td>
-                  <td className="border border-slate-900 px-1 py-[2px] text-right">{item.income ? formatWon(item.income) : "\u00A0"}</td>
-                  <td className="border border-slate-900 px-1 py-[2px] text-right">{item.expense ? formatWon(item.expense) : "\u00A0"}</td>
+                  <td className="border border-slate-900 px-1 py-[2px] text-right font-semibold text-blue-700">{item.income ? formatWon(item.income) : "\u00A0"}</td>
+                  <td className="border border-slate-900 px-1 py-[2px] text-right font-semibold text-red-700">{item.expense ? formatWon(item.expense) : "\u00A0"}</td>
                   <td className="border border-slate-900 px-1 py-[2px]">{item.memo || "\u00A0"}</td>
                 </tr>
               ))}
