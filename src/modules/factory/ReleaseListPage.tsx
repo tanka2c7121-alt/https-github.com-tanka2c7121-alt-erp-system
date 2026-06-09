@@ -281,13 +281,6 @@ export default function ReleaseListPage({ onSelectMenu }: ReleaseListPageProps) 
           >
             출력
           </button>
-          <button
-            type="button"
-            onClick={() => void loadItems()}
-            className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-          >
-            새로고침
-          </button>
         </div>
       </div>
 

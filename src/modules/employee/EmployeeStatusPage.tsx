@@ -122,14 +122,6 @@ export default function EmployeeStatusPage({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={() => void loadEmployees()}
-            className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-          >
-            새로고침
-          </button>
-
           {canManage && (
             <button
               type="button"

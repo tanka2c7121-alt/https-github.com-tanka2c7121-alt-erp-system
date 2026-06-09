@@ -407,13 +407,6 @@ export default function PendingInsuranceListPage({
           )}
         </div>
 
-        <button
-          type="button"
-          onClick={() => void fetchRows()}
-          className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-        >
-          새로고침
-        </button>
       </div>
 
       <section className="grid grid-cols-1 gap-3 md:grid-cols-4">
