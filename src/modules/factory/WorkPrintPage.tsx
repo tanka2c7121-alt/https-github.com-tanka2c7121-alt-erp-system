@@ -182,10 +182,10 @@ export default function WorkPrintPage({
 <table className="w-full border-collapse text-[12px] leading-none text-center">
   <tbody>
 <tr>
-  <th className="w-20 border border-slate-900 bg-slate-100 px-2 py-0 align-middle">
+  <th className="w-20 border border-slate-900 bg-slate-200 px-2 py-0 align-middle font-black">
     차량번호
   </th>
-  <td className="h-8 border border-slate-900 px-2 py-0 align-middle ">
+  <td className="h-8 border border-slate-900 bg-blue-50 px-2 py-0 align-middle text-base font-black text-blue-900">
     {order?.car_number || "\u00A0"}
   </td>
 
@@ -196,10 +196,10 @@ export default function WorkPrintPage({
     {order?.car_model || "\u00A0"}
   </td>
 
-  <th className="w-20 border border-slate-900 bg-slate-100 px-2 py-0 align-middle">
+  <th className="w-20 border border-slate-900 bg-slate-200 px-2 py-0 align-middle font-black">
     차량연식
   </th>
-  <td className="h-8 border border-slate-900 px-2 py-0 align-middle whitespace-nowrap overflow-hidden">
+  <td className="h-8 border border-slate-900 bg-blue-50 px-2 py-0 align-middle text-base font-black text-blue-900 whitespace-nowrap overflow-hidden">
     {order?.car_year || "\u00A0"}
   </td>
 </tr>
@@ -219,10 +219,10 @@ export default function WorkPrintPage({
     {order?.mileage || "\u00A0"}
   </td>
 
-  <th className="w-20 border border-slate-900 bg-slate-100 px-2 py-0 align-middle">
+  <th className="w-20 border border-slate-900 bg-yellow-100 px-2 py-0 align-middle font-black">
     칼라코드
   </th>
-  <td className="h-8 border border-slate-900 px-2 py-0 align-middle whitespace-nowrap overflow-hidden">
+  <td className="h-8 border border-slate-900 bg-yellow-50 px-2 py-0 align-middle text-base font-black text-yellow-900 whitespace-nowrap overflow-hidden">
     {order?.color_code || "\u00A0"}
   </td>
 </tr>
