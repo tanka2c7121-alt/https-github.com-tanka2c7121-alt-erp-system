@@ -133,6 +133,8 @@ export default function SettlementRegisterPage({
   const [completionWarningAccepted, setCompletionWarningAccepted] = useState(false);
   const [closingWarningAccepted, setClosingWarningAccepted] = useState(false);
   const [adminUnlocked, setAdminUnlocked] = useState(false);
+  const [adminPasswordOpen, setAdminPasswordOpen] = useState(false);
+  const [adminPassword, setAdminPassword] = useState("");
   const [form, setForm] = useState({
     workName: "",
     carNumber: "",
@@ -553,17 +555,24 @@ export default function SettlementRegisterPage({
     return error;
   };
 
-  const handleAdminUnlock = async () => {
-    const adminId = window.prompt("관리자 아이디를 입력하세요.");
-    if (!adminId) return;
+  const handleAdminUnlock = () => {
+    if (user.role !== "ADMIN") {
+      alert("관리자만 잠금해제할 수 있습니다.");
+      return;
+    }
 
-    const password = window.prompt("관리자 비밀번호를 입력하세요.");
+    setAdminPassword("");
+    setAdminPasswordOpen(true);
+  };
+
+  const confirmAdminUnlock = async () => {
+    const password = adminPassword.trim();
     if (!password) return;
 
     const { data, error } = await supabase
       .from("app_users")
       .select("id")
-      .eq("user_id", adminId.trim().toLowerCase())
+      .eq("user_id", user.user_id)
       .eq("password", password)
       .eq("role", "ADMIN")
       .eq("is_active", true)
@@ -575,6 +584,8 @@ export default function SettlementRegisterPage({
     }
 
     setAdminUnlocked(true);
+    setAdminPassword("");
+    setAdminPasswordOpen(false);
     alert("잠금이 해제되었습니다. 저장 후 다시 잠금 상태가 됩니다.");
   };
   const handleSave = async ({
@@ -1179,6 +1190,54 @@ export default function SettlementRegisterPage({
           {saving ? (isEditMode ? "수정 중" : "저장 중") : isEditMode ? "수정 후 저장" : "저장"}
         </button>
       </div>
+
+      {adminPasswordOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
+          <div className="w-full max-w-sm rounded-xl bg-white p-5 shadow-2xl">
+            <h4 className="text-lg font-bold text-slate-900">관리자 잠금해제</h4>
+            <p className="mt-1 text-sm text-slate-600">
+              관리자 비밀번호를 입력하세요.
+            </p>
+
+            <input
+              className="mt-4 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+              type="password"
+              autoFocus
+              value={adminPassword}
+              onChange={(event) => setAdminPassword(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  void confirmAdminUnlock();
+                }
+                if (event.key === "Escape") {
+                  setAdminPassword("");
+                  setAdminPasswordOpen(false);
+                }
+              }}
+            />
+
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setAdminPassword("");
+                  setAdminPasswordOpen(false);
+                }}
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={() => void confirmAdminUnlock()}
+                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+              >
+                확인
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
