@@ -89,7 +89,7 @@ const expensePendingStatuses: ExpenseRequest["status"][] = [
   "관리자 승인대기",
 ];
 
-const categoryOptions: Record<string, string[]> = {
+const defaultCategoryOptions: Record<string, string[]> = {
   고정비: [
     "임대료",
     "관리비",
@@ -129,6 +129,7 @@ export default function ExpenseRequestPage({
   const [statusFilter, setStatusFilter] = useState("");
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
+  const [categoryOptions, setCategoryOptions] = useState(defaultCategoryOptions);
   const [form, setForm] = useState<FormState>({
     requestDate: todayText(),
     account: "",
@@ -177,6 +178,58 @@ export default function ExpenseRequestPage({
   useEffect(() => {
     void loadRows();
   }, [loadRows]);
+
+  useEffect(() => {
+    const loadCategoryOptions = async () => {
+      const { data, error } = await supabase
+        .from("daily_cash_categories")
+        .select("type, name")
+        .eq("is_active", true)
+        .in("type", ["고정비", "변동비"])
+        .order("type", { ascending: true })
+        .order("sort_order", { ascending: true })
+        .order("name", { ascending: true });
+
+      if (error || !data || data.length === 0) {
+        setCategoryOptions(defaultCategoryOptions);
+        return;
+      }
+
+      const nextOptions: Record<string, string[]> = {
+        고정비: [],
+        변동비: [],
+      };
+
+      data.forEach((row: any) => {
+        const type = String(row.type ?? "").trim();
+        const name = String(row.name ?? "").trim();
+
+        if (!name || !(type in nextOptions)) return;
+        nextOptions[type] = [...nextOptions[type], name];
+      });
+
+      setCategoryOptions({
+        고정비: nextOptions.고정비.length
+          ? nextOptions.고정비
+          : defaultCategoryOptions.고정비,
+        변동비: nextOptions.변동비.length
+          ? nextOptions.변동비
+          : defaultCategoryOptions.변동비,
+      });
+    };
+
+    void loadCategoryOptions();
+  }, []);
+
+  const selectedCategoryOptions = useMemo(() => {
+    const options = categoryOptions[form.expenseType] || [];
+
+    if (form.category && !options.includes(form.category)) {
+      return [form.category, ...options];
+    }
+
+    return options;
+  }, [categoryOptions, form.category, form.expenseType]);
 
   const visibleRows = useMemo(() => {
     const keyword = searchText.trim().toLowerCase();
@@ -522,7 +575,7 @@ export default function ExpenseRequestPage({
               onChange={(event) => handleChange("category", event.target.value)}
             >
               <option value="">선택</option>
-              {(categoryOptions[form.expenseType] || []).map((category) => (
+              {selectedCategoryOptions.map((category) => (
                 <option key={category} value={category}>
                   {category}
                 </option>
