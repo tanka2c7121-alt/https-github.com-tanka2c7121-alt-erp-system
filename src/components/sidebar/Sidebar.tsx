@@ -33,6 +33,37 @@ export default function Sidebar({
     }));
   };
 
+  const getVisibleExpandableMenuIds = (items: MenuItem[]): string[] => {
+    return items.flatMap((item) => {
+      if (item.roles && !item.roles.includes(userRole)) {
+        return [];
+      }
+
+      if (
+        item.departments &&
+        !isAdmin &&
+        !item.departments.includes(userDepartment ?? "")
+      ) {
+        return [];
+      }
+
+      const childIds = getVisibleExpandableMenuIds(item.children ?? []);
+
+      return item.children && item.children.length > 0
+        ? [item.id, ...childIds]
+        : childIds;
+    });
+  };
+
+  const toggleAllMenus = () => {
+    const expandableIds = getVisibleExpandableMenuIds(menuData);
+    const shouldOpen = expandableIds.some((id) => !openMenus[id]);
+
+    setOpenMenus(
+      Object.fromEntries(expandableIds.map((id) => [id, shouldOpen]))
+    );
+  };
+
   const renderMenu = (items: MenuItem[], depth = 0) => {
     return items.map((item) => {
       if (item.roles && !item.roles.includes(userRole)) {
@@ -84,7 +115,13 @@ export default function Sidebar({
   return (
     <aside className="h-full w-64 overflow-y-auto bg-slate-900 py-4 pl-10 pr-4 text-white">
       <div className="mb-6">
-        <div className="text-lg font-bold">ERP MENU</div>
+        <button
+          type="button"
+          onClick={toggleAllMenus}
+          className="rounded-lg text-left text-lg font-bold text-white underline-offset-4 hover:underline"
+        >
+          ERP MENU
+        </button>
         <div className="text-xs text-slate-400">업무 메뉴</div>
       </div>
 
