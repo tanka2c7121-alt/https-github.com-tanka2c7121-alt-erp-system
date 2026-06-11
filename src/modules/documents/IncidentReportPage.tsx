@@ -11,6 +11,7 @@ type LoginUser = {
   user_id: string;
   user_name: string;
   department?: string | null;
+  approval_role?: string | null;
   role: UserRole;
 };
 
@@ -79,7 +80,8 @@ export default function IncidentReportPage({
     actionTaken: "",
     memo: "",
   });
-  const canCheck = isAdmin;
+  const canCheck =
+    isAdmin || user.approval_role === "관리부" || user.department === "관리부";
 
   const loadRows = useCallback(async () => {
     const { data, error } = await supabase

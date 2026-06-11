@@ -24,7 +24,7 @@ type AppUser = {
 };
 
 const departments = ["관리부", "도장부", "판금부", "정비부"];
-const approvalRoles = ["직원", "부서장", "관리부", "관리자"];
+const approvalRoles = ["직원", "부서장", "관리부", "총괄관리", "관리자"];
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function EmployeeManagePage() {

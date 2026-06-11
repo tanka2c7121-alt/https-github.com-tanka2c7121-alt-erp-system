@@ -104,10 +104,13 @@ export default function HomeDashboardPage({
 }: HomeDashboardPageProps) {
   const approvalRole = user?.approval_role ?? (isAdmin ? "관리자" : "직원");
   const isFinalAttendanceApprover = isAdmin || approvalRole === "관리자";
+  const isAdminDeptApprover =
+    approvalRole === "관리부" || user?.department === "관리부";
   const canApproveAttendance =
-    isFinalAttendanceApprover || approvalRole === "부서장";
+    isFinalAttendanceApprover || isAdminDeptApprover || approvalRole === "부서장";
   const canApproveExpenses =
     isAdmin || user?.role === "CHIEF" || approvalRole === "총괄관리";
+  const canCheckIncident = isAdmin || isAdminDeptApprover;
   const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
   const [pendingUsers, setPendingUsers] = useState<PendingUser[]>([]);
   const [pendingExpenseRequests, setPendingExpenseRequests] = useState<
@@ -134,7 +137,9 @@ export default function HomeDashboardPage({
 
     const attendanceStatuses = isFinalAttendanceApprover
       ? ["관리부 확인대기", "관리자 승인대기"]
-      : ["부서장 승인대기"];
+      : isAdminDeptApprover
+        ? ["관리부 확인대기"]
+        : ["부서장 승인대기"];
 
     let attendanceQuery = supabase
       .from("attendance_requests")
@@ -185,7 +190,7 @@ export default function HomeDashboardPage({
       canApproveAttendance
         ? attendanceQuery
         : Promise.resolve({ data: [], error: null }),
-      isAdmin
+      canCheckIncident
         ? supabase
             .from("incident_reports")
             .select("id, report_date, incident_type, title, requested_name, requested_by, content")
@@ -243,7 +248,9 @@ export default function HomeDashboardPage({
     approvalRole,
     canApproveAttendance,
     canApproveExpenses,
+    canCheckIncident,
     isAdmin,
+    isAdminDeptApprover,
     isFinalAttendanceApprover,
     user?.department,
   ]);
@@ -585,12 +592,12 @@ export default function HomeDashboardPage({
         <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
           <QuickActions actions={quickActionMenus} onSelectMenu={onSelectMenu} />
 
-          {(isAdmin || canApproveAttendance || canApproveExpenses) && (
+          {(isAdmin || canApproveAttendance || canApproveExpenses || canCheckIncident) && (
             <AdminApprovalPanel
               showEmployeeApprovals={isAdmin}
               showExpenseApprovals={canApproveExpenses}
               showAttendanceApprovals={canApproveAttendance}
-              showIncidentApprovals={isAdmin}
+              showIncidentApprovals={canCheckIncident}
               pendingUsers={pendingUsers.slice(0, 6)}
               pendingExpenses={pendingExpenseRequests.slice(0, 6)}
               pendingAttendances={pendingAttendanceRequests.slice(0, 6)}

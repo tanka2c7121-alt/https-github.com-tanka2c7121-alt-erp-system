@@ -89,7 +89,8 @@ export default function AttendanceRequestPrintPage({
   }
 
   const isDepartmentHead = user.approval_role === "부서장";
-  const isAdminDept = user.approval_role === "관리부";
+  const isAdminDept =
+    user.approval_role === "관리부" || user.department === "관리부";
   const isFinalAdmin = isAdmin || user.approval_role === "관리자";
   const canApprove =
     attendanceRequest.status === "부서장 승인대기"
@@ -108,7 +109,7 @@ export default function AttendanceRequestPrintPage({
     });
 
   const nextApprovalStatus = (): AttendanceRequest["status"] => {
-    if (attendanceRequest.status === "부서장 승인대기") return "관리자 승인대기";
+    if (attendanceRequest.status === "부서장 승인대기") return "관리부 확인대기";
     if (attendanceRequest.status === "관리부 확인대기") return "관리자 승인대기";
     return "승인완료";
   };

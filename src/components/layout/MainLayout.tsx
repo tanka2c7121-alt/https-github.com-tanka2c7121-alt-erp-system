@@ -119,6 +119,7 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
   const userRole = user.role ?? "STAFF";
   const canViewSales = ["ADMIN", "CHIEF"].includes(userRole);
   const approvalRole = user.approval_role ?? (isAdmin ? "관리자" : "직원");
+  const canCheckIncident = isAdmin || approvalRole === "관리부" || user.department === "관리부";
 
   const [selectedMenu, setSelectedMenu] = useState<MenuItem>(initialMenu);
   const [menuHistory, setMenuHistory] = useState<MenuItem[]>([]);
@@ -274,9 +275,11 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
     const canSeeExpenseApprovalNotice =
       isAdmin || userRole === "CHIEF" || approvalRole === "총괄관리";
     const isFinalAttendanceApprover = isAdmin || approvalRole === "관리자";
+    const isAdminDeptApprover =
+      approvalRole === "관리부" || user.department === "관리부";
     const canSeeAttendanceApprovalNotice =
-      isFinalAttendanceApprover || approvalRole === "부서장";
-    const canCheckIncident = isAdmin;
+      isFinalAttendanceApprover || isAdminDeptApprover || approvalRole === "부서장";
+    const canCheckIncident = isAdmin || isAdminDeptApprover;
     const myExpenseReadAt = getMyDocumentReadAt(user.user_id, "expenses");
     const myAttendanceReadAt = getMyDocumentReadAt(user.user_id, "attendances");
     const myIncidentReadAt = getMyDocumentReadAt(user.user_id, "incidents");
@@ -313,6 +316,11 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
               .from("attendance_requests")
               .select("id", { count: "exact", head: true })
               .in("status", ["관리부 확인대기", "관리자 승인대기"])
+          : isAdminDeptApprover
+            ? supabase
+                .from("attendance_requests")
+                .select("id", { count: "exact", head: true })
+                .eq("status", "관리부 확인대기")
           : supabase
               .from("attendance_requests")
               .select("id", { count: "exact", head: true })
@@ -404,6 +412,16 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
             title: "지출결의서 승인대기",
             count: notificationCounts.expenses,
             menu: { id: "documents-expense-request", title: "지출결의서" },
+          },
+        ]
+      : []),
+    ...(!isAdmin && canCheckIncident
+      ? [
+          {
+            id: "incidents",
+            title: "경위서 확인대기",
+            count: notificationCounts.incidents,
+            menu: { id: "documents-incident-report", title: "경위서" },
           },
         ]
       : []),
