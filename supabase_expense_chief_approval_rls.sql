@@ -25,6 +25,13 @@ $$;
 
 grant execute on function public.current_app_user_can_approve_expenses() to authenticated;
 
+alter table if exists public.expense_requests
+  drop constraint if exists expense_requests_status_check;
+
+alter table if exists public.expense_requests
+  add constraint expense_requests_status_check
+  check (status in ('승인대기', '총괄관리 승인대기', '관리자 승인대기', '승인완료', '반려'));
+
 drop policy if exists expense_requests_select_scope on public.expense_requests;
 drop policy if exists expense_requests_update_scope on public.expense_requests;
 
@@ -56,5 +63,8 @@ using (
 with check (
   public.current_app_user_is_admin()
   or requested_by = public.current_app_user_id()
-  or public.current_app_user_can_approve_expenses()
+  or (
+    public.current_app_user_can_approve_expenses()
+    and status in ('총괄관리 승인대기', '관리자 승인대기', '승인완료', '반려')
+  )
 );

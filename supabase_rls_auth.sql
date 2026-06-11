@@ -381,7 +381,10 @@ using (
 with check (
   public.current_app_user_is_admin()
   or requested_by = public.current_app_user_id()
-  or public.current_app_user_can_approve_expenses()
+  or (
+    public.current_app_user_can_approve_expenses()
+    and status in ('총괄관리 승인대기', '관리자 승인대기', '승인완료', '반려')
+  )
 );
 
 create policy expense_requests_delete_admin
