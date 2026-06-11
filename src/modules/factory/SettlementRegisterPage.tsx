@@ -134,6 +134,9 @@ export default function SettlementRegisterPage({
   const [closingWarningAccepted, setClosingWarningAccepted] = useState(false);
   const [adminUnlocked, setAdminUnlocked] = useState(false);
   const [adminPasswordOpen, setAdminPasswordOpen] = useState(false);
+  const [adminPasswordPurpose, setAdminPasswordPurpose] = useState<
+    "unlock" | "serviceChargeOverride"
+  >("unlock");
   const [adminPassword, setAdminPassword] = useState("");
   const [form, setForm] = useState({
     workName: "",
@@ -163,6 +166,7 @@ export default function SettlementRegisterPage({
     completedAt: "",
     completedBy: "",
     completedByName: "",
+    serviceChargeOverride: false,
     memo: "",
   });
 
@@ -359,6 +363,7 @@ export default function SettlementRegisterPage({
       completedAt: settlement?.completed_at ?? "",
       completedBy: settlement?.completed_by ?? "",
       completedByName: settlement?.completed_by_name ?? "",
+      serviceChargeOverride: Boolean(settlement?.service_charge_override),
       memo: workOrder.message ?? settlement?.memo ?? "",
     });
 
@@ -562,6 +567,20 @@ export default function SettlementRegisterPage({
     }
 
     setAdminPassword("");
+    setAdminPasswordPurpose("unlock");
+    setAdminPasswordOpen(true);
+  };
+
+  const handleServiceChargeOverrideChange = (checked: boolean) => {
+    if (isLocked) return;
+
+    if (!checked) {
+      setForm((prev) => ({ ...prev, serviceChargeOverride: false }));
+      return;
+    }
+
+    setAdminPassword("");
+    setAdminPasswordPurpose("serviceChargeOverride");
     setAdminPasswordOpen(true);
   };
 
@@ -569,17 +588,29 @@ export default function SettlementRegisterPage({
     const password = adminPassword.trim();
     if (!password) return;
 
-    const { data, error } = await supabase
+    let query = supabase
       .from("app_users")
       .select("id")
-      .eq("user_id", user.user_id)
       .eq("password", password)
       .eq("role", "ADMIN")
-      .eq("is_active", true)
-      .maybeSingle();
+      .eq("is_active", true);
+
+    if (adminPasswordPurpose === "unlock") {
+      query = query.eq("user_id", user.user_id);
+    }
+
+    const { data, error } = await query.limit(1).maybeSingle();
 
     if (error || !data) {
       alert("관리자 인증에 실패했습니다.");
+      return;
+    }
+
+    if (adminPasswordPurpose === "serviceChargeOverride") {
+      setForm((prev) => ({ ...prev, serviceChargeOverride: true }));
+      setAdminPassword("");
+      setAdminPasswordOpen(false);
+      alert("서비스 체크가 적용되었습니다.");
       return;
     }
 
@@ -642,8 +673,10 @@ export default function SettlementRegisterPage({
     const hasDatedPaymentAmount = paymentRows.some(
       (row) => toNumber(row.amount) > 0 && Boolean(row.date)
     );
+    const requiresChargeAndPayment = !saveForm.serviceChargeOverride;
     if (
       (saveForm.progressStatus === "완결" || saveForm.progressStatus === "종결") &&
+      requiresChargeAndPayment &&
       (claimTotal <= 0 || !hasDatedPaymentAmount)
     ) {
       alert("완결/종결은 청구금액, 입금일, 입금금액이 모두 있어야 저장할 수 있습니다.");
@@ -691,6 +724,7 @@ export default function SettlementRegisterPage({
         completed_at: completedAt,
         completed_by: completedBy,
         completed_by_name: completedByName,
+        service_charge_override: saveForm.serviceChargeOverride,
         memo: saveForm.memo,
       });
 
@@ -899,7 +933,18 @@ export default function SettlementRegisterPage({
       <section className="rounded-xl border border-slate-200 bg-white p-4">
         <div className="mb-4 flex items-center justify-between">
           <h3 className="text-lg font-bold text-slate-900">청구정보</h3>
-          <div className="flex gap-2">
+          <div className="flex items-center gap-3">
+            <label className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700">
+              <input
+                type="checkbox"
+                checked={form.serviceChargeOverride}
+                disabled={isLocked}
+                onChange={(event) =>
+                  handleServiceChargeOverrideChange(event.target.checked)
+                }
+              />
+              서비스
+            </label>
             <button
               type="button"
               onClick={() => setClaimRows((prev) => [...prev, emptyClaimRow()])}
