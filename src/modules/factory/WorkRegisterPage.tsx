@@ -2036,7 +2036,11 @@ function handleClearWorkRow(index: number) {
       )}
 
       
-      <section className="grid grid-cols-2 gap-3 xl:grid-cols-8 xl:gap-4">
+      <section className="rounded-xl border border-cyan-200 border-l-4 border-l-cyan-500 bg-cyan-50/40 p-4 shadow-sm">
+        <h4 className="mb-4 rounded-lg bg-cyan-100 px-3 py-2 text-base font-bold text-cyan-950">
+          차량 기본정보
+        </h4>
+        <div className="grid grid-cols-2 gap-3 xl:grid-cols-8 xl:gap-4">
       
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <label className={labelClass}>제조사</label>
@@ -2127,16 +2131,21 @@ function handleClearWorkRow(index: number) {
 />
 </div>
 
-        <Field
+<Field
   label="칼라코드"
   value={colorCode}
   onChange={(e) => setColorCode(e.target.value)}
   options={activeColorOptions[carModel] || []}
 />
+        </div>
       </section>
 
       {/* 2번째 줄 */}
-      <section className="grid grid-cols-2 gap-3 xl:grid-cols-8 xl:gap-4">
+      <section className="rounded-xl border border-emerald-200 border-l-4 border-l-emerald-500 bg-emerald-50/40 p-4 shadow-sm">
+        <h4 className="mb-4 rounded-lg bg-emerald-100 px-3 py-2 text-base font-bold text-emerald-950">
+          입출고 및 거래정보
+        </h4>
+        <div className="grid grid-cols-2 gap-3 xl:grid-cols-8 xl:gap-4">
         <Field
           label="입고일"
           type="date"
@@ -2254,10 +2263,15 @@ function handleClearWorkRow(index: number) {
   ))}
 </select>
 </div>
+        </div>
       </section>
 
       {/* 3번째 줄 */}
-      <section className="grid grid-cols-2 gap-3 xl:grid-cols-8 xl:gap-4">
+      <section className="rounded-xl border border-violet-200 border-l-4 border-l-violet-500 bg-violet-50/40 p-4 shadow-sm">
+        <h4 className="mb-4 rounded-lg bg-violet-100 px-3 py-2 text-base font-bold text-violet-950">
+          보험 및 정산정보
+        </h4>
+        <div className="grid grid-cols-2 gap-3 xl:grid-cols-8 xl:gap-4">
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <label className={labelClass}>구분</label>
           <select
@@ -2428,10 +2442,14 @@ function handleClearWorkRow(index: number) {
   options={["-", "10만원", "20만원", "30만원", "33만원", "50만원", "55만원","60만원","66만원","99만원"]}
 />
 
+        </div>
  </section> 
 
       {/* 전달내용 */}
-      <section className="rounded-xl border border-slate-200 bg-white p-4">
+      <section className="rounded-xl border border-amber-200 border-l-4 border-l-amber-500 bg-amber-50/40 p-4 shadow-sm">
+        <h4 className="mb-4 rounded-lg bg-amber-100 px-3 py-2 text-base font-bold text-amber-950">
+          전달내용
+        </h4>
         <textarea
           className={textAreaClass}
           value={message}
@@ -2441,26 +2459,26 @@ function handleClearWorkRow(index: number) {
       </section>
 
       {/* 작업내용 */}
-      <section className="rounded-xl border border-slate-200 bg-white p-4">
+      <section className="rounded-xl border border-blue-200 border-l-4 border-l-blue-500 bg-blue-50/40 p-4 shadow-sm">
         <div className="mb-4 flex items-center justify-between">
-          <label className={labelClass}>작업내용</label>
+          <label className="rounded-lg bg-blue-100 px-3 py-2 text-base font-bold text-blue-950">작업내용</label>
           
         </div>
 
         <div className="overflow-x-auto">
           <table className="w-full min-w-[620px] table-fixed border-collapse">
             <thead>
-              <tr className="bg-slate-100">
-                <th className="w-16 border border-slate-300 px-2 py-2 text-center text-sm font-semibold text-slate-800">
+              <tr className="bg-blue-100">
+                <th className="w-16 border border-blue-200 px-2 py-2 text-center text-sm font-semibold text-blue-950">
                   좌우
                 </th>
-                <th className="w-[44%] border border-slate-300 px-3 py-2 text-left text-sm font-semibold text-slate-800">
+                <th className="w-[44%] border border-blue-200 px-3 py-2 text-left text-sm font-semibold text-blue-950">
                   부위
                 </th>
-                <th className="w-[28%] border border-slate-300 px-3 py-2 text-left text-sm font-semibold text-slate-800">
+                <th className="w-[28%] border border-blue-200 px-3 py-2 text-left text-sm font-semibold text-blue-950">
                   작업내용
                 </th>
-                <th className="w-16 border border-slate-300 px-2 py-2 text-center text-sm font-semibold text-slate-800">
+                <th className="w-16 border border-blue-200 px-2 py-2 text-center text-sm font-semibold text-blue-950">
                   삭제
                 </th>
               </tr>
