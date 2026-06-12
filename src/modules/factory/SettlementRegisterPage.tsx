@@ -52,6 +52,21 @@ const getInputStateClass = (value?: string | number | null) =>
   String(value ?? "").trim()
     ? "border-blue-200 bg-blue-50"
     : "border-red-200 bg-red-50";
+const getProgressStatusClass = (value?: string) => {
+  if (value === "완결") {
+    return "border-green-300 bg-green-100 font-bold text-green-800";
+  }
+
+  if (value === "종결") {
+    return "border-slate-400 bg-slate-200 font-bold text-slate-800";
+  }
+
+  if (value === "미결") {
+    return "border-orange-300 bg-orange-100 font-bold text-orange-800";
+  }
+
+  return getInputStateClass(value);
+};
 
 const emptyPaymentRow = (): PaymentRow => ({
   paymentType: "",
@@ -851,7 +866,7 @@ export default function SettlementRegisterPage({
         </div>
       )}
 
-      <section className="rounded-xl border border-slate-200 bg-white p-4">
+      <section className="rounded-xl border border-cyan-200 border-l-4 border-l-cyan-500 bg-cyan-50/40 p-4 shadow-sm [&>h3]:rounded-lg [&>h3]:bg-cyan-100 [&>h3]:px-3 [&>h3]:py-2 [&>h3]:text-cyan-950">
         <h3 className="mb-4 text-lg font-bold text-slate-900">기본정보</h3>
 
         <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-3">
@@ -925,12 +940,13 @@ export default function SettlementRegisterPage({
             value={form.progressStatus}
             onChange={handleProgressStatusChange}
             options={progressStatusOptions}
+            statusTone
           />
           <Field label="거래처" value={form.partnerCompany} />
         </div>
       </section>
 
-      <section className="rounded-xl border border-slate-200 bg-white p-4">
+      <section className="rounded-xl border border-violet-200 border-l-4 border-l-violet-500 bg-violet-50/40 p-4 shadow-sm [&>div:first-child>h3]:rounded-lg [&>div:first-child>h3]:bg-violet-100 [&>div:first-child>h3]:px-3 [&>div:first-child>h3]:py-2 [&>div:first-child>h3]:text-violet-950">
         <div className="mb-4 flex items-center justify-between">
           <h3 className="text-lg font-bold text-slate-900">청구정보</h3>
           <div className="flex items-center gap-3">
@@ -972,7 +988,7 @@ export default function SettlementRegisterPage({
           {claimRows.map((row, index) => (
             <div
               key={index}
-              className="grid grid-cols-1 gap-4 rounded-xl border border-slate-100 p-3 md:grid-cols-5"
+              className="grid grid-cols-1 gap-4 rounded-xl border border-violet-100 bg-white/80 p-3 md:grid-cols-5"
             >
               <Field
                 label="청구일"
@@ -1001,7 +1017,7 @@ export default function SettlementRegisterPage({
         </div>
       </section>
 
-      <section className="rounded-xl border border-slate-200 bg-white p-5">
+      <section className="rounded-xl border border-emerald-200 border-l-4 border-l-emerald-500 bg-emerald-50/40 p-5 shadow-sm [&>div:first-child>h3]:rounded-lg [&>div:first-child>h3]:bg-emerald-100 [&>div:first-child>h3]:px-3 [&>div:first-child>h3]:py-2 [&>div:first-child>h3]:text-emerald-950">
         <div className="mb-4 flex items-center justify-between">
           <h3 className="text-lg font-bold text-slate-900">입금내역</h3>
           <div className="flex gap-2">
@@ -1032,7 +1048,7 @@ export default function SettlementRegisterPage({
           {paymentRows.map((row, index) => (
             <div
               key={index}
-              className="grid grid-cols-1 gap-4 rounded-xl border border-slate-100 p-3 md:grid-cols-5"
+              className="grid grid-cols-1 gap-4 rounded-xl border border-emerald-100 bg-white/80 p-3 md:grid-cols-5"
             >
               <Field
                 label="입금일"
@@ -1126,7 +1142,7 @@ export default function SettlementRegisterPage({
         </div>
       </section>
 
-      <section className="rounded-xl border border-slate-200 bg-white p-5">
+      <section className="rounded-xl border border-amber-200 border-l-4 border-l-amber-500 bg-amber-50/40 p-5 shadow-sm [&>div:first-child>h3]:rounded-lg [&>div:first-child>h3]:bg-amber-100 [&>div:first-child>h3]:px-3 [&>div:first-child>h3]:py-2 [&>div:first-child>h3]:text-amber-950">
         <div className="mb-4 flex items-center justify-between">
           <h3 className="text-lg font-bold text-slate-900">지출내역</h3>
           <div className="flex gap-2">
@@ -1157,7 +1173,7 @@ export default function SettlementRegisterPage({
           {expenseRows.map((row, index) => (
             <div
               key={index}
-              className="grid grid-cols-1 gap-4 rounded-xl border border-slate-100 p-3 md:grid-cols-5"
+              className="grid grid-cols-1 gap-4 rounded-xl border border-amber-100 bg-white/80 p-3 md:grid-cols-5"
             >
               <Field
                 label="지출일"
@@ -1295,6 +1311,7 @@ function Field({
   options,
   onChange,
   disabled = false,
+  statusTone = false,
 }: {
   label: string;
   placeholder?: string;
@@ -1303,20 +1320,21 @@ function Field({
   options?: string[];
   onChange?: (value: string) => void;
   disabled?: boolean;
+  statusTone?: boolean;
 }) {
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-4">
       <label className={labelClass}>{label}</label>
       {options ? (
         <select
-          className={`${getInputStateClass(value)} ${inputClass} disabled:cursor-not-allowed disabled:bg-slate-100`}
+          className={`${statusTone ? getProgressStatusClass(value) : getInputStateClass(value)} ${inputClass} disabled:cursor-not-allowed disabled:bg-slate-100`}
           value={value}
           disabled={disabled || !onChange}
           onChange={(event) => onChange?.(event.target.value)}
         >
           <option value="">선택</option>
           {options.map((item) => (
-            <option key={item} value={item}>
+            <option key={item} value={item} className={statusTone ? getProgressStatusClass(item) : undefined}>
               {item}
             </option>
           ))}

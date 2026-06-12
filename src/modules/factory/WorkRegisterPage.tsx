@@ -16,6 +16,7 @@ const getInputStateClass = (value: string) =>
   value
     ? "border-blue-200 bg-blue-50"
     : "border-red-200 bg-red-50";
+const isMissingInputValue = (value: string) => !String(value ?? "").trim();
 const inputClass =
   "mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none";
 
@@ -1396,6 +1397,56 @@ async function handleSave() {
   try {
     const targetWorkName = workName;
     const normalizedCarNumber = carNumber.trim();
+    const missingFields = [
+      ["작명", workName],
+      ["제조사", carMaker],
+      ["차량명", carModel],
+      ["차량번호", normalizedCarNumber],
+      ["전화번호", phoneNumber],
+      ["차량연식", carYear],
+      ["VIN", vin],
+      ["주행거리", mileage],
+      ["칼라코드", colorCode],
+      ["입고일", inboundDate],
+      ["출고예정", outboundDate],
+      ["출고일", releaseDate],
+      ["렌터카 업체", rentalCompany],
+      ["렌터카 전화번호", rentalPhoneNumber],
+      ["견인", towYn],
+      ["탁송", deliveryYn],
+      ["거래처", partnerCompany],
+      ["구분", category],
+      ["보험사", company],
+      ...(coverageType === "과실" ? ([["상대보험사", otherCompany]] as const) : []),
+      ["담보", coverageType],
+      ["접수번호", receiptNumber],
+      ...(coverageType === "과실"
+        ? ([["대물 접수번호", otherReceiptNumber]] as const)
+        : []),
+      ["과실", faultRate],
+      ...(coverageType === "과실"
+        ? ([
+            ["자차 담당자", ownManagerName],
+            ["대물 담당자", otherManagerName],
+          ] as const)
+        : ([["담당자", managerName]] as const)),
+      ["부가세", vatYn],
+      ["면책금(최소)", deductibleAmount],
+    ]
+      .filter(([, value]) => isMissingInputValue(value))
+      .map(([label]) => label);
+
+    if (missingFields.length > 0) {
+      const previewFields = missingFields.slice(0, 12).join(", ");
+      const restCount = missingFields.length - 12;
+
+      alert(
+        `빨간색 미입력 칸이 ${missingFields.length}개 있습니다. 모두 입력 후 저장하세요.\n\n${previewFields}${
+          restCount > 0 ? ` 외 ${restCount}개` : ""
+        }`
+      );
+      return false;
+    }
 
     if (!workName) {
       alert("작명을 입력하세요.");
