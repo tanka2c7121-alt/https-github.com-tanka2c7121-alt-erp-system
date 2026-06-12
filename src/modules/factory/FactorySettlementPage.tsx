@@ -29,9 +29,12 @@ type SettlementItem = {
   chargeAmount: number;
   paidAmount: number;
   receivableAmount: number;
+  paymentRate: number | null;
 };
 
 const formatWon = (amount: number) => amount.toLocaleString();
+const formatPercent = (rate: number | null) =>
+  rate === null ? "-" : `${rate.toFixed(1)}%`;
 const currentDateText = localDateText();
 const currentYear = currentDateText.slice(0, 4);
 const currentMonth = currentDateText.slice(5, 7);
@@ -296,6 +299,12 @@ const handleSort = (field: keyof SettlementItem) => {
         chargeAmount: settlementClaimAmount || paymentClaimAmount,
         paidAmount: paymentAmountMap.get(workName) ?? 0,
         receivableAmount: receivableAmountMap.get(workName) ?? 0,
+        paymentRate:
+          (settlementClaimAmount || paymentClaimAmount) > 0
+            ? ((paymentAmountMap.get(workName) ?? 0) /
+                (settlementClaimAmount || paymentClaimAmount)) *
+              100
+            : null,
       };
     })
     );
@@ -403,7 +412,7 @@ const pagedList = filteredList.slice(
       <div>
         <h3 className="text-xl font-bold">{pageTitle}</h3>
         <p className="text-sm text-slate-700">
-          작업별 청구금액, 입금금액, 미수금, 면책금을 확인하는 화면입니다.
+          작업별 청구금액, 입금금액, 결제율, 면책금을 확인하는 화면입니다.
         </p>
       </div>
 
@@ -604,8 +613,10 @@ const pagedList = filteredList.slice(
                   className="cursor-pointer select-none border border-slate-300 px-3 py-2">
                   입금금액
                 </th>
-                <th className="border border-slate-300 px-3 py-2">
-                  미수금
+                <th
+                  onClick={() => handleSort("paymentRate")}
+                  className="cursor-pointer select-none border border-slate-300 px-3 py-2">
+                  결제율
                 </th>
                 <th
                   onClick={() => handleSort("deductible_amount")}
@@ -650,8 +661,8 @@ const pagedList = filteredList.slice(
                     <td className="border border-slate-300 px-3 py-2">{item.company}</td>
                     <td className="border border-slate-300 px-3 py-2 text-right">{formatWon(item.chargeAmount)}</td>
                     <td className="border border-slate-300 px-3 py-2 text-right">{formatWon(item.paidAmount)}</td>
-                    <td className="border border-slate-300 px-3 py-2 text-right font-semibold text-red-600">
-                      {formatWon(item.receivableAmount)}
+                    <td className="border border-slate-300 px-3 py-2 text-right font-semibold">
+                      {formatPercent(item.paymentRate)}
                     </td>
                     <td className="border border-slate-300 px-3 py-2 text-right text-blue-600">
                       {item.deductible_amount || "-"}
