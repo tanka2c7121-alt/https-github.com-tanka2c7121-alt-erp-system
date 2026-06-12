@@ -309,7 +309,8 @@ function CatalogManager({ canManage }: { canManage: boolean }) {
   const handleAddBusiness = async () => {
     const nextName = businessName.trim();
     const nextPhoneNumber = phoneNumber.trim();
-    const nextGroupName = activeTab === "insurer" ? groupName : "";
+    const nextGroupName =
+      activeTab === "insurer" || activeTab === "partner" ? groupName : "";
 
     if (!nextName) {
       alert("목록명을 입력하세요.");
@@ -590,6 +591,15 @@ function CatalogManager({ canManage }: { canManage: boolean }) {
                 <option value="캐피탈">캐피탈</option>
                 <option value="일반">일반</option>
               </select>
+            ) : activeTab === "partner" ? (
+              <select
+                className={inputClass}
+                value={groupName}
+                onChange={(event) => setGroupName(event.target.value)}
+              >
+                <option value="">일반 거래처</option>
+                <option value="입고지원">입고지원 대상</option>
+              </select>
             ) : (
               <div />
             )}
@@ -642,7 +652,7 @@ function CatalogManager({ canManage }: { canManage: boolean }) {
         <BusinessTable
           rows={visibleBusinessRows}
           canManage={canManage}
-          showGroup={activeTab === "insurer"}
+          showGroup={activeTab === "insurer" || activeTab === "partner"}
           showPhone={activeTab === "rental"}
           onToggle={toggleBusinessActive}
           onDelete={deleteBusiness}
