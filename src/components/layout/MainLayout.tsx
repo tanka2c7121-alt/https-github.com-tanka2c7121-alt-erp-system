@@ -39,6 +39,7 @@ import IncidentReportPage from "../../modules/documents/IncidentReportPage";
 import IncidentReportPrintPage from "../../modules/documents/IncidentReportPrintPage";
 import SalesDashboardPage from "../../modules/sales/SalesDashboardPage";
 import SalesRevenuePage from "../../modules/sales/SalesRevenuePage";
+import PartnerSupportPage from "../../modules/sales/PartnerSupportPage";
 
 type LoginUser = {
   id: string | number;
@@ -600,6 +601,9 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
     }
     if (menu.id === "sales-partner") {
       return <SalesRevenuePage kind="partner" title="거래처매출" />;
+    }
+    if (menu.id === "sales-partner-support") {
+      return <PartnerSupportPage onSelectMenu={handleSelectMenu} />;
     }
     if (menu.id === "sales-card") {
       return <SalesRevenuePage kind="card" title="카드승인" />;

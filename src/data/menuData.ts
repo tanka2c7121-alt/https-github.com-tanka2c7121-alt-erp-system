@@ -80,6 +80,8 @@ export const menuData: MenuItem[] = [
       { id: "sales-insurance", title: "보험매출" },
       { id: "sales-capital", title: "캐피탈매출" },
       { id: "sales-general", title: "일반매출" },
+      { id: "sales-partner", title: "거래처매출" },
+      { id: "sales-partner-support", title: "입고지원관리" },
       { id: "sales-card", title: "카드승인" },
       { id: "sales-blue", title: "BLUE POINT" },
     ],
