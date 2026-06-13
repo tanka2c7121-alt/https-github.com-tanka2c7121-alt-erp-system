@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { MenuItem } from "../../data/menuData";
-import { localDateText } from "../../lib/date";
 import { supabase } from "../../lib/supabase";
 
 type PartnerSupportPageProps = {
@@ -17,12 +16,8 @@ type WorkOrderRow = {
   category: string | null;
   insurance_company: string | null;
   partner_company: string | null;
+  inbound_date: string | null;
   release_date: string | null;
-};
-
-type SettlementRow = {
-  work_name: string | null;
-  progress_status: string | null;
 };
 
 type PaymentRow = {
@@ -55,6 +50,7 @@ type BusinessCatalogRow = {
 type SupportRow = {
   id: number;
   workName: string;
+  inboundDate: string;
   releaseDate: string;
   partnerCompany: string;
   carNumber: string;
@@ -74,9 +70,6 @@ type SupportRow = {
 
 type SupportFilter = "pending" | "entered" | "all";
 
-const currentDateText = localDateText();
-const currentYear = currentDateText.slice(0, 4);
-const currentMonth = currentDateText.slice(5, 7);
 const pageSize = 30;
 const defaultSupportTargetPartners = [
   "SK렌터카",
@@ -93,13 +86,6 @@ const toAmountNumber = (value: unknown) =>
 const hasDateValue = (value: unknown) => {
   const text = normalizeText(value).toLowerCase();
   return Boolean(text && text !== "null" && text !== "undefined" && text !== "0000-00-00");
-};
-const normalizeStatus = (value: unknown): SupportRow["status"] => {
-  const text = normalizeText(value);
-
-  if (text.includes("종결")) return "종결";
-  if (text.includes("완결")) return "완결";
-  return "미결";
 };
 const includesKeyword = (value: unknown, keyword: string) =>
   normalizeText(value).replace(/\s+/g, "").includes(keyword);
@@ -141,8 +127,8 @@ export default function PartnerSupportPage({
   onSelectMenu,
 }: PartnerSupportPageProps) {
   const [rows, setRows] = useState<SupportRow[]>([]);
-  const [selectedYear, setSelectedYear] = useState(currentYear);
-  const [selectedMonth, setSelectedMonth] = useState(currentMonth);
+  const [selectedYear, setSelectedYear] = useState(String(new Date().getFullYear()));
+  const [selectedMonth, setSelectedMonth] = useState("");
   const [selectedPartner, setSelectedPartner] = useState("");
   const [supportFilter, setSupportFilter] = useState<SupportFilter>("pending");
   const [searchText, setSearchText] = useState("");
@@ -153,24 +139,12 @@ export default function PartnerSupportPage({
     setIsLoading(true);
 
     try {
-      const startDate = selectedMonth
-        ? `${selectedYear}-${selectedMonth}-01`
-        : `${selectedYear}-01-01`;
-      const endDate = selectedMonth
-        ? `${selectedYear}-${selectedMonth}-${String(
-            new Date(Number(selectedYear), Number(selectedMonth), 0).getDate()
-          ).padStart(2, "0")}`
-        : `${selectedYear}-12-31`;
-
       const { data: workOrders, error: workError } = await fetchAllRows<WorkOrderRow>(
         "work_orders",
-        "id,work_name,car_number,car_model,category,insurance_company,partner_company,release_date",
+        "id,work_name,car_number,car_model,category,insurance_company,partner_company,inbound_date,release_date",
         (query) =>
           query
-            .not("release_date", "is", null)
-            .gte("release_date", startDate)
-            .lte("release_date", endDate)
-            .order("release_date", { ascending: false })
+            .order("inbound_date", { ascending: false })
             .order("id", { ascending: false })
       );
 
@@ -205,24 +179,17 @@ export default function PartnerSupportPage({
       const workNames = Array.from(new Set(targetWorkOrders.map((row) => normalizeText(row.work_name))));
 
       const [
-        settlementResult,
         paymentResult,
         expenseResult,
         dailyCashResult,
       ] =
         workNames.length === 0
           ? [
-              { data: [] as SettlementRow[], error: null },
               { data: [] as PaymentRow[], error: null },
               { data: [] as ExpenseRow[], error: null },
               { data: [] as DailyCashRow[], error: null },
             ]
           : await Promise.all([
-              fetchAllRows<SettlementRow>(
-                "repair_settlements",
-                "work_name,progress_status",
-                (query) => query.in("work_name", workNames)
-              ),
               fetchAllRows<PaymentRow>(
                 "settlement_payments",
                 "work_name,payment_type,payment_detail,payment_amount,payment_date",
@@ -240,9 +207,6 @@ export default function PartnerSupportPage({
               ),
             ]);
 
-      if (settlementResult.error) {
-        throw new Error("정산상태 조회 실패: " + settlementResult.error.message);
-      }
       if (paymentResult.error) {
         throw new Error("입금내역 조회 실패: " + paymentResult.error.message);
       }
@@ -253,11 +217,6 @@ export default function PartnerSupportPage({
         throw new Error("부품대 조회 실패: " + dailyCashResult.error.message);
       }
 
-      const statusByWorkName = new Map(
-        (settlementResult.data ?? [])
-          .map((row) => [normalizeText(row.work_name), normalizeStatus(row.progress_status)] as const)
-          .filter(([workName]) => Boolean(workName))
-      );
       const paymentsByWorkName = new Map<string, PaymentRow[]>();
       const supportByWorkName = new Map<string, { amount: number; date: string }>();
       const partsByWorkName = new Map<string, number>();
@@ -303,15 +262,14 @@ export default function PartnerSupportPage({
 
       setRows(
         targetWorkOrders
-          .map((workOrder) => {
+          .flatMap((workOrder) => {
             const workName = normalizeText(workOrder.work_name);
             const partnerCompany = normalizeText(workOrder.partner_company);
-            const status = statusByWorkName.get(workName) ?? "미결";
             const support = supportByWorkName.get(workName);
             const isSupportEntered = Boolean(support && support.amount > 0);
 
-            if ((status === "완결" || status === "종결") && isSupportEntered) {
-              return null;
+            if (isSupportEntered) {
+              return [];
             }
 
             const paymentRows = paymentsByWorkName.get(workName) ?? [];
@@ -342,14 +300,15 @@ export default function PartnerSupportPage({
             const supportRate = partnerCompany === "상동점" ? 0.15 : 0.1;
             const expectedSupportAmount = Math.round(baseAmount * supportRate);
 
-            return {
+            return [{
               id: workOrder.id,
               workName,
+              inboundDate: normalizeText(workOrder.inbound_date),
               releaseDate: normalizeText(workOrder.release_date),
               partnerCompany,
               carNumber: normalizeText(workOrder.car_number),
               carModel: normalizeText(workOrder.car_model),
-              status,
+              status: "미결",
               paymentTotal,
               vatAmount,
               materialAmount,
@@ -360,9 +319,8 @@ export default function PartnerSupportPage({
               supportAmount: support?.amount ?? 0,
               supportDate: support?.date ?? "",
               isSupportEntered,
-            } satisfies SupportRow;
+            } satisfies SupportRow];
           })
-          .filter((row): row is SupportRow => Boolean(row))
       );
     } catch (error) {
       alert(
@@ -373,7 +331,7 @@ export default function PartnerSupportPage({
     } finally {
       setIsLoading(false);
     }
-  }, [selectedMonth, selectedYear]);
+  }, []);
 
   useEffect(() => {
     void loadRows();
@@ -381,16 +339,9 @@ export default function PartnerSupportPage({
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchText, selectedPartner, supportFilter, selectedMonth, selectedYear]);
+  }, [searchText, selectedPartner]);
 
-  const yearOptions = useMemo(() => {
-    return Array.from(
-      new Set([
-        currentYear,
-        ...rows.map((row) => row.releaseDate.slice(0, 4)).filter(Boolean),
-      ])
-    ).sort((a, b) => b.localeCompare(a));
-  }, [rows]);
+  const yearOptions = useMemo(() => [String(new Date().getFullYear())], []);
 
   const partnerOptions = useMemo(() => {
     return Array.from(new Set(rows.map((row) => row.partnerCompany))).sort((a, b) =>
@@ -403,11 +354,6 @@ export default function PartnerSupportPage({
 
     return rows
       .filter((row) => {
-        if (supportFilter === "entered") return row.isSupportEntered;
-        if (supportFilter === "pending") return !row.isSupportEntered;
-        return true;
-      })
-      .filter((row) => {
         if (!selectedPartner) return true;
         return row.partnerCompany === selectedPartner;
       })
@@ -419,24 +365,20 @@ export default function PartnerSupportPage({
           row.partnerCompany,
           row.carNumber,
           row.carModel,
-          row.status,
         ]
           .join(" ")
           .toLowerCase()
           .includes(keyword);
       });
-  }, [rows, searchText, selectedPartner, supportFilter]);
+  }, [rows, searchText, selectedPartner]);
 
   const summary = useMemo(() => {
-    const pendingRows = rows.filter((row) => !row.isSupportEntered);
-    const enteredRows = rows.filter((row) => row.isSupportEntered);
-
     return {
       totalCount: rows.length,
-      pendingCount: pendingRows.length,
-      enteredCount: enteredRows.length,
-      expectedAmount: pendingRows.reduce((sum, row) => sum + row.expectedSupportAmount, 0),
-      enteredAmount: enteredRows.reduce((sum, row) => sum + row.supportAmount, 0),
+      pendingCount: rows.length,
+      enteredCount: 0,
+      expectedAmount: rows.reduce((sum, row) => sum + row.expectedSupportAmount, 0),
+      enteredAmount: 0,
     };
   }, [rows]);
 
@@ -461,12 +403,8 @@ export default function PartnerSupportPage({
           expectedAmount: 0,
         };
 
-      if (row.isSupportEntered) {
-        current.enteredCount += 1;
-      } else {
-        current.pendingCount += 1;
-        current.expectedAmount += row.expectedSupportAmount;
-      }
+      current.pendingCount += 1;
+      current.expectedAmount += row.expectedSupportAmount;
 
       map.set(row.partnerCompany, current);
     });
@@ -486,6 +424,12 @@ export default function PartnerSupportPage({
 
   return (
     <div className="space-y-5 text-slate-900">
+      <style jsx>{`
+        .partner-support-table thead th:first-child,
+        .partner-support-table tbody tr.data-row td:first-child {
+          display: none;
+        }
+      `}</style>
       <div>
         <h3 className="text-xl font-bold">입고지원관리</h3>
         <p className="text-sm text-slate-700">
@@ -493,19 +437,17 @@ export default function PartnerSupportPage({
         </p>
       </div>
 
-      <section className="grid grid-cols-1 gap-3 md:grid-cols-5">
-        <SummaryCard label="집계대상" value={`${summary.totalCount.toLocaleString()}건`} tone="slate" />
-        <SummaryCard label="입력대기" value={`${summary.pendingCount.toLocaleString()}건`} tone="red" />
-        <SummaryCard label="지출입력" value={`${summary.enteredCount.toLocaleString()}건`} tone="green" />
-        <SummaryCard label="예상금액" value={`${formatWon(summary.expectedAmount)}원`} tone="blue" />
-        <SummaryCard label="입력금액" value={`${formatWon(summary.enteredAmount)}원`} tone="violet" />
+      <section className="grid grid-cols-1 gap-3 md:grid-cols-3">
+        <SummaryCard label="대상 차량" value={`${summary.totalCount.toLocaleString()}건`} tone="slate" />
+        <SummaryCard label="예상 지원금" value={`${formatWon(summary.expectedAmount)}원`} tone="blue" />
+        <SummaryCard label="거래처" value={`${partnerOptions.length.toLocaleString()}곳`} tone="green" />
       </section>
 
       <section className="rounded-xl border border-slate-200 bg-white p-4">
         <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between">
           <div className="flex flex-wrap items-center gap-2">
             <select
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              className="hidden"
               value={selectedYear}
               onChange={(event) => setSelectedYear(event.target.value)}
             >
@@ -517,7 +459,7 @@ export default function PartnerSupportPage({
             </select>
 
             <select
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              className="hidden"
               value={selectedMonth}
               onChange={(event) => setSelectedMonth(event.target.value)}
             >
@@ -534,7 +476,7 @@ export default function PartnerSupportPage({
             </select>
 
             <select
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              className="hidden"
               value={supportFilter}
               onChange={(event) =>
                 setSupportFilter(event.target.value as SupportFilter)
@@ -584,14 +526,14 @@ export default function PartnerSupportPage({
                 </span>
               </div>
               <div className="mt-1 text-xs font-semibold text-slate-500">
-                입력 {summaryRow.enteredCount}건 / 예상 {formatWon(summaryRow.expectedAmount)}원
+                예상 {formatWon(summaryRow.expectedAmount)}원
               </div>
             </button>
           ))}
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1280px] border-collapse text-sm">
+          <table className="partner-support-table w-full min-w-[1180px] border-collapse text-sm">
             <thead>
               <tr className="bg-slate-100 text-slate-700">
                 <th className="border border-slate-300 px-2 py-2">상태</th>
@@ -625,7 +567,7 @@ export default function PartnerSupportPage({
                 </tr>
               ) : (
                 pagedRows.map((row) => (
-                  <tr key={`${row.workName}-${row.id}`} className="hover:bg-blue-50">
+                  <tr key={`${row.workName}-${row.id}`} className="data-row hover:bg-blue-50">
                     <td className="border border-slate-300 px-2 py-2 text-center">
                       <div className="flex flex-col items-center gap-1">
                         <span
@@ -650,7 +592,14 @@ export default function PartnerSupportPage({
                         </span>
                       </div>
                     </td>
-                    <td className="border border-slate-300 px-2 py-2">{row.releaseDate || "-"}</td>
+                    <td className="border border-slate-300 px-2 py-2">
+                      <div>{row.inboundDate || "-"}</div>
+                      {row.releaseDate && (
+                        <div className="text-xs text-slate-500">
+                          출고 {row.releaseDate}
+                        </div>
+                      )}
+                    </td>
                     <td className="border border-slate-300 px-2 py-2 font-semibold">{row.partnerCompany}</td>
                     <td className="border border-slate-300 px-2 py-2 font-semibold text-blue-700">{row.workName}</td>
                     <td className="border border-slate-300 px-2 py-2">{row.carNumber || "-"}</td>

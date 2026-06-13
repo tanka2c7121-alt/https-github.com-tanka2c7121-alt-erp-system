@@ -484,11 +484,6 @@ export default function HomeDashboardPage({
       calendarEvents,
       selectedDayEvents,
       upcomingEvents,
-      scheduleSummary: {
-        today: calendarEvents.filter((event) => event.date === today).length,
-        week: upcomingEvents.length,
-        month: calendarEvents.length,
-      },
     };
   }, [
     koreanHolidays,
@@ -870,7 +865,6 @@ export default function HomeDashboardPage({
             selectedDate={selectedScheduleDate}
             selectedEvents={dashboard.selectedDayEvents}
             upcomingEvents={dashboard.upcomingEvents}
-            summary={dashboard.scheduleSummary}
             onSelectDate={setSelectedScheduleDate}
             onChangeMonth={changeScheduleMonth}
             popupOpen={schedulePopupOpen}
@@ -1175,7 +1169,6 @@ function ScheduleBoard({
   selectedDate,
   selectedEvents,
   upcomingEvents,
-  summary,
   onSelectDate,
   onChangeMonth,
   popupOpen,
@@ -1193,11 +1186,6 @@ function ScheduleBoard({
   selectedDate: string;
   selectedEvents: ScheduleEvent[];
   upcomingEvents: ScheduleEvent[];
-  summary: {
-    today: number;
-    week: number;
-    month: number;
-  };
   onSelectDate: (date: string) => void;
   onChangeMonth: (month: string) => void;
   popupOpen: boolean;
@@ -1219,6 +1207,7 @@ function ScheduleBoard({
     },
     {}
   );
+  const summary = { today: 0, week: 0, month: 0 };
   const summarizeDayEvents = (dayEvents: ScheduleEvent[]) => {
     const inbound = dayEvents.filter((event) => event.kind === "inbound").length;
     const released = dayEvents.filter((event) => event.kind === "released").length;
@@ -1270,14 +1259,14 @@ function ScheduleBoard({
           onClose={onCloseSchedulePopup}
         />
       )}
-      <div className="flex flex-wrap items-end justify-between gap-3 bg-blue-50 px-5 py-4">
+      <div className="flex flex-wrap items-center justify-between gap-2 bg-blue-50 px-4 py-2">
         <div>
           <h4 className="font-bold text-slate-900">중요 일정</h4>
-          <p className="mt-1 text-xs text-slate-500">
+          <p className="mt-0.5 text-[11px] text-slate-500">
             입고, 출고 예정, 출고 완료를 한 달 달력으로 모아봅니다.
           </p>
         </div>
-        <div className="grid grid-cols-3 gap-2 text-center text-xs">
+        <div className="hidden">
           <div className="rounded-lg bg-slate-50 px-3 py-2">
             <p className="font-semibold text-slate-500">오늘</p>
             <p className="mt-1 text-lg font-bold text-slate-900">{summary.today}</p>
@@ -1739,8 +1728,8 @@ function AdminApprovalPanel({
   onRejectIncident: (row: PendingIncidentReport) => void;
 }) {
   return (
-    <section className="order-3 rounded-xl border border-slate-200 bg-white p-3">
-      <div className="max-h-[520px] space-y-3 overflow-y-auto pr-1">
+    <section className="order-3 rounded-xl border border-slate-200 bg-white p-2">
+      <div className="max-h-[520px] space-y-2 overflow-y-auto pr-1 text-xs">
         {showEmployeeApprovals && (
         <div>
           <div className="mb-3 flex items-center justify-between">
@@ -1748,7 +1737,7 @@ function AdminApprovalPanel({
             <button
               type="button"
               onClick={onOpenManage}
-              className="rounded border border-blue-300 px-3 py-1 text-xs font-semibold text-blue-600 hover:bg-blue-50"
+              className="rounded border border-blue-300 px-2 py-0.5 text-[11px] font-semibold text-blue-600 hover:bg-blue-50"
             >
               직원관리
             </button>
@@ -1756,14 +1745,14 @@ function AdminApprovalPanel({
 
           <div className="space-y-2">
             {pendingUsers.length === 0 ? (
-              <div className="rounded-lg bg-slate-50 p-5 text-center text-sm text-slate-500">
+              <div className="rounded-lg bg-slate-50 p-3 text-center text-xs text-slate-500">
                 승인대기 직원이 없습니다.
               </div>
             ) : (
               pendingUsers.map((row) => (
                 <div
                   key={row.id}
-                  className="flex items-center justify-between rounded-lg border border-slate-100 p-3"
+                  className="flex items-center justify-between rounded-lg border border-slate-100 p-2"
                 >
                   <div>
                     <div className="font-semibold">
@@ -1773,7 +1762,7 @@ function AdminApprovalPanel({
                       {row.department ?? "-"} / {row.user_id}
                     </div>
                   </div>
-                  <span className="rounded-full bg-orange-100 px-2 py-1 text-xs font-bold text-orange-700">
+                  <span className="rounded-full bg-orange-100 px-1.5 py-0.5 text-[10px] font-bold text-orange-700">
                     승인대기
                   </span>
                 </div>
@@ -1784,13 +1773,13 @@ function AdminApprovalPanel({
         )}
 
         {showExpenseApprovals && (
-        <div className="border-t border-slate-200 pt-4">
+        <div className="border-t border-slate-200 pt-2">
           <div className="mb-3 flex items-center justify-between">
             <h4 className="font-bold text-slate-900">지출결의서 승인대기</h4>
             <button
               type="button"
               onClick={onOpenExpenseRequests}
-              className="rounded border border-blue-300 px-3 py-1 text-xs font-semibold text-blue-600 hover:bg-blue-50"
+              className="rounded border border-blue-300 px-2 py-0.5 text-[11px] font-semibold text-blue-600 hover:bg-blue-50"
             >
               지출결의서
             </button>
@@ -1798,7 +1787,7 @@ function AdminApprovalPanel({
 
           <div className="space-y-2">
             {pendingExpenses.length === 0 ? (
-              <div className="rounded-lg bg-slate-50 p-5 text-center text-sm text-slate-500">
+              <div className="rounded-lg bg-slate-50 p-3 text-center text-xs text-slate-500">
                 승인대기 지출결의서가 없습니다.
               </div>
             ) : (
@@ -1807,7 +1796,7 @@ function AdminApprovalPanel({
                   key={row.id}
                   type="button"
                   onClick={onOpenExpenseRequests}
-                  className="flex w-full items-center justify-between rounded-lg border border-slate-100 p-3 text-left hover:bg-blue-50"
+                  className="flex w-full items-center justify-between rounded-lg border border-slate-100 p-2 text-left hover:bg-blue-50"
                 >
                   <div className="min-w-0">
                     <div className="truncate font-semibold">
@@ -1828,13 +1817,13 @@ function AdminApprovalPanel({
         )}
 
         {showAttendanceApprovals && (
-        <div className="border-t border-slate-200 pt-4">
+        <div className="border-t border-slate-200 pt-2">
           <div className="mb-3 flex items-center justify-between">
             <h4 className="font-bold text-slate-900">근태신청서 승인대기</h4>
             <button
               type="button"
               onClick={onOpenAttendanceRequests}
-              className="rounded border border-blue-300 px-3 py-1 text-xs font-semibold text-blue-600 hover:bg-blue-50"
+              className="rounded border border-blue-300 px-2 py-0.5 text-[11px] font-semibold text-blue-600 hover:bg-blue-50"
             >
               근태신청서
             </button>
@@ -1842,7 +1831,7 @@ function AdminApprovalPanel({
 
           <div className="space-y-2">
             {pendingAttendances.length === 0 ? (
-              <div className="rounded-lg bg-slate-50 p-5 text-center text-sm text-slate-500">
+              <div className="rounded-lg bg-slate-50 p-3 text-center text-xs text-slate-500">
                 승인대기 근태신청서가 없습니다.
               </div>
             ) : (
@@ -1851,7 +1840,7 @@ function AdminApprovalPanel({
                   key={row.id}
                   type="button"
                   onClick={onOpenAttendanceRequests}
-                  className="flex w-full items-center justify-between rounded-lg border border-slate-100 p-3 text-left hover:bg-blue-50"
+                  className="flex w-full items-center justify-between rounded-lg border border-slate-100 p-2 text-left hover:bg-blue-50"
                 >
                   <div className="min-w-0">
                     <div className="truncate font-semibold">
@@ -1865,7 +1854,7 @@ function AdminApprovalPanel({
                       / {row.requested_name ?? row.requested_by}
                     </div>
                   </div>
-                  <span className="shrink-0 rounded-full bg-orange-100 px-2 py-1 text-xs font-bold text-orange-700">
+                  <span className="shrink-0 rounded-full bg-orange-100 px-1.5 py-0.5 text-[10px] font-bold text-orange-700">
                     승인대기
                   </span>
                 </button>
@@ -1876,13 +1865,13 @@ function AdminApprovalPanel({
         )}
 
         {showIncidentApprovals && (
-        <div className="border-t border-slate-200 pt-4">
+        <div className="border-t border-slate-200 pt-2">
           <div className="mb-3 flex items-center justify-between">
             <h4 className="font-bold text-slate-900">경위서 확인대기</h4>
             <button
               type="button"
               onClick={onOpenIncidentReports}
-              className="rounded border border-blue-300 px-3 py-1 text-xs font-semibold text-blue-600 hover:bg-blue-50"
+              className="rounded border border-blue-300 px-2 py-0.5 text-[11px] font-semibold text-blue-600 hover:bg-blue-50"
             >
               경위서
             </button>
@@ -1890,14 +1879,14 @@ function AdminApprovalPanel({
 
           <div className="space-y-2">
             {pendingIncidents.length === 0 ? (
-              <div className="rounded-lg bg-slate-50 p-5 text-center text-sm text-slate-500">
+              <div className="rounded-lg bg-slate-50 p-3 text-center text-xs text-slate-500">
                 확인대기 경위서가 없습니다.
               </div>
             ) : (
               pendingIncidents.map((row) => (
                 <div
                   key={row.id}
-                  className="rounded-lg border border-slate-100 p-3"
+                  className="rounded-lg border border-slate-100 p-2"
                 >
                   <button
                     type="button"
@@ -1919,14 +1908,14 @@ function AdminApprovalPanel({
                     <button
                       type="button"
                       onClick={() => onCheckIncident(row)}
-                      className="rounded bg-blue-600 px-3 py-1 text-xs font-semibold text-white hover:bg-blue-700"
+                      className="rounded bg-blue-600 px-2 py-0.5 text-[11px] font-semibold text-white hover:bg-blue-700"
                     >
                       확인
                     </button>
                     <button
                       type="button"
                       onClick={() => onRejectIncident(row)}
-                      className="rounded border border-red-300 px-3 py-1 text-xs font-semibold text-red-600 hover:bg-red-50"
+                      className="rounded border border-red-300 px-2 py-0.5 text-[11px] font-semibold text-red-600 hover:bg-red-50"
                     >
                       반려
                     </button>
