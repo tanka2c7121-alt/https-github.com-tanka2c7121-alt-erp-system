@@ -66,7 +66,7 @@ export default function WorkPrintPage({
     printAfterLoad = false
   ) => {
     if (!targetWorkName) {
-      alert("?묐챸???낅젰?섏꽭??");
+      alert("작업명을 입력하세요.");
       return;
     }
 
@@ -79,7 +79,7 @@ export default function WorkPrintPage({
       .maybeSingle();
 
     if (orderError || !orderData) {
-      alert("?묒뾽 ?곗씠?곕? 李얠쓣 ???놁뒿?덈떎.");
+      alert("작업 데이터를 찾을 수 없습니다.");
       return;
     }
 
@@ -90,7 +90,7 @@ export default function WorkPrintPage({
       .order("line_no", { ascending: true });
 
     if (detailError) {
-      alert("?묒뾽?댁슜 議고쉶 ?ㅽ뙣: " + detailError.message);
+      alert("작업내용 조회 실패: " + detailError.message);
       return;
     }
 

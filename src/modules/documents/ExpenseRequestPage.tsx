@@ -155,7 +155,7 @@ export default function ExpenseRequestPage({
       .order("id", { ascending: false });
 
     if (error) {
-      alert("吏異쒓껐?섏꽌 議고쉶 ?ㅽ뙣: " + error.message);
+      alert("지출결의서 조회 실패: " + error.message);
       return;
     }
 
@@ -340,7 +340,7 @@ export default function ExpenseRequestPage({
 
   const uploadReceipt = async (requestId: number) => {
     if (!receiptFile) {
-      throw new Error("?곸닔利??ъ쭊??泥⑤??섏꽭??");
+      throw new Error("영수증 사진을 첨부하세요.");
     }
 
     const extension = receiptFile.name.split(".").pop() || "jpg";
@@ -911,7 +911,7 @@ export default function ExpenseRequestPage({
             onPrint={(row) =>
               onSelectMenu({
                 id: "documents-expense-request-print",
-                title: "吏異쒓껐?섏꽌 異쒕젰",
+                title: "지출결의서 출력",
                 data: { expenseRequest: row },
               })
             }
@@ -926,7 +926,7 @@ export default function ExpenseRequestPage({
           onPrint={(row) =>
             onSelectMenu({
               id: "documents-expense-request-print",
-              title: "吏異쒓껐?섏꽌 異쒕젰",
+              title: "지출결의서 출력",
               data: { expenseRequest: row },
             })
           }
@@ -1028,7 +1028,7 @@ function ExpenseTable({
               colSpan={showApprovalColumn ? 10 : 9}
               className="border border-slate-200 px-3 py-8 text-center text-slate-500"
             >
-              ?깅줉??吏異쒓껐?섏꽌媛 ?놁뒿?덈떎.
+              등록된 지출결의서가 없습니다.
             </td>
           </tr>
         ) : (
@@ -1039,7 +1039,7 @@ function ExpenseTable({
                   type="button"
                   onClick={() => onPrint(row)}
                   className="rounded-full focus:outline-none focus:ring-2 focus:ring-blue-200"
-                  title="吏異쒓껐?섏꽌 ?댁슜 蹂닿린"
+                  title="지출결의서 내용 보기"
                 >
                   <StatusBadge status={row.status} />
                 </button>
@@ -1059,7 +1059,7 @@ function ExpenseTable({
                 <div className="text-xs text-slate-500">{row.content}</div>
               </td>
               <td className="border border-slate-200 px-3 py-2 text-right font-semibold">
-                ??{Number(row.amount || 0).toLocaleString()}
+                ₩{Number(row.amount || 0).toLocaleString()}
               </td>
               <td className="border border-slate-200 px-3 py-2 text-center">
             {row.receipt_url ? (
@@ -1069,10 +1069,10 @@ function ExpenseTable({
                 rel="noreferrer"
                 className="rounded border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
               >
-                蹂닿린
+                보기
               </a>
             ) : (
-              <span className="text-xs text-slate-400">?놁쓬</span>
+              <span className="text-xs text-slate-400">없음</span>
             )}
               </td>
               <td className="border border-slate-200 px-3 py-2 text-center">
@@ -1081,7 +1081,7 @@ function ExpenseTable({
                   onClick={() => onPrint(row)}
                   className="rounded border border-blue-300 px-3 py-1 text-xs font-semibold text-blue-600 hover:bg-blue-50"
                 >
-                  異쒕젰
+                  출력
                 </button>
               </td>
               {showApprovalColumn && (
@@ -1093,14 +1093,14 @@ function ExpenseTable({
                         onClick={() => onApprove(row)}
                         className="rounded bg-blue-600 px-3 py-1 text-xs font-semibold text-white hover:bg-blue-700"
                       >
-                        ?뱀씤
+                        승인
                       </button>
                       <button
                         type="button"
                         onClick={() => onReject(row)}
                         className="rounded border border-red-300 px-3 py-1 text-xs font-semibold text-red-600 hover:bg-red-50"
                       >
-                        諛섎젮
+                        반려
                       </button>
                     </div>
                   ) : (
@@ -1135,7 +1135,7 @@ function MobileExpenseCards({
     <div className="space-y-3 md:hidden">
       {rows.length === 0 ? (
         <div className="rounded-xl border border-slate-200 p-6 text-center text-sm text-slate-500">
-          ?깅줉??吏異쒓껐?섏꽌媛 ?놁뒿?덈떎.
+          등록된 지출결의서가 없습니다.
         </div>
       ) : (
         rows.map((row) => (
@@ -1146,12 +1146,12 @@ function MobileExpenseCards({
                   type="button"
                   onClick={() => onPrint(row)}
                   className="rounded-full focus:outline-none focus:ring-2 focus:ring-blue-200"
-                  title="吏異쒓껐?섏꽌 ?댁슜 蹂닿린"
+                  title="지출결의서 내용 보기"
                 >
                   <StatusBadge status={row.status} />
                 </button>
                 <div className="mt-2 text-lg font-bold">
-                  ??{Number(row.amount || 0).toLocaleString()}
+                  ₩{Number(row.amount || 0).toLocaleString()}
                 </div>
                 <div className="text-sm text-slate-500">
                   {row.request_date} / {row.requested_name ?? row.requested_by}
@@ -1164,10 +1164,11 @@ function MobileExpenseCards({
                   rel="noreferrer"
                   className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700"
                 >
-                  ?곸닔利?                </a>
+                  영수증
+                </a>
               ) : (
                 <span className="rounded-lg bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-400">
-                  ?곸닔利??놁쓬
+                  영수증 없음
                 </span>
               )}
             </div>
@@ -1185,7 +1186,7 @@ function MobileExpenseCards({
               onClick={() => onPrint(row)}
               className="mt-3 w-full rounded-lg border border-blue-300 py-2 text-sm font-semibold text-blue-600"
             >
-              異쒕젰
+              출력
             </button>
 
             {canApprove(row) && (
@@ -1195,14 +1196,14 @@ function MobileExpenseCards({
                   onClick={() => onApprove(row)}
                   className="flex-1 rounded-lg bg-blue-600 py-2 text-sm font-semibold text-white"
                 >
-                  ?뱀씤
+                  승인
                 </button>
                 <button
                   type="button"
                   onClick={() => onReject(row)}
                   className="flex-1 rounded-lg border border-red-300 py-2 text-sm font-semibold text-red-600"
                 >
-                  諛섎젮
+                  반려
                 </button>
               </div>
             )}
