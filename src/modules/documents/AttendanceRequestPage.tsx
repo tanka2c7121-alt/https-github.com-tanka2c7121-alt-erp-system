@@ -21,6 +21,13 @@ type AttendanceRequestPageProps = {
   onSelectMenu: (menu: MenuItem) => void;
 };
 
+type AttendanceStatus =
+  | "부서장 승인대기"
+  | "관리부 확인대기"
+  | "관리자 승인대기"
+  | "승인완료"
+  | "반려";
+
 type AttendanceRequest = {
   id: number;
   request_type: string;
@@ -30,12 +37,7 @@ type AttendanceRequest = {
   end_time: string | null;
   reason: string;
   memo: string | null;
-  status:
-    | "부서장 승인대기"
-    | "관리부 확인대기"
-    | "관리자 승인대기"
-    | "승인완료"
-    | "반려";
+  status: AttendanceStatus;
   requested_by: string;
   requested_name: string | null;
   requested_department: string | null;
@@ -74,18 +76,14 @@ const defaultTimeByRequestType: Record<string, { startTime: string; endTime: str
   오전반차: { startTime: "08:30", endTime: "12:00" },
   오후반차: { startTime: "12:00", endTime: "18:00" },
 };
-const pendingStatuses = [
+const pendingStatuses: AttendanceStatus[] = [
   "부서장 승인대기",
   "관리부 확인대기",
   "관리자 승인대기",
 ];
 
-const todayText = localDateText;
-const addDaysText = addLocalDaysText;
-
 const formatRequesterName = (user: LoginUser) => {
   const department = user.department?.trim();
-
   return department ? `${department} / ${user.user_name}` : user.user_name;
 };
 
@@ -103,13 +101,14 @@ export default function AttendanceRequestPage({
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<FormState>({
     requestType: "연차",
-    startDate: todayText(),
-    endDate: todayText(),
-    startTime: defaultTimeByRequestType["연차"].startTime,
-    endTime: defaultTimeByRequestType["연차"].endTime,
+    startDate: localDateText(),
+    endDate: localDateText(),
+    startTime: defaultTimeByRequestType.연차.startTime,
+    endTime: defaultTimeByRequestType.연차.endTime,
     reason: "",
     memo: "",
   });
+
   const approvalRole = getApprovalRole(user);
   const isDepartmentHead = approvalRole === "부서장";
   const isAdminDept = approvalRole === "관리부" || user.department === "관리부";
@@ -181,19 +180,16 @@ export default function AttendanceRequestPage({
   const approvedCount = visibleRows.filter((row) => row.status === "승인완료").length;
 
   const handleChange = (key: keyof FormState, value: string) => {
-    setForm((prev) => ({
-      ...prev,
-      [key]: value,
-    }));
+    setForm((prev) => ({ ...prev, [key]: value }));
   };
 
   const resetForm = () => {
     setForm({
       requestType: "연차",
-      startDate: todayText(),
-      endDate: todayText(),
-      startTime: defaultTimeByRequestType["연차"].startTime,
-      endTime: defaultTimeByRequestType["연차"].endTime,
+      startDate: localDateText(),
+      endDate: localDateText(),
+      startTime: defaultTimeByRequestType.연차.startTime,
+      endTime: defaultTimeByRequestType.연차.endTime,
       reason: "",
       memo: "",
     });
@@ -257,9 +253,7 @@ export default function AttendanceRequestPage({
     return false;
   };
 
-  const nextApprovalStatus = (
-    status: AttendanceRequest["status"]
-  ): AttendanceRequest["status"] => {
+  const nextApprovalStatus = (status: AttendanceStatus): AttendanceStatus => {
     if (status === "부서장 승인대기") return "관리부 확인대기";
     if (status === "관리부 확인대기") return "관리자 승인대기";
     return "승인완료";
@@ -271,9 +265,7 @@ export default function AttendanceRequestPage({
       return;
     }
 
-    if (!confirm("이 근태신청서를 다음 단계로 승인할까요?")) {
-      return;
-    }
+    if (!confirm("이 근태신청서를 다음 단계로 승인할까요?")) return;
 
     const nextStatus = nextApprovalStatus(row.status);
     const stagePayload =
@@ -316,7 +308,7 @@ export default function AttendanceRequestPage({
       return;
     }
 
-    alert(nextStatus === "승인완료" ? "최종 승인되었습니다." : "다음 단계로 승인되었습니다.");
+    alert(nextStatus === "승인완료" ? "최종 승인하였습니다." : "다음 단계로 승인하였습니다.");
     void loadRows();
   };
 
@@ -327,10 +319,7 @@ export default function AttendanceRequestPage({
     }
 
     const reason = prompt("반려 사유를 입력하세요.");
-
-    if (reason === null) {
-      return;
-    }
+    if (reason === null) return;
 
     const { error } = await supabase
       .from("attendance_requests")
@@ -348,7 +337,41 @@ export default function AttendanceRequestPage({
       return;
     }
 
-    alert("반려되었습니다.");
+    alert("반려하였습니다.");
+    void loadRows();
+  };
+
+  const canDeleteRequest = (row: AttendanceRequest) =>
+    isFinalAdmin || row.requested_by === user.user_id;
+
+  const deleteRequest = async (row: AttendanceRequest) => {
+    if (!canDeleteRequest(row)) {
+      alert("삭제 권한이 없습니다.");
+      return;
+    }
+
+    if (!confirm("이 근태신청서를 삭제할까요? 삭제 후에는 되돌릴 수 없습니다.")) {
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("attendance_requests")
+      .delete()
+      .eq("id", row.id)
+      .select("id")
+      .maybeSingle();
+
+    if (error) {
+      alert("근태신청서 삭제 실패: " + error.message);
+      return;
+    }
+
+    if (!data) {
+      alert("삭제 권한이 없거나 이미 삭제된 근태신청서입니다.");
+      return;
+    }
+
+    alert("삭제되었습니다.");
     void loadRows();
   };
 
@@ -479,7 +502,7 @@ export default function AttendanceRequestPage({
       <section className="rounded-xl border border-slate-200 bg-white p-4">
         <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <h4 className="font-bold text-slate-900">
-            {isAdmin ? "근태신청서 목록" : "내 신청 목록"}
+            {isFinalAdmin ? "근태신청서 목록" : "내 신청 목록"}
           </h4>
 
           <div className="flex flex-col gap-2 sm:flex-row">
@@ -508,10 +531,12 @@ export default function AttendanceRequestPage({
         <div className="hidden overflow-x-auto md:block">
           <AttendanceTable
             rows={visibleRows}
-            isAdmin={isAdmin}
+            isAdmin={isFinalAdmin}
             onApprove={approveRequest}
             onReject={rejectRequest}
             canApprove={canApproveRequest}
+            canDelete={canDeleteRequest}
+            onDelete={deleteRequest}
             onPrint={(row) =>
               onSelectMenu({
                 id: "documents-attendance-request-print",
@@ -527,6 +552,8 @@ export default function AttendanceRequestPage({
           onApprove={approveRequest}
           onReject={rejectRequest}
           canApprove={canApproveRequest}
+          canDelete={canDeleteRequest}
+          onDelete={deleteRequest}
           onPrint={(row) =>
             onSelectMenu({
               id: "documents-attendance-request-print",
@@ -576,7 +603,7 @@ function Badge({
   );
 }
 
-function StatusBadge({ status }: { status: AttendanceRequest["status"] }) {
+function StatusBadge({ status }: { status: AttendanceStatus }) {
   const className =
     status === "승인완료"
       ? "bg-green-100 text-green-700"
@@ -592,9 +619,7 @@ function StatusBadge({ status }: { status: AttendanceRequest["status"] }) {
 }
 
 function UrgentBadge({ startDate }: { startDate: string }) {
-  if (startDate >= addDaysText(7)) {
-    return null;
-  }
+  if (startDate >= addLocalDaysText(7)) return null;
 
   return (
     <span className="rounded-full bg-red-100 px-2 py-1 text-xs font-bold text-red-700">
@@ -622,6 +647,8 @@ function AttendanceTable({
   onApprove,
   onReject,
   canApprove,
+  canDelete,
+  onDelete,
   onPrint,
 }: {
   rows: AttendanceRequest[];
@@ -629,9 +656,11 @@ function AttendanceTable({
   onApprove: (row: AttendanceRequest) => void;
   onReject: (row: AttendanceRequest) => void;
   canApprove: (row: AttendanceRequest) => boolean;
+  canDelete: (row: AttendanceRequest) => boolean;
+  onDelete: (row: AttendanceRequest) => void;
   onPrint: (row: AttendanceRequest) => void;
 }) {
-  const showManageColumn = isAdmin || rows.some(canApprove);
+  const showManageColumn = isAdmin || rows.some(canApprove) || rows.some(canDelete);
 
   return (
     <table className="w-full border-collapse text-sm">
@@ -714,26 +743,38 @@ function AttendanceTable({
               </td>
               {showManageColumn && (
                 <td className="border border-slate-200 px-3 py-2 text-center">
-                  {canApprove(row) ? (
-                    <div className="flex justify-center gap-2">
+                  <div className="flex justify-center gap-2">
+                    {canApprove(row) && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => onApprove(row)}
+                          className="rounded bg-blue-600 px-3 py-1 text-xs font-semibold text-white hover:bg-blue-700"
+                        >
+                          승인
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onReject(row)}
+                          className="rounded border border-red-300 px-3 py-1 text-xs font-semibold text-red-600 hover:bg-red-50"
+                        >
+                          반려
+                        </button>
+                      </>
+                    )}
+                    {canDelete(row) && (
                       <button
                         type="button"
-                        onClick={() => onApprove(row)}
-                        className="rounded bg-blue-600 px-3 py-1 text-xs font-semibold text-white hover:bg-blue-700"
-                      >
-                        승인
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onReject(row)}
+                        onClick={() => onDelete(row)}
                         className="rounded border border-red-300 px-3 py-1 text-xs font-semibold text-red-600 hover:bg-red-50"
                       >
-                        반려
+                        삭제
                       </button>
-                    </div>
-                  ) : (
-                    <span className="text-xs text-slate-400">권한없음</span>
-                  )}
+                    )}
+                    {!canApprove(row) && !canDelete(row) && (
+                      <span className="text-xs text-slate-400">권한없음</span>
+                    )}
+                  </div>
                 </td>
               )}
             </tr>
@@ -780,12 +821,16 @@ function MobileAttendanceCards({
   onApprove,
   onReject,
   canApprove,
+  canDelete,
+  onDelete,
   onPrint,
 }: {
   rows: AttendanceRequest[];
   onApprove: (row: AttendanceRequest) => void;
   onReject: (row: AttendanceRequest) => void;
   canApprove: (row: AttendanceRequest) => boolean;
+  canDelete: (row: AttendanceRequest) => boolean;
+  onDelete: (row: AttendanceRequest) => void;
   onPrint: (row: AttendanceRequest) => void;
 }) {
   return (
@@ -837,6 +882,16 @@ function MobileAttendanceCards({
             >
               출력
             </button>
+
+            {canDelete(row) && (
+              <button
+                type="button"
+                onClick={() => onDelete(row)}
+                className="mt-2 w-full rounded-lg border border-red-300 py-2 text-sm font-semibold text-red-600"
+              >
+                삭제
+              </button>
+            )}
 
             {canApprove(row) && (
               <div className="mt-3 flex gap-2">

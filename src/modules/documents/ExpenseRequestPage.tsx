@@ -129,9 +129,13 @@ export default function ExpenseRequestPage({
   isAdmin,
   onSelectMenu,
 }: ExpenseRequestPageProps) {
+  const currentYear = todayText().slice(0, 4);
+  const currentMonth = todayText().slice(5, 7);
   const [rows, setRows] = useState<ExpenseRequest[]>([]);
   const [searchText, setSearchText] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [listYear, setListYear] = useState(currentYear);
+  const [listMonth, setListMonth] = useState(currentMonth);
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
   const [categoryOptions, setCategoryOptions] = useState(defaultCategoryOptions);
@@ -237,8 +241,23 @@ export default function ExpenseRequestPage({
     return options;
   }, [categoryOptions, form.category, form.expenseType]);
 
+  const yearOptions = useMemo(() => {
+    const years = new Set([currentYear]);
+
+    rows.forEach((row) => {
+      const year = row.request_date?.slice(0, 4);
+
+      if (/^\d{4}$/.test(year)) {
+        years.add(year);
+      }
+    });
+
+    return Array.from(years).sort((a, b) => b.localeCompare(a));
+  }, [currentYear, rows]);
+
   const visibleRows = useMemo(() => {
     const keyword = searchText.trim().toLowerCase();
+    const selectedMonthPrefix = `${listYear}-${listMonth}`;
 
     return rows
       .filter((row) => {
@@ -252,6 +271,7 @@ export default function ExpenseRequestPage({
 
         return row.requested_by === user.user_id;
       })
+      .filter((row) => row.request_date?.startsWith(selectedMonthPrefix))
       .filter((row) => !statusFilter || row.status === statusFilter)
       .filter((row) => {
         if (!keyword) return true;
@@ -270,7 +290,7 @@ export default function ExpenseRequestPage({
           .toLowerCase()
           .includes(keyword);
       });
-  }, [isAdmin, rows, searchText, statusFilter, user]);
+  }, [isAdmin, listMonth, listYear, rows, searchText, statusFilter, user]);
 
   const pendingCount = rows.filter((row) =>
     expensePendingStatuses.includes(row.status)
@@ -621,6 +641,53 @@ export default function ExpenseRequestPage({
     void loadRows();
   };
 
+  const canDeleteRequest = (row: ExpenseRequest) =>
+    isAdmin || (row.requested_by === user.user_id && row.status !== "승인완료");
+
+  const deleteRequest = async (row: ExpenseRequest) => {
+    if (!canDeleteRequest(row)) {
+      alert("삭제 권한이 없습니다.");
+      return;
+    }
+
+    if (!confirm("이 지출결의서를 삭제할까요? 삭제 후에는 되돌릴 수 없습니다.")) {
+      return;
+    }
+
+    if (row.status === "승인완료") {
+      const { error: cashError } = await supabase
+        .from("daily_cash")
+        .delete()
+        .eq("source_type", "expense_request")
+        .eq("source_work_name", `expense-request-${row.id}`);
+
+      if (cashError) {
+        alert("연결된 일일입출금 삭제 실패: " + cashError.message);
+        return;
+      }
+    }
+
+    const { data, error } = await supabase
+      .from("expense_requests")
+      .delete()
+      .eq("id", row.id)
+      .select("id")
+      .maybeSingle();
+
+    if (error) {
+      alert("지출결의서 삭제 실패: " + error.message);
+      return;
+    }
+
+    if (!data) {
+      alert("삭제 권한이 없거나 이미 삭제된 지출결의서입니다.");
+      return;
+    }
+
+    alert("삭제되었습니다.");
+    void loadRows();
+  };
+
   return (
     <div className="space-y-5 text-slate-900">
       <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
@@ -881,6 +948,36 @@ export default function ExpenseRequestPage({
           <div className="flex flex-col gap-2 sm:flex-row">
             <select
               className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900"
+              value={listYear}
+              onChange={(event) => setListYear(event.target.value)}
+              aria-label="조회 연도"
+            >
+              {yearOptions.map((year) => (
+                <option key={year} value={year}>
+                  {year}년
+                </option>
+              ))}
+            </select>
+
+            <select
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900"
+              value={listMonth}
+              onChange={(event) => setListMonth(event.target.value)}
+              aria-label="조회 월"
+            >
+              {Array.from({ length: 12 }, (_, index) => {
+                const month = String(index + 1).padStart(2, "0");
+
+                return (
+                  <option key={month} value={month}>
+                    {index + 1}월
+                  </option>
+                );
+              })}
+            </select>
+
+            <select
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900"
               value={statusFilter}
               onChange={(event) => setStatusFilter(event.target.value)}
             >
@@ -908,6 +1005,8 @@ export default function ExpenseRequestPage({
             canApprove={canApproveRequest}
             onApprove={approveRequest}
             onReject={rejectRequest}
+            canDelete={canDeleteRequest}
+            onDelete={deleteRequest}
             onPrint={(row) =>
               onSelectMenu({
                 id: "documents-expense-request-print",
@@ -923,6 +1022,8 @@ export default function ExpenseRequestPage({
           canApprove={canApproveRequest}
           onApprove={approveRequest}
           onReject={rejectRequest}
+          canDelete={canDeleteRequest}
+          onDelete={deleteRequest}
           onPrint={(row) =>
             onSelectMenu({
               id: "documents-expense-request-print",
@@ -993,6 +1094,8 @@ function ExpenseTable({
   canApprove,
   onApprove,
   onReject,
+  canDelete,
+  onDelete,
   onPrint,
 }: {
   rows: ExpenseRequest[];
@@ -1000,8 +1103,12 @@ function ExpenseTable({
   canApprove: (row: ExpenseRequest) => boolean;
   onApprove: (row: ExpenseRequest) => void;
   onReject: (row: ExpenseRequest) => void;
+  canDelete: (row: ExpenseRequest) => boolean;
+  onDelete: (row: ExpenseRequest) => void;
   onPrint: (row: ExpenseRequest) => void;
 }) {
+  const showManageColumn = showApprovalColumn || rows.some(canDelete);
+
   return (
     <table className="w-full border-collapse text-sm">
       <thead>
@@ -1015,7 +1122,7 @@ function ExpenseTable({
           <th className="border border-slate-200 px-3 py-2 text-right">금액</th>
           <th className="border border-slate-200 px-3 py-2 text-center">영수증</th>
           <th className="border border-slate-200 px-3 py-2 text-center">출력</th>
-          {showApprovalColumn && (
+          {showManageColumn && (
             <th className="border border-slate-200 px-3 py-2 text-center">관리</th>
           )}
         </tr>
@@ -1025,7 +1132,7 @@ function ExpenseTable({
         {rows.length === 0 ? (
           <tr>
             <td
-              colSpan={showApprovalColumn ? 10 : 9}
+              colSpan={showManageColumn ? 10 : 9}
               className="border border-slate-200 px-3 py-8 text-center text-slate-500"
             >
               등록된 지출결의서가 없습니다.
@@ -1084,10 +1191,11 @@ function ExpenseTable({
                   출력
                 </button>
               </td>
-              {showApprovalColumn && (
+              {showManageColumn && (
                 <td className="border border-slate-200 px-3 py-2 text-center">
-                  {canApprove(row) ? (
-                    <div className="flex justify-center gap-2">
+                  <div className="flex justify-center gap-2">
+                    {canApprove(row) && (
+                      <>
                       <button
                         type="button"
                         onClick={() => onApprove(row)}
@@ -1102,12 +1210,23 @@ function ExpenseTable({
                       >
                         반려
                       </button>
-                    </div>
-                  ) : (
+                      </>
+                    )}
+                    {canDelete(row) && (
+                      <button
+                        type="button"
+                        onClick={() => onDelete(row)}
+                        className="rounded border border-red-300 px-3 py-1 text-xs font-semibold text-red-600 hover:bg-red-50"
+                      >
+                        삭제
+                      </button>
+                    )}
+                    {!canApprove(row) && !canDelete(row) && (
                     <span className="text-xs text-slate-400">
                       {row.approved_name ?? "-"}
                     </span>
-                  )}
+                    )}
+                  </div>
                 </td>
               )}
             </tr>
@@ -1123,12 +1242,16 @@ function MobileExpenseCards({
   canApprove,
   onApprove,
   onReject,
+  canDelete,
+  onDelete,
   onPrint,
 }: {
   rows: ExpenseRequest[];
   canApprove: (row: ExpenseRequest) => boolean;
   onApprove: (row: ExpenseRequest) => void;
   onReject: (row: ExpenseRequest) => void;
+  canDelete: (row: ExpenseRequest) => boolean;
+  onDelete: (row: ExpenseRequest) => void;
   onPrint: (row: ExpenseRequest) => void;
 }) {
   return (
@@ -1188,6 +1311,16 @@ function MobileExpenseCards({
             >
               출력
             </button>
+
+            {canDelete(row) && (
+              <button
+                type="button"
+                onClick={() => onDelete(row)}
+                className="mt-2 w-full rounded-lg border border-red-300 py-2 text-sm font-semibold text-red-600"
+              >
+                삭제
+              </button>
+            )}
 
             {canApprove(row) && (
               <div className="mt-3 flex gap-2">

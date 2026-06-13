@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useState } from "react";
 import Sidebar from "../sidebar/Sidebar";
@@ -73,7 +73,7 @@ const initialMenu: MenuItem = {
 
 const defaultCameraQuickAction: MenuItem = {
   id: "factory-work-register",
-  title: "작업등록 카메라열기",
+  title: "카메라열기",
   data: { openCamera: true },
 };
 
@@ -149,7 +149,7 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
     userRole,
     user.department
   );
-  const mobileMenuTitle = mobileMenuParent?.title ?? "메뉴";
+  const mobileMenuTitle = mobileMenuParent?.title ?? "硫붾돱";
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -483,9 +483,9 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
             menu.id === "employee-admin"
               ? "관리"
               : menu.id === "employee-body"
-                ? "판금"
+                ? "자금"
                 : menu.id === "employee-paint"
-                  ? "도장"
+                  ? "현장"
                   : menu.id === "employee-repair"
                     ? "정비"
                     : undefined
@@ -675,13 +675,13 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
 
     return (
       <div className="rounded-xl border border-dashed p-10 text-center text-slate-600">
-        선택한 메뉴: <span className="font-semibold text-slate-900">{menu.title}</span>
+        ?좏깮??硫붾돱: <span className="font-semibold text-slate-900">{menu.title}</span>
       </div>
     );
   };
 
   return (
-    <div className="flex h-screen w-full flex-col overflow-x-hidden bg-slate-100">
+    <div className="flex h-screen w-full flex-col overflow-x-hidden bg-transparent">
       <Topbar
         user={user}
         onLogout={onLogout}
@@ -692,7 +692,7 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
       <div className="flex min-w-0 flex-1 overflow-hidden">
         <div
           className={[
-            "group/sidebar relative hidden h-full shrink-0 overflow-hidden bg-slate-900 transition-[width] duration-200 ease-out md:block",
+            "group/sidebar relative hidden h-full shrink-0 overflow-hidden transition-[width] duration-200 ease-out md:block",
             isSidebarOpen ? "w-64" : "w-8 hover:w-64",
           ].join(" ")}
         >
@@ -700,18 +700,18 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
             type="button"
             aria-label="메뉴 열기"
             onClick={() => setIsSidebarOpen((prev) => !prev)}
-            className="absolute inset-y-0 left-0 z-20 w-8 bg-slate-900/90 transition-colors group-hover/sidebar:bg-slate-900"
+            className="absolute inset-y-0 left-0 z-20 w-8 border-r border-white/60 bg-white/70 transition-colors backdrop-blur-xl group-hover/sidebar:bg-white"
           />
           <button
             type="button"
             onClick={() => setIsSidebarOpen((prev) => !prev)}
-            className="absolute inset-y-0 left-0 z-30 w-8 bg-slate-900 text-slate-200 shadow-md"
+            className="absolute inset-y-0 left-0 z-30 w-8 border-r border-white/70 bg-white/85 text-slate-700 shadow-md shadow-slate-300/40 backdrop-blur-xl"
           >
             <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-xs font-bold tracking-widest [writing-mode:vertical-rl]">
               MENU
             </span>
           </button>
-          <div className="h-full w-64 bg-slate-900 shadow-2xl">
+          <div className="h-full w-64">
             <Sidebar
               selectedMenuId={selectedMenu.id}
               onSelectMenu={handleSelectMenu}
@@ -723,7 +723,7 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
         </div>
 
         <main className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto p-3 md:p-6">
-          <div className="mb-3 rounded-xl border border-slate-200 bg-white p-3 md:hidden">
+          <div className="mb-3 rounded-2xl border border-white/70 bg-white/75 p-3 shadow-lg shadow-slate-300/30 backdrop-blur-xl md:hidden">
             <div className="mb-2 flex items-center justify-between gap-2">
               <div className="min-w-0">
                 <div className="text-xs font-semibold text-slate-500">메뉴</div>
@@ -736,7 +736,7 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
                 <button
                   type="button"
                   onClick={() => setMobileMenuPath((prev) => prev.slice(0, -1))}
-                  className="shrink-0 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50"
+                  className="shrink-0 rounded-full border border-slate-200 bg-white/80 px-3 py-1.5 text-xs font-bold text-slate-700 shadow-sm hover:bg-white"
                 >
                   뒤로
                 </button>
@@ -762,7 +762,7 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
                       "min-h-12 min-w-0 rounded-xl border px-3 py-2 text-left text-xs font-bold leading-snug shadow-sm transition",
                       isSelected
                         ? "border-blue-600 bg-blue-600 text-white"
-                        : "border-slate-200 bg-slate-50 text-slate-800 hover:border-blue-200 hover:bg-blue-50",
+                        : "border-white/70 bg-white/70 text-slate-800 shadow-sm hover:border-blue-200 hover:bg-white",
                     ].join(" ")}
                   >
                     <span className="flex min-w-0 items-center justify-between gap-2">
@@ -775,11 +775,11 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
             </div>
           </div>
 
-          <section className="min-h-[500px] min-w-0 overflow-x-hidden rounded-xl border bg-white p-3 shadow-sm md:rounded-2xl md:p-6">
+          <section className="min-h-[500px] min-w-0 overflow-x-hidden rounded-2xl border border-white/70 bg-white/80 p-3 shadow-2xl shadow-slate-300/40 backdrop-blur-xl md:rounded-[22px] md:p-6">
             <div className="mb-4 flex items-center justify-between gap-2">
               <div>
                 {canFavoriteCurrentMenu && (
-                  <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-blue-50">
+                  <label className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-slate-200 bg-white/75 px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-white">
                     <input
                       type="checkbox"
                       checked={isCurrentMenuFavorited}
@@ -798,7 +798,7 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
               <button
                 type="button"
                 onClick={handleRefreshMenu}
-                className="shrink-0 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-bold text-blue-700 shadow-sm hover:bg-blue-100"
+                className="shrink-0 rounded-full border border-blue-200 bg-blue-50/90 px-4 py-2 text-sm font-bold text-blue-700 shadow-sm hover:bg-blue-100"
               >
                 새로고침
               </button>
@@ -806,7 +806,7 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
                 <button
                   type="button"
                   onClick={handleBackMenu}
-                  className="shrink-0 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 shadow-sm hover:bg-slate-50"
+                  className="shrink-0 rounded-full border border-slate-200 bg-white/80 px-4 py-2 text-sm font-bold text-slate-700 shadow-sm hover:bg-white"
                 >
                   뒤로
                 </button>

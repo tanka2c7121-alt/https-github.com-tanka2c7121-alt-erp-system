@@ -1,9 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import type { MenuItem } from "../../data/menuData";
 import { localDateText } from "../../lib/date";
 import { supabase } from "../../lib/supabase";
-import type { MenuItem } from "../../data/menuData";
 import type { UserRole } from "../../types/roles";
 
 type LoginUser = {
@@ -80,6 +80,7 @@ export default function IncidentReportPage({
     actionTaken: "",
     memo: "",
   });
+
   const canCheck =
     isAdmin || user.approval_role === "관리부" || user.department === "관리부";
 
@@ -182,8 +183,7 @@ export default function IncidentReportPage({
   const handleCheck = async (row: IncidentReport) => {
     if (!canCheck || row.status !== "확인대기") return;
 
-    const ok = confirm("이 경위서를 확인완료 처리할까요?");
-    if (!ok) return;
+    if (!confirm("이 경위서를 확인완료 처리할까요?")) return;
 
     const { error } = await supabase
       .from("incident_reports")
@@ -206,8 +206,7 @@ export default function IncidentReportPage({
   const handleReject = async (row: IncidentReport) => {
     if (!canCheck || row.status !== "확인대기") return;
 
-    const ok = confirm("이 경위서를 반려 처리할까요?");
-    if (!ok) return;
+    if (!confirm("이 경위서를 반려 처리할까요?")) return;
 
     const { error } = await supabase
       .from("incident_reports")
@@ -224,6 +223,40 @@ export default function IncidentReportPage({
       return;
     }
 
+    void loadRows();
+  };
+
+  const canDeleteReport = (row: IncidentReport) =>
+    canCheck || row.requested_by === user.user_id;
+
+  const handleDelete = async (row: IncidentReport) => {
+    if (!canDeleteReport(row)) {
+      alert("삭제 권한이 없습니다.");
+      return;
+    }
+
+    if (!confirm("이 경위서를 삭제할까요? 삭제 후에는 되돌릴 수 없습니다.")) {
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("incident_reports")
+      .delete()
+      .eq("id", row.id)
+      .select("id")
+      .maybeSingle();
+
+    if (error) {
+      alert("경위서 삭제 실패: " + error.message);
+      return;
+    }
+
+    if (!data) {
+      alert("삭제 권한이 없거나 이미 삭제된 경위서입니다.");
+      return;
+    }
+
+    alert("삭제되었습니다.");
     void loadRows();
   };
 
@@ -270,8 +303,8 @@ export default function IncidentReportPage({
         </div>
 
         <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-          <TextArea label="경위 내용" value={form.content} onChange={(value) => handleChange("content", value)} placeholder="발생 경위와 내용을 입력하세요." />
-          <TextArea label="조치 내용" value={form.actionTaken} onChange={(value) => handleChange("actionTaken", value)} placeholder="조치했거나 조치 예정인 내용을 입력하세요." />
+          <TextArea label="경위 내용" value={form.content} onChange={(value) => handleChange("content", value)} placeholder="발생 경위와 내용을 입력하세요" />
+          <TextArea label="조치 내용" value={form.actionTaken} onChange={(value) => handleChange("actionTaken", value)} placeholder="조치했거나 조치 예정인 내용을 입력하세요" />
         </div>
 
         <div className="mt-4">
@@ -292,7 +325,7 @@ export default function IncidentReportPage({
             disabled={saving}
             className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
           >
-            {saving ? "저장 중" : "등록"}
+            {saving ? "저장 중..." : "등록"}
           </button>
         </div>
       </section>
@@ -328,8 +361,10 @@ export default function IncidentReportPage({
           <IncidentTable
             rows={visibleRows}
             canCheck={canCheck}
+            canDelete={canDeleteReport}
             onCheck={handleCheck}
             onReject={handleReject}
+            onDelete={handleDelete}
             onPrint={openPrintPage}
           />
         </div>
@@ -337,8 +372,10 @@ export default function IncidentReportPage({
         <MobileIncidentCards
           rows={visibleRows}
           canCheck={canCheck}
+          canDelete={canDeleteReport}
           onCheck={handleCheck}
           onReject={handleReject}
+          onDelete={handleDelete}
           onPrint={openPrintPage}
         />
       </section>
@@ -349,14 +386,18 @@ export default function IncidentReportPage({
 function IncidentTable({
   rows,
   canCheck,
+  canDelete,
   onCheck,
   onReject,
+  onDelete,
   onPrint,
 }: {
   rows: IncidentReport[];
   canCheck: boolean;
+  canDelete: (row: IncidentReport) => boolean;
   onCheck: (row: IncidentReport) => void;
   onReject: (row: IncidentReport) => void;
+  onDelete: (row: IncidentReport) => void;
   onPrint: (row: IncidentReport) => void;
 }) {
   return (
@@ -407,8 +448,10 @@ function IncidentTable({
               <ActionButtons
                 row={row}
                 canCheck={canCheck}
+                canDelete={canDelete}
                 onCheck={onCheck}
                 onReject={onReject}
+                onDelete={onDelete}
               />
             </td>
           </tr>
@@ -429,14 +472,18 @@ function IncidentTable({
 function MobileIncidentCards({
   rows,
   canCheck,
+  canDelete,
   onCheck,
   onReject,
+  onDelete,
   onPrint,
 }: {
   rows: IncidentReport[];
   canCheck: boolean;
+  canDelete: (row: IncidentReport) => boolean;
   onCheck: (row: IncidentReport) => void;
   onReject: (row: IncidentReport) => void;
+  onDelete: (row: IncidentReport) => void;
   onPrint: (row: IncidentReport) => void;
 }) {
   if (rows.length === 0) {
@@ -494,8 +541,10 @@ function MobileIncidentCards({
             <ActionButtons
               row={row}
               canCheck={canCheck}
+              canDelete={canDelete}
               onCheck={onCheck}
               onReject={onReject}
+              onDelete={onDelete}
             />
           </div>
         </div>
@@ -507,34 +556,54 @@ function MobileIncidentCards({
 function ActionButtons({
   row,
   canCheck,
+  canDelete,
   onCheck,
   onReject,
+  onDelete,
 }: {
   row: IncidentReport;
   canCheck: boolean;
+  canDelete: (row: IncidentReport) => boolean;
   onCheck: (row: IncidentReport) => void;
   onReject: (row: IncidentReport) => void;
+  onDelete: (row: IncidentReport) => void;
 }) {
-  if (!canCheck || row.status !== "확인대기") {
+  const showCheckButtons = canCheck && row.status === "확인대기";
+  const showDeleteButton = canDelete(row);
+
+  if (!showCheckButtons && !showDeleteButton) {
     return <span className="text-xs text-slate-400">-</span>;
   }
 
   return (
     <div className="flex justify-center gap-2">
-      <button
-        type="button"
-        onClick={() => void onCheck(row)}
-        className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700"
-      >
-        확인
-      </button>
-      <button
-        type="button"
-        onClick={() => void onReject(row)}
-        className="rounded-lg border border-red-300 bg-white px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50"
-      >
-        반려
-      </button>
+      {showCheckButtons && (
+        <>
+          <button
+            type="button"
+            onClick={() => void onCheck(row)}
+            className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700"
+          >
+            확인
+          </button>
+          <button
+            type="button"
+            onClick={() => void onReject(row)}
+            className="rounded-lg border border-red-300 bg-white px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50"
+          >
+            반려
+          </button>
+        </>
+      )}
+      {showDeleteButton && (
+        <button
+          type="button"
+          onClick={() => void onDelete(row)}
+          className="rounded-lg border border-red-300 bg-white px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50"
+        >
+          삭제
+        </button>
+      )}
     </div>
   );
 }
@@ -566,7 +635,7 @@ function StatusBadge({ status }: { status: IncidentStatus }) {
       ? "bg-green-100 text-green-700"
       : status === "반려"
         ? "bg-red-100 text-red-700"
-      : "bg-amber-100 text-amber-700";
+        : "bg-amber-100 text-amber-700";
 
   return (
     <span className={`rounded-full px-2 py-1 text-xs font-bold ${className}`}>
@@ -635,7 +704,7 @@ function TextArea({
     <label className={labelClass}>
       {label}
       <textarea
-        className={`${inputClass} resize-y`}
+        className={`${inputClass} resize-none`}
         rows={rows}
         value={value}
         placeholder={placeholder}

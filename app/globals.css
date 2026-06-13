@@ -14,9 +14,22 @@ body {
 }
 
 body {
-  background: white;
+  background:
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.9), transparent 34rem),
+    linear-gradient(135deg, #f5f5f7 0%, #eef1f6 45%, #e8edf5 100%);
   color: #171717;
-  font-family: Arial, Helvetica, sans-serif;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "SF Pro Display",
+    "SF Pro Text",
+    "Segoe UI",
+    "Noto Sans KR",
+    Arial,
+    Helvetica,
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 .print-only {

@@ -91,10 +91,10 @@ export default function Sidebar({
               onSelectMenu(item);
             }}
             className={[
-              "w-full flex items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition",
+              "w-full flex items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-medium transition",
               isSelected
-                ? "bg-blue-600 text-white"
-                : "text-slate-200 hover:bg-slate-700",
+                ? "bg-blue-500 text-white shadow-sm"
+                : "text-slate-700 hover:bg-white/70",
             ].join(" ")}
             style={{ paddingLeft: `${12 + depth * 18}px` }}
           >
@@ -113,16 +113,16 @@ export default function Sidebar({
   };
 
   return (
-    <aside className="h-full w-64 overflow-y-auto bg-slate-900 py-4 pl-10 pr-4 text-white">
+    <aside className="h-full w-64 overflow-y-auto border-r border-white/70 bg-white/60 py-4 pl-10 pr-4 text-slate-900 shadow-xl shadow-slate-300/30 backdrop-blur-2xl">
       <div className="mb-6">
         <button
           type="button"
           onClick={toggleAllMenus}
-          className="rounded-lg text-left text-lg font-bold text-white underline-offset-4 hover:underline"
+          className="rounded-lg text-left text-lg font-bold text-slate-950 underline-offset-4 hover:underline"
         >
           ERP MENU
         </button>
-        <div className="text-xs text-slate-400">업무 메뉴</div>
+        <div className="text-xs text-slate-500">업무 메뉴</div>
       </div>
 
       <nav className="space-y-1">{renderMenu(menuData)}</nav>
