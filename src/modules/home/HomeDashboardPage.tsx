@@ -78,9 +78,65 @@ type HomeNotice = {
   updated_at: string;
 };
 
+type ScheduleEvent = {
+  id: string;
+  date: string;
+  label: string;
+  detail: string;
+  tone: "blue" | "green" | "indigo" | "red";
+  manual?: boolean;
+};
+
+type ManualSchedule = {
+  id: string;
+  date: string;
+  title: string;
+  memo: string;
+};
+
 const todayText = localDateText;
+const manualScheduleStorageKey = "erpHomeManualSchedules";
+const weekDays = ["일", "월", "화", "수", "목", "금", "토"];
 const dismissedNoticeKey = (noticeId: number) =>
   `erpDismissedHomeNotice:${noticeId}:${todayText()}`;
+const parseLocalDate = (dateText: string) => {
+  const [year, month, day] = dateText.split("-").map(Number);
+  return new Date(year, month - 1, day);
+};
+const toLocalDateText = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+const addDays = (dateText: string, days: number) => {
+  const date = parseLocalDate(dateText);
+  date.setDate(date.getDate() + days);
+  return toLocalDateText(date);
+};
+const formatKoreanDate = (dateText: string) => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateText)) return dateText;
+
+  const date = parseLocalDate(dateText);
+  return `${date.getMonth() + 1}월 ${date.getDate()}일(${weekDays[date.getDay()]})`;
+};
+const buildMonthDays = (monthText: string) => {
+  const [year, month] = monthText.split("-").map(Number);
+  const firstDate = new Date(year, month - 1, 1);
+  const startDate = new Date(firstDate);
+  startDate.setDate(firstDate.getDate() - firstDate.getDay());
+
+  return Array.from({ length: 42 }, (_, index) => {
+    const date = new Date(startDate);
+    date.setDate(startDate.getDate() + index);
+
+    return {
+      date: toLocalDateText(date),
+      day: date.getDate(),
+      inMonth: date.getMonth() === month - 1,
+    };
+  });
+};
 const currentWorkMonth = (orders: WorkOrder[]) => {
   const today = todayText();
   const calendarMonth = today.slice(0, 7);
@@ -131,6 +187,10 @@ export default function HomeDashboardPage({
   const [noticeContent, setNoticeContent] = useState("");
   const [noticeSaving, setNoticeSaving] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [selectedScheduleDate, setSelectedScheduleDate] = useState(todayText());
+  const [manualSchedules, setManualSchedules] = useState<ManualSchedule[]>([]);
+  const [scheduleTitle, setScheduleTitle] = useState("");
+  const [scheduleMemo, setScheduleMemo] = useState("");
 
   const loadDashboard = useCallback(async () => {
     setLoading(true);
@@ -260,6 +320,17 @@ export default function HomeDashboardPage({
   }, [loadDashboard]);
 
   useEffect(() => {
+    try {
+      const saved = localStorage.getItem(manualScheduleStorageKey);
+      if (saved) {
+        setManualSchedules(JSON.parse(saved) as ManualSchedule[]);
+      }
+    } catch {
+      setManualSchedules([]);
+    }
+  }, []);
+
+  useEffect(() => {
     const refresh = () => {
       void loadDashboard();
     };
@@ -285,6 +356,64 @@ export default function HomeDashboardPage({
     const thisMonthOutbound = workOrders.filter((item) =>
       item.release_date?.startsWith(thisMonth)
     );
+    const workScheduleEvents = workOrders
+      .flatMap<ScheduleEvent>((item) => {
+        const events: ScheduleEvent[] = [];
+        const vehicle = [item.car_number, item.car_model].filter(Boolean).join(" / ");
+
+        if (item.inbound_date) {
+          events.push({
+            id: `${item.id}-inbound`,
+            date: item.inbound_date,
+            label: "입고",
+            detail: `${item.work_name} · ${vehicle || "차량 정보 없음"}`,
+            tone: "green",
+          });
+        }
+
+        if (item.outbound_date && !item.release_date) {
+          events.push({
+            id: `${item.id}-outbound-plan`,
+            date: item.outbound_date,
+            label: "출고 예정",
+            detail: `${item.work_name} · ${vehicle || "차량 정보 없음"}`,
+            tone: "blue",
+          });
+        }
+
+        if (item.release_date) {
+          events.push({
+            id: `${item.id}-released`,
+            date: item.release_date,
+            label: "출고 완료",
+            detail: `${item.work_name} · ${vehicle || "차량 정보 없음"}`,
+            tone: "indigo",
+          });
+        }
+
+        return events;
+      })
+      .filter((event) => event.date?.startsWith(thisMonth));
+    const manualScheduleEvents = manualSchedules
+      .filter((event) => event.date?.startsWith(thisMonth))
+      .map<ScheduleEvent>((event) => ({
+        id: event.id,
+        date: event.date,
+        label: "주요일정",
+        detail: event.memo ? `${event.title} · ${event.memo}` : event.title,
+        tone: "red",
+        manual: true,
+      }));
+    const calendarEvents = [...manualScheduleEvents, ...workScheduleEvents].sort(
+      (a, b) => a.date.localeCompare(b.date)
+    );
+    const selectedDayEvents = calendarEvents.filter(
+      (event) => event.date === selectedScheduleDate
+    );
+    const nextWeekEnd = addDays(today, 7);
+    const upcomingEvents = calendarEvents
+      .filter((event) => event.date >= today && event.date <= nextWeekEnd)
+      .slice(0, 5);
 
     return {
       activeOrders,
@@ -292,19 +421,17 @@ export default function HomeDashboardPage({
       thisMonthInbound,
       todayOutbound,
       thisMonthOutbound,
-      recentInbound: [...activeOrders]
-        .sort((a, b) => String(b.inbound_date).localeCompare(String(a.inbound_date)))
-        .slice(0, 8),
+      calendarMonth: thisMonth,
+      calendarEvents,
+      selectedDayEvents,
+      upcomingEvents,
+      scheduleSummary: {
+        today: calendarEvents.filter((event) => event.date === today).length,
+        week: upcomingEvents.length,
+        month: calendarEvents.length,
+      },
     };
-  }, [workOrders]);
-
-  const openWork = (workName: string) => {
-    onSelectMenu({
-      id: "factory-work-register",
-      title: "작업등록",
-      data: { workName },
-    });
-  };
+  }, [manualSchedules, selectedScheduleDate, workOrders]);
 
   const loadNoticeList = async () => {
     if (!isAdmin) return;
@@ -320,6 +447,37 @@ export default function HomeDashboardPage({
     }
 
     setNoticeList((data ?? []) as HomeNotice[]);
+  };
+
+  const saveManualSchedules = (items: ManualSchedule[]) => {
+    setManualSchedules(items);
+    localStorage.setItem(manualScheduleStorageKey, JSON.stringify(items));
+  };
+
+  const addManualSchedule = () => {
+    const title = scheduleTitle.trim();
+    const memo = scheduleMemo.trim();
+
+    if (!title) {
+      alert("일정 제목을 입력해주세요.");
+      return;
+    }
+
+    saveManualSchedules([
+      ...manualSchedules,
+      {
+        id: `manual-${Date.now()}`,
+        date: selectedScheduleDate,
+        title,
+        memo,
+      },
+    ]);
+    setScheduleTitle("");
+    setScheduleMemo("");
+  };
+
+  const deleteManualSchedule = (eventId: string) => {
+    saveManualSchedules(manualSchedules.filter((item) => item.id !== eventId));
   };
 
   const openNoticeManager = async () => {
@@ -589,7 +747,7 @@ export default function HomeDashboardPage({
           업무 홈을 불러오는 중입니다.
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+        <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
           <QuickActions actions={quickActionMenus} onSelectMenu={onSelectMenu} />
 
           {(isAdmin || canApproveAttendance || canApproveExpenses || canCheckIncident) && (
@@ -598,10 +756,10 @@ export default function HomeDashboardPage({
               showExpenseApprovals={canApproveExpenses}
               showAttendanceApprovals={canApproveAttendance}
               showIncidentApprovals={canCheckIncident}
-              pendingUsers={pendingUsers.slice(0, 6)}
-              pendingExpenses={pendingExpenseRequests.slice(0, 6)}
-              pendingAttendances={pendingAttendanceRequests.slice(0, 6)}
-              pendingIncidents={pendingIncidentReports.slice(0, 6)}
+              pendingUsers={pendingUsers.slice(0, 3)}
+              pendingExpenses={pendingExpenseRequests.slice(0, 3)}
+              pendingAttendances={pendingAttendanceRequests.slice(0, 3)}
+              pendingIncidents={pendingIncidentReports.slice(0, 3)}
               onOpenManage={() =>
                 onSelectMenu({
                   id: "employee-manage",
@@ -635,14 +793,28 @@ export default function HomeDashboardPage({
             />
           )}
 
-          <RecentInboundList rows={dashboard.recentInbound} onOpen={openWork} />
-
-          <NoticePanel />
+          <ScheduleBoard
+            month={dashboard.calendarMonth}
+            events={dashboard.calendarEvents}
+            selectedDate={selectedScheduleDate}
+            selectedEvents={dashboard.selectedDayEvents}
+            upcomingEvents={dashboard.upcomingEvents}
+            summary={dashboard.scheduleSummary}
+            onSelectDate={setSelectedScheduleDate}
+            scheduleTitle={scheduleTitle}
+            scheduleMemo={scheduleMemo}
+            onScheduleTitleChange={setScheduleTitle}
+            onScheduleMemoChange={setScheduleMemo}
+            onAddSchedule={addManualSchedule}
+            onDeleteSchedule={deleteManualSchedule}
+          />
         </div>
       )}
     </div>
   );
 }
+
+void _NoticePanel;
 
 function SummaryCard({
   title,
@@ -890,9 +1062,9 @@ function QuickActions({
   onSelectMenu: (menu: MenuItem) => void;
 }) {
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-4">
+    <section className="order-2 rounded-xl border border-slate-200 bg-white p-3">
       <h4 className="mb-3 font-bold text-slate-900">빠른 작업</h4>
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-2">
         {actions.map((action, index) => (
           <button
             key={`${action.id}-${index}`}
@@ -904,9 +1076,9 @@ function QuickActions({
                 data: action.data,
               })
             }
-            className="rounded-xl border border-slate-200 p-4 text-left transition hover:border-blue-300 hover:bg-blue-50"
+            className="rounded-lg border border-slate-200 p-3 text-left transition hover:border-blue-300 hover:bg-blue-50"
           >
-            <div className="font-bold text-slate-900">{action.title}</div>
+            <div className="text-sm font-bold text-slate-900">{action.title}</div>
             <div className="mt-1 text-xs text-slate-500">
               {action.data?.openCamera ? "작업등록으로 이동 후 카메라 실행" : "즐겨찾기 페이지로 이동"}
             </div>
@@ -917,13 +1089,219 @@ function QuickActions({
   );
 }
 
-function RecentInboundList({
-  rows,
-  onOpen,
+function ScheduleBoard({
+  month,
+  events,
+  selectedDate,
+  selectedEvents,
+  upcomingEvents,
+  summary,
+  onSelectDate,
+  scheduleTitle,
+  scheduleMemo,
+  onScheduleTitleChange,
+  onScheduleMemoChange,
+  onAddSchedule,
+  onDeleteSchedule,
 }: {
-  rows: WorkOrder[];
-  onOpen: (workName: string) => void;
+  month: string;
+  events: ScheduleEvent[];
+  selectedDate: string;
+  selectedEvents: ScheduleEvent[];
+  upcomingEvents: ScheduleEvent[];
+  summary: {
+    today: number;
+    week: number;
+    month: number;
+  };
+  onSelectDate: (date: string) => void;
+  scheduleTitle: string;
+  scheduleMemo: string;
+  onScheduleTitleChange: (value: string) => void;
+  onScheduleMemoChange: (value: string) => void;
+  onAddSchedule: () => void;
+  onDeleteSchedule: (eventId: string) => void;
 }) {
+  const monthDays = buildMonthDays(month);
+  const today = todayText();
+  const eventsByDate = events.reduce<Record<string, ScheduleEvent[]>>(
+    (result, event) => {
+      result[event.date] = [...(result[event.date] ?? []), event];
+      return result;
+    },
+    {}
+  );
+
+  return (
+    <section className="order-1 overflow-hidden rounded-xl border border-blue-100 bg-white shadow-sm xl:row-span-2">
+      <div className="flex flex-wrap items-end justify-between gap-3 bg-blue-50 px-5 py-4">
+        <div>
+          <h4 className="font-bold text-slate-900">중요 일정</h4>
+          <p className="mt-1 text-xs text-slate-500">
+            입고, 출고 예정, 출고 완료를 한 달 달력으로 모아봅니다.
+          </p>
+        </div>
+        <div className="grid grid-cols-3 gap-2 text-center text-xs">
+          <div className="rounded-lg bg-slate-50 px-3 py-2">
+            <p className="font-semibold text-slate-500">오늘</p>
+            <p className="mt-1 text-lg font-bold text-slate-900">{summary.today}</p>
+          </div>
+          <div className="rounded-lg bg-slate-50 px-3 py-2">
+            <p className="font-semibold text-slate-500">7일</p>
+            <p className="mt-1 text-lg font-bold text-slate-900">{summary.week}</p>
+          </div>
+          <div className="rounded-lg bg-slate-50 px-3 py-2">
+            <p className="font-semibold text-slate-500">이번 달</p>
+            <p className="mt-1 text-lg font-bold text-slate-900">{summary.month}</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 p-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(300px,0.65fr)]">
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+          <div className="mb-3 flex items-center justify-between">
+            <p className="text-sm font-bold text-slate-900">
+              {month.replace("-", ".")}
+            </p>
+            <div className="flex items-center gap-3 text-[11px] font-semibold text-slate-500">
+              <span className="flex items-center gap-1">
+                <span className="h-2 w-2 rounded-full bg-green-500" />
+                입고
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="h-2 w-2 rounded-full bg-blue-500" />
+                예정
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="h-2 w-2 rounded-full bg-indigo-500" />
+                완료
+              </span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-7 gap-1 text-center text-xs font-bold text-slate-500">
+            {weekDays.map((day) => (
+              <div key={day} className="py-2">
+                {day}
+              </div>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-7 gap-2">
+            {monthDays.map((day) => {
+              const dayEvents = eventsByDate[day.date] ?? [];
+              const isSelected = day.date === selectedDate;
+              const isToday = day.date === today;
+
+              return (
+                <button
+                  key={day.date}
+                  type="button"
+                  onClick={() => onSelectDate(day.date)}
+                  className={[
+                    "min-h-24 rounded-lg border p-2 text-left transition",
+                    day.inMonth ? "bg-white shadow-sm" : "bg-slate-100 text-slate-300",
+                    dayEvents.length > 0 && day.inMonth
+                      ? "border-blue-200 bg-blue-50"
+                      : "",
+                    isSelected
+                      ? "border-blue-600 bg-white ring-2 ring-blue-200"
+                      : "border-slate-100 hover:border-blue-200",
+                  ].join(" ")}
+                >
+                  <div className="flex items-center justify-between">
+                    <span
+                      className={[
+                        "flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold",
+                        isToday ? "bg-slate-900 text-white" : "",
+                      ].join(" ")}
+                    >
+                      {day.day}
+                    </span>
+                    {dayEvents.length > 0 && (
+                      <span className="text-[11px] font-bold text-slate-400">
+                        {dayEvents.length}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="mt-3 space-y-1">
+                    {dayEvents.slice(0, 3).map((event) => (
+                      <span
+                        key={event.id}
+                        className={[
+                          "block truncate rounded px-1.5 py-0.5 text-[10px] font-bold",
+                          event.tone === "green"
+                            ? "bg-green-100 text-green-700"
+                            : event.tone === "blue"
+                              ? "bg-blue-100 text-blue-700"
+                              : event.tone === "red"
+                                ? "bg-red-100 text-red-700"
+                                : "bg-indigo-100 text-indigo-700",
+                        ].join(" ")}
+                      >
+                        {event.label}
+                      </span>
+                    ))}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          <div className="rounded-xl border border-blue-100 bg-blue-50 p-3">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <h5 className="text-sm font-bold text-slate-900">주요일정 추가</h5>
+              <span className="text-xs font-semibold text-blue-700">
+                {formatKoreanDate(selectedDate)}
+              </span>
+            </div>
+            <div className="space-y-2">
+              <input
+                value={scheduleTitle}
+                onChange={(event) => onScheduleTitleChange(event.target.value)}
+                placeholder="일정 제목"
+                className="w-full rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500"
+              />
+              <input
+                value={scheduleMemo}
+                onChange={(event) => onScheduleMemoChange(event.target.value)}
+                placeholder="간단 메모"
+                className="w-full rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500"
+              />
+              <button
+                type="button"
+                onClick={onAddSchedule}
+                className="w-full rounded-lg bg-blue-600 px-3 py-2 text-sm font-bold text-white hover:bg-blue-700"
+              >
+                일정 추가
+              </button>
+            </div>
+          </div>
+          <ScheduleList
+            title={`${formatKoreanDate(selectedDate)} 일정`}
+            emptyText="선택한 날짜에 등록된 일정이 없습니다."
+            events={selectedEvents}
+            onDelete={onDeleteSchedule}
+          />
+          <ScheduleList
+            title="다가오는 일정"
+            emptyText="앞으로 7일 안에 표시할 일정이 없습니다."
+            events={upcomingEvents}
+            showDate
+          />
+        </div>
+      </div>
+    </section>
+  );
+
+  const rows: WorkOrder[] = [];
+  const onOpen = (workName: string) => {
+    void workName;
+  };
+
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-4">
       <div className="mb-3 flex items-center justify-between">
@@ -972,6 +1350,80 @@ function RecentInboundList({
   );
 }
 
+function ScheduleList({
+  title,
+  emptyText,
+  events,
+  showDate = false,
+  onDelete,
+}: {
+  title: string;
+  emptyText: string;
+  events: ScheduleEvent[];
+  showDate?: boolean;
+  onDelete?: (eventId: string) => void;
+}) {
+  return (
+    <div className="rounded-xl border border-slate-200 p-3">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <h5 className="text-sm font-bold text-slate-900">{title}</h5>
+        <span className="shrink-0 rounded-full bg-slate-100 px-2 py-1 text-[11px] font-bold text-slate-500">
+          {events.length}건
+        </span>
+      </div>
+
+      {events.length === 0 ? (
+        <div className="rounded-lg bg-slate-50 p-5 text-center text-sm text-slate-500">
+          {emptyText}
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {events.map((event) => (
+            <div
+              key={event.id}
+              className="rounded-lg border border-slate-100 p-3"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span
+                  className={[
+                    "rounded-full px-2 py-1 text-[11px] font-bold",
+                    event.tone === "green"
+                      ? "bg-green-100 text-green-700"
+                      : event.tone === "blue"
+                        ? "bg-blue-100 text-blue-700"
+                        : event.tone === "red"
+                          ? "bg-red-100 text-red-700"
+                          : "bg-indigo-100 text-indigo-700",
+                  ].join(" ")}
+                >
+                  {event.label}
+                </span>
+                {showDate && (
+                  <span className="text-xs font-semibold text-slate-500">
+                    {formatKoreanDate(event.date)}
+                  </span>
+                )}
+              </div>
+              <p className="mt-2 line-clamp-2 text-sm font-semibold text-slate-800">
+                {event.detail}
+              </p>
+              {event.manual && onDelete && (
+                <button
+                  type="button"
+                  onClick={() => onDelete(event.id)}
+                  className="mt-2 rounded border border-red-200 px-2 py-1 text-xs font-semibold text-red-600 hover:bg-red-50"
+                >
+                  삭제
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AdminApprovalPanel({
   showEmployeeApprovals,
   showExpenseApprovals,
@@ -1004,8 +1456,8 @@ function AdminApprovalPanel({
   onRejectIncident: (row: PendingIncidentReport) => void;
 }) {
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-4">
-      <div className="space-y-4">
+    <section className="order-3 rounded-xl border border-slate-200 bg-white p-3">
+      <div className="max-h-[520px] space-y-3 overflow-y-auto pr-1">
         {showEmployeeApprovals && (
         <div>
           <div className="mb-3 flex items-center justify-between">
@@ -1207,7 +1659,7 @@ function AdminApprovalPanel({
   );
 }
 
-function NoticePanel() {
+function _NoticePanel() {
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-4">
       <h4 className="mb-3 font-bold text-slate-900">업무 안내</h4>
