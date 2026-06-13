@@ -69,6 +69,20 @@ type SupportRow = {
 };
 
 type SupportFilter = "pending" | "entered" | "all";
+type SortKey =
+  | "inboundDate"
+  | "partnerCompany"
+  | "workName"
+  | "carNumber"
+  | "carModel"
+  | "paymentTotal"
+  | "vatAmount"
+  | "materialAmount"
+  | "partsAmount"
+  | "baseAmount"
+  | "expectedSupportAmount"
+  | "supportAmount";
+type SortDirection = "asc" | "desc";
 
 const pageSize = 30;
 const defaultSupportTargetPartners = [
@@ -134,6 +148,8 @@ export default function PartnerSupportPage({
   const [searchText, setSearchText] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
+  const [sortKey, setSortKey] = useState<SortKey>("inboundDate");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
 
   const loadRows = useCallback(async () => {
     setIsLoading(true);
@@ -372,6 +388,32 @@ export default function PartnerSupportPage({
       });
   }, [rows, searchText, selectedPartner]);
 
+  const sortedRows = useMemo(() => {
+    const direction = sortDirection === "asc" ? 1 : -1;
+
+    return [...filteredRows].sort((a, b) => {
+      const aValue = a[sortKey];
+      const bValue = b[sortKey];
+
+      if (typeof aValue === "number" && typeof bValue === "number") {
+        return (aValue - bValue) * direction;
+      }
+
+      return String(aValue ?? "").localeCompare(String(bValue ?? ""), "ko") * direction;
+    });
+  }, [filteredRows, sortDirection, sortKey]);
+
+  const handleSort = (key: SortKey) => {
+    setCurrentPage(1);
+    if (sortKey === key) {
+      setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
+      return;
+    }
+
+    setSortKey(key);
+    setSortDirection("asc");
+  };
+
   const summary = useMemo(() => {
     return {
       totalCount: rows.length,
@@ -415,9 +457,9 @@ export default function PartnerSupportPage({
     });
   }, [rows]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
+  const totalPages = Math.max(1, Math.ceil(sortedRows.length / pageSize));
   const safeCurrentPage = Math.min(currentPage, totalPages);
-  const pagedRows = filteredRows.slice(
+  const pagedRows = sortedRows.slice(
     (safeCurrentPage - 1) * pageSize,
     safeCurrentPage * pageSize
   );
@@ -427,6 +469,9 @@ export default function PartnerSupportPage({
       <style jsx>{`
         .partner-support-table thead th:first-child,
         .partner-support-table tbody tr.data-row td:first-child {
+          display: none;
+        }
+        .partner-support-table thead tr:nth-child(2) {
           display: none;
         }
       `}</style>
@@ -535,6 +580,22 @@ export default function PartnerSupportPage({
         <div className="overflow-x-auto">
           <table className="partner-support-table w-full min-w-[1180px] border-collapse text-sm">
             <thead>
+              <tr className="bg-slate-100 text-slate-700">
+                <th className="hidden">상태</th>
+                <SortableHeader label="입고일" sortKey="inboundDate" activeKey={sortKey} direction={sortDirection} onSort={handleSort} />
+                <SortableHeader label="거래처" sortKey="partnerCompany" activeKey={sortKey} direction={sortDirection} onSort={handleSort} />
+                <SortableHeader label="작업명" sortKey="workName" activeKey={sortKey} direction={sortDirection} onSort={handleSort} />
+                <SortableHeader label="차량번호" sortKey="carNumber" activeKey={sortKey} direction={sortDirection} onSort={handleSort} />
+                <SortableHeader label="차량명" sortKey="carModel" activeKey={sortKey} direction={sortDirection} onSort={handleSort} />
+                <SortableHeader label="입금총액" sortKey="paymentTotal" activeKey={sortKey} direction={sortDirection} align="right" onSort={handleSort} />
+                <SortableHeader label="부가세" sortKey="vatAmount" activeKey={sortKey} direction={sortDirection} align="right" onSort={handleSort} />
+                <SortableHeader label="총액15%" sortKey="materialAmount" activeKey={sortKey} direction={sortDirection} align="right" onSort={handleSort} />
+                <SortableHeader label="부품비" sortKey="partsAmount" activeKey={sortKey} direction={sortDirection} align="right" onSort={handleSort} />
+                <SortableHeader label="기준금액" sortKey="baseAmount" activeKey={sortKey} direction={sortDirection} align="right" onSort={handleSort} />
+                <SortableHeader label="예상지원" sortKey="expectedSupportAmount" activeKey={sortKey} direction={sortDirection} align="right" onSort={handleSort} />
+                <SortableHeader label="입력금액" sortKey="supportAmount" activeKey={sortKey} direction={sortDirection} align="right" onSort={handleSort} />
+                <th className="border border-slate-300 px-2 py-2">관리</th>
+              </tr>
               <tr className="bg-slate-100 text-slate-700">
                 <th className="border border-slate-300 px-2 py-2">상태</th>
                 <th className="border border-slate-300 px-2 py-2">출고일</th>
@@ -704,5 +765,39 @@ function SummaryCard({
       <p className="text-sm font-semibold">{label}</p>
       <p className="mt-2 text-2xl font-bold">{value}</p>
     </div>
+  );
+}
+
+function SortableHeader({
+  label,
+  sortKey,
+  activeKey,
+  direction,
+  align = "left",
+  onSort,
+}: {
+  label: string;
+  sortKey: SortKey;
+  activeKey: SortKey;
+  direction: SortDirection;
+  align?: "left" | "right" | "center";
+  onSort: (key: SortKey) => void;
+}) {
+  const isActive = sortKey === activeKey;
+  const arrow = isActive ? (direction === "asc" ? "▲" : "▼") : "↕";
+  const alignClass =
+    align === "right" ? "justify-end text-right" : align === "center" ? "justify-center text-center" : "justify-start text-left";
+
+  return (
+    <th className="border border-slate-300 px-2 py-2">
+      <button
+        type="button"
+        onClick={() => onSort(sortKey)}
+        className={`flex w-full items-center gap-1 font-semibold hover:text-blue-700 ${alignClass}`}
+      >
+        <span>{label}</span>
+        <span className="text-[10px] text-slate-400">{arrow}</span>
+      </button>
+    </th>
   );
 }
