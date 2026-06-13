@@ -84,6 +84,7 @@ type ScheduleEvent = {
   label: string;
   detail: string;
   tone: "blue" | "green" | "indigo" | "red";
+  kind: "inbound" | "outboundPlan" | "released" | "manual" | "holiday";
   manual?: boolean;
 };
 
@@ -94,8 +95,15 @@ type ManualSchedule = {
   memo: string;
 };
 
+type KoreanHoliday = {
+  date: string;
+  localName: string;
+  name: string;
+};
+
 const todayText = localDateText;
 const manualScheduleStorageKey = "erpHomeManualSchedules";
+const holidayStorageKey = (year: string) => `erpKoreanHolidays:${year}`;
 const weekDays = ["일", "월", "화", "수", "목", "금", "토"];
 const dismissedNoticeKey = (noticeId: number) =>
   `erpDismissedHomeNotice:${noticeId}:${todayText()}`;
@@ -114,6 +122,17 @@ const addDays = (dateText: string, days: number) => {
   date.setDate(date.getDate() + days);
   return toLocalDateText(date);
 };
+const addMonths = (monthText: string, months: number) => {
+  const [year, month] = monthText.split("-").map(Number);
+  const date = new Date(year, month - 1 + months, 1);
+  return toLocalDateText(date).slice(0, 7);
+};
+const isDateInMonth = (dateText: string | null | undefined, monthText: string) =>
+  Boolean(
+    dateText &&
+      /^\d{4}-\d{2}-\d{2}$/.test(dateText) &&
+      dateText.slice(0, 7) === monthText
+  );
 const formatKoreanDate = (dateText: string) => {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateText)) return dateText;
 
@@ -133,24 +152,11 @@ const buildMonthDays = (monthText: string) => {
     return {
       date: toLocalDateText(date),
       day: date.getDate(),
+      dayOfWeek: date.getDay(),
       inMonth: date.getMonth() === month - 1,
     };
   });
 };
-const currentWorkMonth = (orders: WorkOrder[]) => {
-  const today = todayText();
-  const calendarMonth = today.slice(0, 7);
-  const workMonths = orders
-    .map((item) => item.work_name?.slice(0, 7) ?? "")
-    .filter((month) => /^\d{4}-\d{2}$/.test(month));
-
-  if (workMonths.includes(calendarMonth)) {
-    return calendarMonth;
-  }
-
-  return [...workMonths].sort().pop() ?? calendarMonth;
-};
-
 export default function HomeDashboardPage({
   isAdmin,
   user,
@@ -187,8 +193,13 @@ export default function HomeDashboardPage({
   const [noticeContent, setNoticeContent] = useState("");
   const [noticeSaving, setNoticeSaving] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [visibleScheduleMonth, setVisibleScheduleMonth] = useState(
+    todayText().slice(0, 7)
+  );
   const [selectedScheduleDate, setSelectedScheduleDate] = useState(todayText());
+  const [schedulePopupOpen, setSchedulePopupOpen] = useState(false);
   const [manualSchedules, setManualSchedules] = useState<ManualSchedule[]>([]);
+  const [koreanHolidays, setKoreanHolidays] = useState<KoreanHoliday[]>([]);
   const [scheduleTitle, setScheduleTitle] = useState("");
   const [scheduleMemo, setScheduleMemo] = useState("");
 
@@ -331,6 +342,38 @@ export default function HomeDashboardPage({
   }, []);
 
   useEffect(() => {
+    const year = visibleScheduleMonth.slice(0, 4);
+    const cacheKey = holidayStorageKey(year);
+
+    const loadHolidays = async () => {
+      try {
+        const cached = localStorage.getItem(cacheKey);
+        if (cached) {
+          setKoreanHolidays(JSON.parse(cached) as KoreanHoliday[]);
+          return;
+        }
+
+        const response = await fetch(
+          `https://date.nager.at/api/v3/PublicHolidays/${year}/KR`
+        );
+
+        if (!response.ok) {
+          setKoreanHolidays([]);
+          return;
+        }
+
+        const holidays = (await response.json()) as KoreanHoliday[];
+        localStorage.setItem(cacheKey, JSON.stringify(holidays));
+        setKoreanHolidays(holidays);
+      } catch {
+        setKoreanHolidays([]);
+      }
+    };
+
+    void loadHolidays();
+  }, [visibleScheduleMonth]);
+
+  useEffect(() => {
     const refresh = () => {
       void loadDashboard();
     };
@@ -346,15 +389,15 @@ export default function HomeDashboardPage({
 
   const dashboard = useMemo(() => {
     const today = todayText();
-    const thisMonth = currentWorkMonth(workOrders);
+    const thisMonth = visibleScheduleMonth;
     const activeOrders = workOrders.filter((item) => !item.release_date);
     const todayInbound = workOrders.filter((item) => item.inbound_date === today);
     const thisMonthInbound = workOrders.filter((item) =>
-      item.work_name?.startsWith(thisMonth)
+      isDateInMonth(item.inbound_date, thisMonth)
     );
     const todayOutbound = workOrders.filter((item) => item.release_date === today);
     const thisMonthOutbound = workOrders.filter((item) =>
-      item.release_date?.startsWith(thisMonth)
+      isDateInMonth(item.release_date, thisMonth)
     );
     const workScheduleEvents = workOrders
       .flatMap<ScheduleEvent>((item) => {
@@ -368,6 +411,7 @@ export default function HomeDashboardPage({
             label: "입고",
             detail: `${item.work_name} · ${vehicle || "차량 정보 없음"}`,
             tone: "green",
+            kind: "inbound",
           });
         }
 
@@ -378,6 +422,7 @@ export default function HomeDashboardPage({
             label: "출고 예정",
             detail: `${item.work_name} · ${vehicle || "차량 정보 없음"}`,
             tone: "blue",
+            kind: "outboundPlan",
           });
         }
 
@@ -388,25 +433,39 @@ export default function HomeDashboardPage({
             label: "출고 완료",
             detail: `${item.work_name} · ${vehicle || "차량 정보 없음"}`,
             tone: "indigo",
+            kind: "released",
           });
         }
 
         return events;
       })
-      .filter((event) => event.date?.startsWith(thisMonth));
+      .filter((event) => isDateInMonth(event.date, visibleScheduleMonth));
     const manualScheduleEvents = manualSchedules
-      .filter((event) => event.date?.startsWith(thisMonth))
+      .filter((event) => isDateInMonth(event.date, visibleScheduleMonth))
       .map<ScheduleEvent>((event) => ({
         id: event.id,
         date: event.date,
         label: "주요일정",
         detail: event.memo ? `${event.title} · ${event.memo}` : event.title,
         tone: "red",
+        kind: "manual",
         manual: true,
       }));
-    const calendarEvents = [...manualScheduleEvents, ...workScheduleEvents].sort(
-      (a, b) => a.date.localeCompare(b.date)
-    );
+    const holidayEvents = koreanHolidays
+      .filter((event) => isDateInMonth(event.date, visibleScheduleMonth))
+      .map<ScheduleEvent>((event) => ({
+        id: `holiday-${event.date}-${event.localName}`,
+        date: event.date,
+        label: "공휴일",
+        detail: event.localName || event.name,
+        tone: "red",
+        kind: "holiday",
+      }));
+    const calendarEvents = [
+      ...holidayEvents,
+      ...manualScheduleEvents,
+      ...workScheduleEvents,
+    ].sort((a, b) => a.date.localeCompare(b.date));
     const selectedDayEvents = calendarEvents.filter(
       (event) => event.date === selectedScheduleDate
     );
@@ -421,7 +480,7 @@ export default function HomeDashboardPage({
       thisMonthInbound,
       todayOutbound,
       thisMonthOutbound,
-      calendarMonth: thisMonth,
+      calendarMonth: visibleScheduleMonth,
       calendarEvents,
       selectedDayEvents,
       upcomingEvents,
@@ -431,7 +490,13 @@ export default function HomeDashboardPage({
         month: calendarEvents.length,
       },
     };
-  }, [manualSchedules, selectedScheduleDate, workOrders]);
+  }, [
+    koreanHolidays,
+    manualSchedules,
+    selectedScheduleDate,
+    visibleScheduleMonth,
+    workOrders,
+  ]);
 
   const loadNoticeList = async () => {
     if (!isAdmin) return;
@@ -478,6 +543,12 @@ export default function HomeDashboardPage({
 
   const deleteManualSchedule = (eventId: string) => {
     saveManualSchedules(manualSchedules.filter((item) => item.id !== eventId));
+  };
+
+  const changeScheduleMonth = (month: string) => {
+    setVisibleScheduleMonth(month);
+    setSelectedScheduleDate(`${month}-01`);
+    setSchedulePopupOpen(false);
   };
 
   const openNoticeManager = async () => {
@@ -747,7 +818,7 @@ export default function HomeDashboardPage({
           업무 홈을 불러오는 중입니다.
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_220px]">
           <QuickActions actions={quickActionMenus} onSelectMenu={onSelectMenu} />
 
           {(isAdmin || canApproveAttendance || canApproveExpenses || canCheckIncident) && (
@@ -801,6 +872,13 @@ export default function HomeDashboardPage({
             upcomingEvents={dashboard.upcomingEvents}
             summary={dashboard.scheduleSummary}
             onSelectDate={setSelectedScheduleDate}
+            onChangeMonth={changeScheduleMonth}
+            popupOpen={schedulePopupOpen}
+            onOpenSchedulePopup={(date) => {
+              setSelectedScheduleDate(date);
+              setSchedulePopupOpen(true);
+            }}
+            onCloseSchedulePopup={() => setSchedulePopupOpen(false)}
             scheduleTitle={scheduleTitle}
             scheduleMemo={scheduleMemo}
             onScheduleTitleChange={setScheduleTitle}
@@ -1062,9 +1140,9 @@ function QuickActions({
   onSelectMenu: (menu: MenuItem) => void;
 }) {
   return (
-    <section className="order-2 rounded-xl border border-slate-200 bg-white p-3">
+    <section className="order-2 rounded-xl border border-slate-200 bg-white p-2">
       <h4 className="mb-3 font-bold text-slate-900">빠른 작업</h4>
-      <div className="grid grid-cols-1 gap-2">
+      <div className="grid grid-cols-1 gap-1.5">
         {actions.map((action, index) => (
           <button
             key={`${action.id}-${index}`}
@@ -1076,10 +1154,12 @@ function QuickActions({
                 data: action.data,
               })
             }
-            className="rounded-lg border border-slate-200 p-3 text-left transition hover:border-blue-300 hover:bg-blue-50"
+            className="rounded-lg border border-slate-200 px-2.5 py-2 text-left transition hover:border-blue-300 hover:bg-blue-50"
           >
-            <div className="text-sm font-bold text-slate-900">{action.title}</div>
-            <div className="mt-1 text-xs text-slate-500">
+            <div className="text-xs font-bold text-slate-900">
+              {action.data?.openCamera ? "카메라열기" : action.title}
+            </div>
+            <div className="mt-0.5 text-[11px] text-slate-500">
               {action.data?.openCamera ? "작업등록으로 이동 후 카메라 실행" : "즐겨찾기 페이지로 이동"}
             </div>
           </button>
@@ -1097,6 +1177,10 @@ function ScheduleBoard({
   upcomingEvents,
   summary,
   onSelectDate,
+  onChangeMonth,
+  popupOpen,
+  onOpenSchedulePopup,
+  onCloseSchedulePopup,
   scheduleTitle,
   scheduleMemo,
   onScheduleTitleChange,
@@ -1115,6 +1199,10 @@ function ScheduleBoard({
     month: number;
   };
   onSelectDate: (date: string) => void;
+  onChangeMonth: (month: string) => void;
+  popupOpen: boolean;
+  onOpenSchedulePopup: (date: string) => void;
+  onCloseSchedulePopup: () => void;
   scheduleTitle: string;
   scheduleMemo: string;
   onScheduleTitleChange: (value: string) => void;
@@ -1131,9 +1219,57 @@ function ScheduleBoard({
     },
     {}
   );
+  const summarizeDayEvents = (dayEvents: ScheduleEvent[]) => {
+    const inbound = dayEvents.filter((event) => event.kind === "inbound").length;
+    const released = dayEvents.filter((event) => event.kind === "released").length;
+    const outboundPlan = dayEvents.filter(
+      (event) => event.kind === "outboundPlan"
+    ).length;
+    const manual = dayEvents.filter((event) => event.kind === "manual").length;
+    const holiday = dayEvents.filter((event) => event.kind === "holiday");
+
+    return [
+      holiday.length > 0
+        ? {
+            key: "holiday",
+            label: holiday[0]?.detail ?? "공휴일",
+            tone: "red",
+          }
+        : null,
+      inbound > 0
+        ? { key: "inbound", label: `입고 ${inbound}대`, tone: "green" }
+        : null,
+      released > 0
+        ? { key: "released", label: `출고 ${released}대`, tone: "indigo" }
+        : null,
+      outboundPlan > 0
+        ? { key: "outboundPlan", label: `출고예정 ${outboundPlan}대`, tone: "blue" }
+        : null,
+      manual > 0
+        ? { key: "manual", label: `주요일정 ${manual}건`, tone: "red" }
+        : null,
+    ].filter(Boolean) as Array<{
+      key: string;
+      label: string;
+      tone: ScheduleEvent["tone"];
+    }>;
+  };
 
   return (
-    <section className="order-1 overflow-hidden rounded-xl border border-blue-100 bg-white shadow-sm xl:row-span-2">
+    <section className="order-1 overflow-visible rounded-xl border border-blue-100 bg-white shadow-sm xl:row-span-2">
+      {popupOpen && (
+        <SchedulePopup
+          selectedDate={selectedDate}
+          selectedEvents={selectedEvents}
+          scheduleTitle={scheduleTitle}
+          scheduleMemo={scheduleMemo}
+          onScheduleTitleChange={onScheduleTitleChange}
+          onScheduleMemoChange={onScheduleMemoChange}
+          onAddSchedule={onAddSchedule}
+          onDeleteSchedule={onDeleteSchedule}
+          onClose={onCloseSchedulePopup}
+        />
+      )}
       <div className="flex flex-wrap items-end justify-between gap-3 bg-blue-50 px-5 py-4">
         <div>
           <h4 className="font-bold text-slate-900">중요 일정</h4>
@@ -1157,12 +1293,35 @@ function ScheduleBoard({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 p-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(300px,0.65fr)]">
+      <div className="p-4">
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-          <div className="mb-3 flex items-center justify-between">
-            <p className="text-sm font-bold text-slate-900">
-              {month.replace("-", ".")}
-            </p>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => onChangeMonth(addMonths(month, -1))}
+                className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs font-bold text-slate-600 hover:bg-slate-50"
+              >
+                이전
+              </button>
+              <p className="min-w-20 text-center text-base font-bold text-slate-900">
+                {month.replace("-", ".")}
+              </p>
+              <button
+                type="button"
+                onClick={() => onChangeMonth(addMonths(month, 1))}
+                className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs font-bold text-slate-600 hover:bg-slate-50"
+              >
+                다음
+              </button>
+              <button
+                type="button"
+                onClick={() => onChangeMonth(todayText().slice(0, 7))}
+                className="rounded-lg bg-slate-900 px-2 py-1 text-xs font-bold text-white hover:bg-slate-700"
+              >
+                이번달
+              </button>
+            </div>
             <div className="flex items-center gap-3 text-[11px] font-semibold text-slate-500">
               <span className="flex items-center gap-1">
                 <span className="h-2 w-2 rounded-full bg-green-500" />
@@ -1180,8 +1339,14 @@ function ScheduleBoard({
           </div>
 
           <div className="grid grid-cols-7 gap-1 text-center text-xs font-bold text-slate-500">
-            {weekDays.map((day) => (
-              <div key={day} className="py-2">
+            {weekDays.map((day, index) => (
+              <div
+                key={`${day}-${index}`}
+                className={[
+                  "py-2",
+                  index === 0 || index === 6 ? "text-red-500" : "",
+                ].join(" ")}
+              >
                 {day}
               </div>
             ))}
@@ -1190,19 +1355,40 @@ function ScheduleBoard({
           <div className="grid grid-cols-7 gap-2">
             {monthDays.map((day) => {
               const dayEvents = eventsByDate[day.date] ?? [];
+              const daySummary = summarizeDayEvents(dayEvents);
+              const compactDaySummary = daySummary.map((event) =>
+                event.key === "manual"
+                  ? { ...event, label: event.label.replace(/^.*?(\d+).*$/, "중요 $1") }
+                  : event.key === "outboundPlan"
+                    ? { ...event, label: event.label.replace(/^.*?(\d+).*$/, "예정 $1대") }
+                    : event
+              );
               const isSelected = day.date === selectedDate;
               const isToday = day.date === today;
+              const isHoliday =
+                day.dayOfWeek === 0 ||
+                day.dayOfWeek === 6 ||
+                dayEvents.some((event) => event.kind === "holiday");
 
               return (
                 <button
                   key={day.date}
                   type="button"
-                  onClick={() => onSelectDate(day.date)}
+                  onClick={() => {
+                    onSelectDate(day.date);
+                    onOpenSchedulePopup(day.date);
+                  }}
                   className={[
-                    "min-h-24 rounded-lg border p-2 text-left transition",
-                    day.inMonth ? "bg-white shadow-sm" : "bg-slate-100 text-slate-300",
+                    "group relative min-h-24 rounded-lg border p-2 text-left transition",
+                    day.inMonth
+                      ? isHoliday
+                        ? "border-red-100 bg-red-50 text-red-900 shadow-sm"
+                        : "bg-white shadow-sm"
+                      : "bg-slate-100 text-slate-300",
                     dayEvents.length > 0 && day.inMonth
-                      ? "border-blue-200 bg-blue-50"
+                      ? isHoliday
+                        ? "border-red-200 bg-red-50"
+                        : "border-blue-200 bg-blue-50"
                       : "",
                     isSelected
                       ? "border-blue-600 bg-white ring-2 ring-blue-200"
@@ -1226,9 +1412,9 @@ function ScheduleBoard({
                   </div>
 
                   <div className="mt-3 space-y-1">
-                    {dayEvents.slice(0, 3).map((event) => (
+                    {compactDaySummary.slice(0, 4).map((event) => (
                       <span
-                        key={event.id}
+                        key={event.key}
                         className={[
                           "block truncate rounded px-1.5 py-0.5 text-[10px] font-bold",
                           event.tone === "green"
@@ -1244,14 +1430,31 @@ function ScheduleBoard({
                       </span>
                     ))}
                   </div>
+                  {dayEvents.length > 0 && (
+                    <div className="pointer-events-none absolute left-1/2 top-8 z-30 hidden w-56 -translate-x-1/2 rounded-lg border border-slate-200 bg-white p-3 text-left shadow-xl group-hover:block">
+                      <div className="mb-2 text-xs font-bold text-slate-900">
+                        {formatKoreanDate(day.date)}
+                      </div>
+                      <div className="space-y-1">
+                        {daySummary.map((event) => (
+                          <div
+                            key={`tip-${event.key}`}
+                            className="truncate text-xs font-semibold text-slate-700"
+                          >
+                            {event.label}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </button>
               );
             })}
           </div>
         </div>
 
-        <div className="space-y-3">
-          <div className="rounded-xl border border-blue-100 bg-blue-50 p-3">
+        <div className="hidden">
+          <div className="hidden">
             <div className="mb-2 flex items-center justify-between gap-2">
               <h5 className="text-sm font-bold text-slate-900">주요일정 추가</h5>
               <span className="text-xs font-semibold text-blue-700">
@@ -1347,6 +1550,86 @@ function ScheduleBoard({
         </table>
       </div>
     </section>
+  );
+}
+
+function SchedulePopup({
+  selectedDate,
+  selectedEvents,
+  scheduleTitle,
+  scheduleMemo,
+  onScheduleTitleChange,
+  onScheduleMemoChange,
+  onAddSchedule,
+  onDeleteSchedule,
+  onClose,
+}: {
+  selectedDate: string;
+  selectedEvents: ScheduleEvent[];
+  scheduleTitle: string;
+  scheduleMemo: string;
+  onScheduleTitleChange: (value: string) => void;
+  onScheduleMemoChange: (value: string) => void;
+  onAddSchedule: () => void;
+  onDeleteSchedule: (eventId: string) => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4">
+      <div className="grid max-h-[90vh] w-full max-w-4xl grid-cols-1 gap-4 overflow-hidden rounded-2xl bg-white p-5 shadow-2xl md:grid-cols-[minmax(0,1fr)_320px]">
+        <section className="min-h-0">
+          <div className="mb-4 flex items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-bold text-blue-600">주요일정</p>
+              <h3 className="mt-1 text-xl font-bold text-slate-900">
+                {formatKoreanDate(selectedDate)}
+              </h3>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-lg border border-slate-300 px-3 py-1 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+            >
+              닫기
+            </button>
+          </div>
+
+          <div className="max-h-[62vh] overflow-y-auto pr-1">
+            <ScheduleList
+              title="등록된 일정"
+              emptyText="등록된 일정이 없습니다."
+              events={selectedEvents}
+              onDelete={onDeleteSchedule}
+            />
+          </div>
+        </section>
+
+        <section className="rounded-xl border border-blue-100 bg-blue-50 p-3">
+          <h4 className="mb-3 text-sm font-bold text-slate-900">일정 입력</h4>
+          <div className="space-y-2">
+            <input
+              value={scheduleTitle}
+              onChange={(event) => onScheduleTitleChange(event.target.value)}
+              placeholder="일정 제목"
+              className="w-full rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500"
+            />
+            <textarea
+              value={scheduleMemo}
+              onChange={(event) => onScheduleMemoChange(event.target.value)}
+              placeholder="간단 메모"
+              className="min-h-28 w-full resize-none rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500"
+            />
+            <button
+              type="button"
+              onClick={onAddSchedule}
+              className="w-full rounded-lg bg-blue-600 px-3 py-2 text-sm font-bold text-white hover:bg-blue-700"
+            >
+              일정 추가
+            </button>
+          </div>
+        </section>
+      </div>
+    </div>
   );
 }
 
