@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { MenuItem } from "../../data/menuData";
@@ -60,6 +60,11 @@ type FormState = {
   memo: string;
 };
 
+type ExpenseLine = Pick<
+  FormState,
+  "category" | "vendor" | "amount" | "content" | "memo"
+>;
+
 const inputClass =
   "mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:outline-none";
 const labelClass = "text-sm font-semibold text-slate-800";
@@ -93,27 +98,27 @@ const defaultCategoryOptions: Record<string, string[]> = {
   고정비: [
     "임대료",
     "관리비",
-    "전기세",
-    "수도세",
+    "전기료",
+    "수도료",
     "인터넷",
     "직원급여",
     "4대보험",
     "직원식대",
     "세금",
-    "렌트료",
+    "상표료",
     "AOS프로그램사용료",
   ],
   변동비: [
     "부품대",
     "외주",
-    "도장부관리비",
-    "판금부관리비",
+    "현장부관리비",
+    "자금부관리비",
     "소모품",
     "유류비",
-    "택시비",
+    "식사비",
     "식대",
-    "탁송비",
-    "세차비",
+    "운송비",
+    "인차비",
     "공구구입비",
     "기타지출",
   ],
@@ -130,6 +135,7 @@ export default function ExpenseRequestPage({
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
   const [categoryOptions, setCategoryOptions] = useState(defaultCategoryOptions);
+  const [expenseLines, setExpenseLines] = useState<ExpenseLine[]>([]);
   const [form, setForm] = useState<FormState>({
     requestDate: todayText(),
     account: "",
@@ -149,7 +155,7 @@ export default function ExpenseRequestPage({
       .order("id", { ascending: false });
 
     if (error) {
-      alert("지출결의서 조회 실패: " + error.message);
+      alert("吏異쒓껐?섏꽌 議고쉶 ?ㅽ뙣: " + error.message);
       return;
     }
 
@@ -292,12 +298,49 @@ export default function ExpenseRequestPage({
       paymentMethod: "",
       memo: "",
     });
+    setExpenseLines([]);
     setReceiptFile(null);
+  };
+
+  const clearLineFields = () => {
+    setForm((prev) => ({
+      ...prev,
+      category: "",
+      vendor: "",
+      amount: "",
+      content: "",
+      memo: "",
+    }));
+  };
+
+  const addExpenseLine = () => {
+    const amount = Number(form.amount.replaceAll(",", "") || 0);
+
+    if (!form.category || !form.content || amount <= 0) {
+      alert("분류, 내용, 금액을 입력한 뒤 목록에 추가해주세요.");
+      return;
+    }
+
+    setExpenseLines((prev) => [
+      ...prev,
+      {
+        category: form.category,
+        vendor: form.vendor,
+        amount: form.amount,
+        content: form.content,
+        memo: form.memo,
+      },
+    ]);
+    clearLineFields();
+  };
+
+  const removeExpenseLine = (index: number) => {
+    setExpenseLines((prev) => prev.filter((_, itemIndex) => itemIndex !== index));
   };
 
   const uploadReceipt = async (requestId: number) => {
     if (!receiptFile) {
-      throw new Error("영수증 사진을 첨부하세요.");
+      throw new Error("?곸닔利??ъ쭊??泥⑤??섏꽭??");
     }
 
     const extension = receiptFile.name.split(".").pop() || "jpg";
@@ -318,14 +361,83 @@ export default function ExpenseRequestPage({
 
   const handleSubmit = async () => {
     const amount = Number(form.amount.replaceAll(",", "") || 0);
+    const nextStatus: ExpenseRequest["status"] = isChiefUser(user)
+      ? "관리자 승인대기"
+      : "총괄관리 승인대기";
+
+    if (expenseLines.length > 0) {
+      if (!form.requestDate || !form.account || !form.expenseType) {
+        alert("사용일자, 계정, 구분을 입력해주세요.");
+        return;
+      }
+
+      setSaving(true);
+
+      const { data, error } = await supabase
+        .from("expense_requests")
+        .insert(
+          expenseLines.map((line) => ({
+            request_date: form.requestDate,
+            account: normalizeAccountName(form.account),
+            expense_type: form.expenseType,
+            category: line.category,
+            vendor: line.vendor,
+            amount: Number(line.amount.replaceAll(",", "") || 0),
+            content: line.content,
+            payment_method: form.paymentMethod,
+            receipt_url: "",
+            memo: line.memo,
+            status: nextStatus,
+            requested_by: user.user_id,
+            requested_name: formatRequesterName(user),
+          }))
+        )
+        .select("id");
+
+      if (error || !data || data.length === 0) {
+        setSaving(false);
+        alert("지출결의서 신청 실패: " + (error?.message ?? "저장 오류"));
+        return;
+      }
+
+      if (receiptFile) {
+        try {
+          const receiptUrl = await uploadReceipt(data[0].id);
+          const { error: updateError } = await supabase
+            .from("expense_requests")
+            .update({ receipt_url: receiptUrl })
+            .in(
+              "id",
+              data.map((row) => row.id)
+            );
+
+          if (updateError) {
+            throw new Error(updateError.message);
+          }
+        } catch (uploadError) {
+          setSaving(false);
+          alert(
+            "영수증 저장 실패: " +
+              (uploadError instanceof Error ? uploadError.message : "업로드 오류")
+          );
+          return;
+        }
+      }
+
+      setSaving(false);
+      alert(`지출결의서 ${data.length}건이 신청되었습니다.`);
+      resetForm();
+      void loadRows();
+      return;
+    }
 
     if (!form.requestDate || !form.account || !form.expenseType || !form.category) {
-      alert("사용일자, 계정, 구분, 분류를 입력하세요.");
+      alert("사용일자, 계정, 구분, 분류를 입력해주세요.");
       return;
     }
 
     if (!form.content || amount <= 0) {
-      alert("내용과 금액을 입력하세요.");
+      alert("내용과 금액을 입력해주세요.");
       return;
     }
 
@@ -344,7 +456,7 @@ export default function ExpenseRequestPage({
         payment_method: form.paymentMethod,
         receipt_url: "",
         memo: form.memo,
-        status: isChiefUser(user) ? "관리자 승인대기" : "총괄관리 승인대기",
+        status: nextStatus,
         requested_by: user.user_id,
         requested_name: formatRequesterName(user),
       })
@@ -473,7 +585,7 @@ export default function ExpenseRequestPage({
       return;
     }
 
-    alert("승인되었습니다.");
+    alert("승인하였습니다.");
     void loadRows();
   };
 
@@ -505,7 +617,7 @@ export default function ExpenseRequestPage({
       return;
     }
 
-    alert("반려되었습니다.");
+    alert("반려하였습니다.");
     void loadRows();
   };
 
@@ -521,7 +633,7 @@ export default function ExpenseRequestPage({
 
         <div className="flex gap-2 text-sm">
           <Badge label="승인대기" value={pendingCount} tone="orange" />
-          <Badge label="승인합계" value={`₩ ${approvedTotal.toLocaleString()}`} tone="blue" />
+          <Badge label="승인합계" value={`₩${approvedTotal.toLocaleString()}`} tone="blue" />
         </div>
       </div>
 
@@ -657,7 +769,90 @@ export default function ExpenseRequestPage({
           </Field>
         </div>
 
+        {expenseLines.length > 0 && (
+          <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200">
+            <table className="w-full min-w-[720px] border-collapse text-sm">
+              <thead>
+                <tr className="bg-slate-100 text-slate-700">
+                  <th className="border border-slate-200 px-2 py-2 text-left">
+                    분류
+                  </th>
+                  <th className="border border-slate-200 px-2 py-2 text-left">
+                    사용처
+                  </th>
+                  <th className="border border-slate-200 px-2 py-2 text-left">
+                    내용
+                  </th>
+                  <th className="border border-slate-200 px-2 py-2 text-right">
+                    금액
+                  </th>
+                  <th className="border border-slate-200 px-2 py-2">
+                    관리
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {expenseLines.map((line, index) => (
+                  <tr key={`${line.category}-${line.content}-${index}`}>
+                    <td className="border border-slate-200 px-2 py-2">
+                      {line.category}
+                    </td>
+                    <td className="border border-slate-200 px-2 py-2">
+                      {line.vendor || "-"}
+                    </td>
+                    <td className="border border-slate-200 px-2 py-2">
+                      <div className="font-semibold">{line.content}</div>
+                      {line.memo && (
+                        <div className="text-xs text-slate-500">{line.memo}</div>
+                      )}
+                    </td>
+                    <td className="border border-slate-200 px-2 py-2 text-right font-bold">
+                      {Number(
+                        line.amount.replaceAll(",", "") || 0
+                      ).toLocaleString()}
+                    </td>
+                    <td className="border border-slate-200 px-2 py-2 text-center">
+                      <button
+                        type="button"
+                        onClick={() => removeExpenseLine(index)}
+                        className="rounded border border-red-300 px-2 py-1 text-xs font-semibold text-red-600 hover:bg-red-50"
+                      >
+                        삭제
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="bg-blue-50 font-bold text-blue-700">
+                  <td className="border border-slate-200 px-2 py-2" colSpan={3}>
+                    합계
+                  </td>
+                  <td className="border border-slate-200 px-2 py-2 text-right">
+                    {expenseLines
+                      .reduce(
+                        (sum, line) =>
+                          sum + Number(line.amount.replaceAll(",", "") || 0),
+                        0
+                      )
+                      .toLocaleString()}
+                  </td>
+                  <td className="border border-slate-200 px-2 py-2" />
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
+
         <div className="mt-4 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={addExpenseLine}
+            className="rounded-lg border border-blue-300 px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50"
+          >
+            목록에 추가
+          </button>
+
           <button
             type="button"
             onClick={resetForm}
@@ -672,7 +867,7 @@ export default function ExpenseRequestPage({
             disabled={saving}
             className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
           >
-            {saving ? "신청 중..." : "신청"}
+            {saving ? "신청 중..." : expenseLines.length > 0 ? `${expenseLines.length}건 신청` : "신청"}
           </button>
         </div>
       </section>
@@ -716,7 +911,7 @@ export default function ExpenseRequestPage({
             onPrint={(row) =>
               onSelectMenu({
                 id: "documents-expense-request-print",
-                title: "지출결의서 출력",
+                title: "吏異쒓껐?섏꽌 異쒕젰",
                 data: { expenseRequest: row },
               })
             }
@@ -731,7 +926,7 @@ export default function ExpenseRequestPage({
           onPrint={(row) =>
             onSelectMenu({
               id: "documents-expense-request-print",
-              title: "지출결의서 출력",
+              title: "吏異쒓껐?섏꽌 異쒕젰",
               data: { expenseRequest: row },
             })
           }
@@ -833,7 +1028,7 @@ function ExpenseTable({
               colSpan={showApprovalColumn ? 10 : 9}
               className="border border-slate-200 px-3 py-8 text-center text-slate-500"
             >
-              등록된 지출결의서가 없습니다.
+              ?깅줉??吏異쒓껐?섏꽌媛 ?놁뒿?덈떎.
             </td>
           </tr>
         ) : (
@@ -844,7 +1039,7 @@ function ExpenseTable({
                   type="button"
                   onClick={() => onPrint(row)}
                   className="rounded-full focus:outline-none focus:ring-2 focus:ring-blue-200"
-                  title="지출결의서 내용 보기"
+                  title="吏異쒓껐?섏꽌 ?댁슜 蹂닿린"
                 >
                   <StatusBadge status={row.status} />
                 </button>
@@ -864,7 +1059,7 @@ function ExpenseTable({
                 <div className="text-xs text-slate-500">{row.content}</div>
               </td>
               <td className="border border-slate-200 px-3 py-2 text-right font-semibold">
-                ₩ {Number(row.amount || 0).toLocaleString()}
+                ??{Number(row.amount || 0).toLocaleString()}
               </td>
               <td className="border border-slate-200 px-3 py-2 text-center">
             {row.receipt_url ? (
@@ -874,10 +1069,10 @@ function ExpenseTable({
                 rel="noreferrer"
                 className="rounded border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
               >
-                보기
+                蹂닿린
               </a>
             ) : (
-              <span className="text-xs text-slate-400">없음</span>
+              <span className="text-xs text-slate-400">?놁쓬</span>
             )}
               </td>
               <td className="border border-slate-200 px-3 py-2 text-center">
@@ -886,7 +1081,7 @@ function ExpenseTable({
                   onClick={() => onPrint(row)}
                   className="rounded border border-blue-300 px-3 py-1 text-xs font-semibold text-blue-600 hover:bg-blue-50"
                 >
-                  출력
+                  異쒕젰
                 </button>
               </td>
               {showApprovalColumn && (
@@ -898,14 +1093,14 @@ function ExpenseTable({
                         onClick={() => onApprove(row)}
                         className="rounded bg-blue-600 px-3 py-1 text-xs font-semibold text-white hover:bg-blue-700"
                       >
-                        승인
+                        ?뱀씤
                       </button>
                       <button
                         type="button"
                         onClick={() => onReject(row)}
                         className="rounded border border-red-300 px-3 py-1 text-xs font-semibold text-red-600 hover:bg-red-50"
                       >
-                        반려
+                        諛섎젮
                       </button>
                     </div>
                   ) : (
@@ -940,7 +1135,7 @@ function MobileExpenseCards({
     <div className="space-y-3 md:hidden">
       {rows.length === 0 ? (
         <div className="rounded-xl border border-slate-200 p-6 text-center text-sm text-slate-500">
-          등록된 지출결의서가 없습니다.
+          ?깅줉??吏異쒓껐?섏꽌媛 ?놁뒿?덈떎.
         </div>
       ) : (
         rows.map((row) => (
@@ -951,12 +1146,12 @@ function MobileExpenseCards({
                   type="button"
                   onClick={() => onPrint(row)}
                   className="rounded-full focus:outline-none focus:ring-2 focus:ring-blue-200"
-                  title="지출결의서 내용 보기"
+                  title="吏異쒓껐?섏꽌 ?댁슜 蹂닿린"
                 >
                   <StatusBadge status={row.status} />
                 </button>
                 <div className="mt-2 text-lg font-bold">
-                  ₩ {Number(row.amount || 0).toLocaleString()}
+                  ??{Number(row.amount || 0).toLocaleString()}
                 </div>
                 <div className="text-sm text-slate-500">
                   {row.request_date} / {row.requested_name ?? row.requested_by}
@@ -969,11 +1164,10 @@ function MobileExpenseCards({
                   rel="noreferrer"
                   className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700"
                 >
-                  영수증
-                </a>
+                  ?곸닔利?                </a>
               ) : (
                 <span className="rounded-lg bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-400">
-                  영수증 없음
+                  ?곸닔利??놁쓬
                 </span>
               )}
             </div>
@@ -991,7 +1185,7 @@ function MobileExpenseCards({
               onClick={() => onPrint(row)}
               className="mt-3 w-full rounded-lg border border-blue-300 py-2 text-sm font-semibold text-blue-600"
             >
-              출력
+              異쒕젰
             </button>
 
             {canApprove(row) && (
@@ -1001,14 +1195,14 @@ function MobileExpenseCards({
                   onClick={() => onApprove(row)}
                   className="flex-1 rounded-lg bg-blue-600 py-2 text-sm font-semibold text-white"
                 >
-                  승인
+                  ?뱀씤
                 </button>
                 <button
                   type="button"
                   onClick={() => onReject(row)}
                   className="flex-1 rounded-lg border border-red-300 py-2 text-sm font-semibold text-red-600"
                 >
-                  반려
+                  諛섎젮
                 </button>
               </div>
             )}
