@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { MenuItem } from "../../data/menuData";
 import { supabase } from "../../lib/supabase";
+import { useRealtimeRefresh } from "../../lib/useRealtimeRefresh";
 
 type PartnerSupportPageProps = {
   onSelectMenu: (menu: MenuItem) => void;
@@ -83,6 +84,13 @@ type SortKey =
   | "expectedSupportAmount"
   | "supportAmount";
 type SortDirection = "asc" | "desc";
+const realtimeTables = [
+  { table: "work_orders" },
+  { table: "business_catalog" },
+  { table: "settlement_payments" },
+  { table: "settlement_expenses" },
+  { table: "daily_cash" },
+];
 
 const pageSize = 30;
 const defaultSupportTargetPartners = [
@@ -360,6 +368,12 @@ export default function PartnerSupportPage({
   useEffect(() => {
     void loadRows();
   }, [loadRows]);
+
+  useRealtimeRefresh({
+    channelName: "partner-support-page",
+    tables: realtimeTables,
+    onRefresh: loadRows,
+  });
 
   useEffect(() => {
     setCurrentPage(1);

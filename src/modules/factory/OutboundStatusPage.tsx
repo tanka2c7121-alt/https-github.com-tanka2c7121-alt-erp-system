@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { MenuItem } from "../../data/menuData";
 import { localDateText } from "../../lib/date";
 import { supabase } from "../../lib/supabase";
+import { useRealtimeRefresh } from "../../lib/useRealtimeRefresh";
 
 type OutboundStatusPageProps = {
   onSelectMenu: (menu: MenuItem) => void;
@@ -25,6 +26,7 @@ type WorkItem = {
 };
 
 const pageSize = 30;
+const realtimeTables = [{ table: "work_orders" }];
 const currentDateText = localDateText();
 const currentYear = currentDateText.slice(0, 4);
 const currentMonth = currentDateText.slice(5, 7);
@@ -74,17 +76,13 @@ export default function OutboundStatusPage({
 
   useEffect(() => {
     void loadWorkList();
-
-    const handleFocus = () => {
-      void loadWorkList();
-    };
-
-    window.addEventListener("focus", handleFocus);
-
-    return () => {
-      window.removeEventListener("focus", handleFocus);
-    };
   }, [loadWorkList]);
+
+  useRealtimeRefresh({
+    channelName: "outbound-status-page",
+    tables: realtimeTables,
+    onRefresh: loadWorkList,
+  });
 
   const handleSort = (field: keyof WorkItem) => {
     if (sortField === field) {

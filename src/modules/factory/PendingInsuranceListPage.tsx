@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { MenuItem } from "../../data/menuData";
 import { supabase } from "../../lib/supabase";
+import { useRealtimeRefresh } from "../../lib/useRealtimeRefresh";
 
 type QueryBuilder = any;
 
@@ -68,6 +69,11 @@ type SortKey =
   | "paidAmount"
   | "receivableAmount";
 type SortDirection = "asc" | "desc";
+const realtimeTables = [
+  { table: "work_orders" },
+  { table: "repair_settlements" },
+  { table: "settlement_payments" },
+];
 
 async function fetchAllRows<T>(
   tableName: string,
@@ -234,6 +240,12 @@ export default function PendingInsuranceListPage({
   useEffect(() => {
     void fetchRows();
   }, [fetchRows]);
+
+  useRealtimeRefresh({
+    channelName: "pending-insurance-list-page",
+    tables: realtimeTables,
+    onRefresh: fetchRows,
+  });
 
   const workOrderByName = useMemo(() => {
     return new Map(

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { MenuItem } from "../../data/menuData";
 import { localDateText } from "../../lib/date";
 import { supabase } from "../../lib/supabase";
+import { useRealtimeRefresh } from "../../lib/useRealtimeRefresh";
 import type { UserRole } from "../../types/roles";
 
 type HomeDashboardPageProps = {
@@ -107,6 +108,14 @@ const holidayStorageKey = (year: string) => `erpKoreanHolidays:${year}`;
 const weekDays = ["일", "월", "화", "수", "목", "금", "토"];
 const dismissedNoticeKey = (noticeId: number) =>
   `erpDismissedHomeNotice:${noticeId}:${todayText()}`;
+const realtimeTables = [
+  { table: "work_orders" },
+  { table: "app_users" },
+  { table: "expense_requests" },
+  { table: "attendance_requests" },
+  { table: "incident_reports" },
+  { table: "home_notices" },
+];
 const parseLocalDate = (dateText: string) => {
   const [year, month, day] = dateText.split("-").map(Number);
   return new Date(year, month - 1, day);
@@ -385,19 +394,11 @@ export default function HomeDashboardPage({
     void loadHolidays();
   }, [visibleScheduleMonth]);
 
-  useEffect(() => {
-    const refresh = () => {
-      void loadDashboard();
-    };
-
-    window.addEventListener("focus", refresh);
-    document.addEventListener("visibilitychange", refresh);
-
-    return () => {
-      window.removeEventListener("focus", refresh);
-      document.removeEventListener("visibilitychange", refresh);
-    };
-  }, [loadDashboard]);
+  useRealtimeRefresh({
+    channelName: "home-dashboard-page",
+    tables: realtimeTables,
+    onRefresh: loadDashboard,
+  });
 
   const dashboard = useMemo(() => {
     const today = todayText();

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
 import { localDateText } from "../../lib/date";
+import { useRealtimeRefresh } from "../../lib/useRealtimeRefresh";
 import type { MenuItem } from "../../data/menuData";
 import type { UserRole } from "../../types/roles";
 
@@ -48,6 +49,13 @@ const inputClass =
 const smallInputClass =
   "mt-1 w-full rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none";
 const labelClass = "text-sm font-semibold text-slate-800";
+const realtimeTables = [
+  { table: "work_orders" },
+  { table: "repair_settlements" },
+  { table: "settlement_payments" },
+  { table: "settlement_expenses" },
+  { table: "daily_cash" },
+];
 const getInputStateClass = (value?: string | number | null) =>
   String(value ?? "").trim()
     ? "border-blue-200 bg-blue-50"
@@ -272,7 +280,10 @@ export default function SettlementRegisterPage({
     );
   };
 
-  const loadWorkOrder = async (targetWorkName = form.workName) => {
+  const loadWorkOrder = async (
+    targetWorkName = form.workName,
+    options: { silent?: boolean } = {}
+  ) => {
     if (!targetWorkName) {
       alert("작명을 입력하세요.");
       return;
@@ -463,7 +474,9 @@ export default function SettlementRegisterPage({
     setClosingWarningAccepted(false);
     setAdminUnlocked(false);
     setIsEditMode(Boolean(settlement) || paymentItems.length > 0 || Boolean(expenses?.length));
-    alert("불러왔습니다.");
+    if (!options.silent) {
+      alert("불러왔습니다.");
+    }
   };
 
   useEffect(() => {
@@ -473,6 +486,13 @@ export default function SettlementRegisterPage({
     void loadWorkOrder(initialWorkName);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialWorkName]);
+
+  useRealtimeRefresh({
+    channelName: `settlement-register-page-${form.workName || initialWorkName || "empty"}`,
+    tables: realtimeTables,
+    enabled: Boolean(form.workName && isEditMode),
+    onRefresh: () => loadWorkOrder(form.workName || initialWorkName, { silent: true }),
+  });
 
   const savePaymentRows = async (targetForm = form) => {
     const rows = paymentRows

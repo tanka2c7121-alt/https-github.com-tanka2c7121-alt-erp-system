@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react
 import type { MenuItem } from "../../data/menuData";
 import { localDateText } from "../../lib/date";
 import { supabase } from "../../lib/supabase";
+import { useRealtimeRefresh } from "../../lib/useRealtimeRefresh";
 
 type ReleaseListPageProps = {
   onSelectMenu: (menu: MenuItem) => void;
@@ -34,6 +35,7 @@ type SortField =
   | "manager_display";
 
 const dayMs = 24 * 60 * 60 * 1000;
+const realtimeTables = [{ table: "work_orders" }];
 
 const daysBetween = (from: string, to: string) => {
   if (!from || !to) return 0;
@@ -132,17 +134,13 @@ export default function ReleaseListPage({ onSelectMenu }: ReleaseListPageProps) 
 
   useEffect(() => {
     void loadItems();
-
-    const handleFocus = () => {
-      void loadItems();
-    };
-
-    window.addEventListener("focus", handleFocus);
-
-    return () => {
-      window.removeEventListener("focus", handleFocus);
-    };
   }, [loadItems]);
+
+  useRealtimeRefresh({
+    channelName: "release-list-page",
+    tables: realtimeTables,
+    onRefresh: loadItems,
+  });
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {

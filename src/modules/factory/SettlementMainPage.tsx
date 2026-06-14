@@ -4,7 +4,15 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { MenuItem } from "../../data/menuData";
 import { localDateText } from "../../lib/date";
 import { supabase } from "../../lib/supabase";
+import { useRealtimeRefresh } from "../../lib/useRealtimeRefresh";
 type QueryBuilder = any;
+
+const realtimeTables = [
+  { table: "daily_cash" },
+  { table: "settlement_payments" },
+  { table: "repair_settlements" },
+  { table: "work_orders" },
+];
 
 async function fetchAllRows<T>(
   tableName: string,
@@ -440,6 +448,16 @@ const fetchSettlementMain = useCallback(async (year: string, month: string) => {
     selectedMonth,
     selectedYear,
   ]);
+
+  useRealtimeRefresh({
+    channelName: "settlement-main-page",
+    tables: realtimeTables,
+    onRefresh: () => {
+      void fetchSettlementMain(selectedYear, selectedMonth);
+      void fetchBalanceRows();
+      void fetchReceivableRows();
+    },
+  });
 
   return (
     <div className="space-y-6 text-slate-900">

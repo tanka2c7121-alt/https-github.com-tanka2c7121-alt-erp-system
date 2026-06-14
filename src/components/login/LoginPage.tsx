@@ -50,6 +50,26 @@ const brandMarks = [
     name: "BUGATTI",
     logoSrc: "https://pngimg.com/uploads/bugatti_logo/bugatti_logo_PNG10.png",
   },
+  {
+    name: "Porsche",
+    logoSrc: "https://pngimg.com/uploads/porsche_logo/porsche_logo_PNG1.png",
+  },
+  {
+    name: "Land Rover",
+    logoSrc: "https://upload.wikimedia.org/wikipedia/commons/c/c2/Land_Rover_2023.svg",
+  },
+  {
+    name: "Kia",
+    logoSrc: "https://cdn.simpleicons.org/kia/05141F",
+  },
+  {
+    name: "Lamborghini",
+    logoSrc: "https://pngimg.com/uploads/lamborghini/lamborghini_PNG10709.png",
+  },
+  {
+    name: "Hyundai",
+    logoSrc: "https://cdn.simpleicons.org/hyundai/05141F",
+  },
 ];
 
 const phoneDigits = (value: string) => value.replace(/\D/g, "");
@@ -323,11 +343,21 @@ export default function LoginPage({ onLogin }: Props) {
           .spotlight-mark:nth-child(3) { animation-delay: 0.6s; }
           .spotlight-mark:nth-child(4) { animation-delay: 0.9s; }
           .spotlight-mark:nth-child(5) { animation-delay: 1.2s; }
+          .spotlight-mark:nth-child(6) { animation-delay: 1.5s; }
+          .spotlight-mark:nth-child(7) { animation-delay: 1.8s; }
+          .spotlight-mark:nth-child(8) { animation-delay: 2.1s; }
+          .spotlight-mark:nth-child(9) { animation-delay: 2.4s; }
+          .spotlight-mark:nth-child(10) { animation-delay: 2.7s; }
           .spotlight-mark:nth-child(1)::before { animation-delay: 0s; }
           .spotlight-mark:nth-child(2)::before { animation-delay: 0.3s; }
           .spotlight-mark:nth-child(3)::before { animation-delay: 0.6s; }
           .spotlight-mark:nth-child(4)::before { animation-delay: 0.9s; }
           .spotlight-mark:nth-child(5)::before { animation-delay: 1.2s; }
+          .spotlight-mark:nth-child(6)::before { animation-delay: 1.5s; }
+          .spotlight-mark:nth-child(7)::before { animation-delay: 1.8s; }
+          .spotlight-mark:nth-child(8)::before { animation-delay: 2.1s; }
+          .spotlight-mark:nth-child(9)::before { animation-delay: 2.4s; }
+          .spotlight-mark:nth-child(10)::before { animation-delay: 2.7s; }
 
           .animated-logo-chip {
             position: relative;
@@ -350,7 +380,7 @@ export default function LoginPage({ onLogin }: Props) {
           }
 
           .final-genesis-glow {
-            animation: finalGenesisGlow 1s ease 1.52s forwards;
+            animation: finalGenesisGlow 1s ease 3.02s forwards;
           }
 
           .final-genesis-glow::before {
@@ -387,7 +417,7 @@ export default function LoginPage({ onLogin }: Props) {
           }
 
           @keyframes logoBackdrop {
-            0%, 68% { opacity: 0.95; }
+            0%, 84% { opacity: 0.95; }
             100% { opacity: 0.08; }
           }
 

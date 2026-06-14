@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { MenuItem } from "../../data/menuData";
 import { supabase } from "../../lib/supabase";
+import { useRealtimeRefresh } from "../../lib/useRealtimeRefresh";
 
 type InboundStatusPageProps = {
   onSelectMenu: (menu: MenuItem) => void;
@@ -24,6 +25,7 @@ type WorkItem = {
 };
 
 const pageSize = 30;
+const realtimeTables = [{ table: "work_orders" }];
 
 export default function InboundStatusPage({
   onSelectMenu,
@@ -67,17 +69,13 @@ export default function InboundStatusPage({
 
   useEffect(() => {
     void loadWorkList();
-
-    const handleFocus = () => {
-      void loadWorkList();
-    };
-
-    window.addEventListener("focus", handleFocus);
-
-    return () => {
-      window.removeEventListener("focus", handleFocus);
-    };
   }, [loadWorkList]);
+
+  useRealtimeRefresh({
+    channelName: "inbound-status-page",
+    tables: realtimeTables,
+    onRefresh: loadWorkList,
+  });
 
   const handleSort = (field: keyof WorkItem) => {
     if (sortField === field) {
