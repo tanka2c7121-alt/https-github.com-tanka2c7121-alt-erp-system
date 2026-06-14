@@ -1,5 +1,7 @@
 "use client";
 
+/* eslint-disable @next/next/no-img-element */
+
 import { useEffect, useState } from "react";
 
 import { supabaseAuthPassword } from "../../lib/authPassword";
@@ -27,6 +29,28 @@ type Props = {
 const rememberedUserIdKey = "erpRememberedUserId";
 const departments = ["관리부", "도장부", "판금부", "정비부"];
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const brandMarks = [
+  {
+    name: "ASTON MARTIN",
+    logoSrc: "https://pngimg.com/uploads/aston_martin/aston_martin_PNG1.png",
+  },
+  {
+    name: "Mercedes-Benz",
+    logoSrc: "https://pngimg.com/uploads/car_logo/car_logo_PNG1655.png",
+  },
+  {
+    name: "BMW",
+    logoSrc: "https://pngimg.com/uploads/car_logo/car_logo_PNG1641.png",
+  },
+  {
+    name: "Ferrari",
+    logoSrc: "https://pngimg.com/uploads/car_logo/car_logo_PNG1642.png",
+  },
+  {
+    name: "BUGATTI",
+    logoSrc: "https://pngimg.com/uploads/bugatti_logo/bugatti_logo_PNG10.png",
+  },
+];
 
 const phoneDigits = (value: string) => value.replace(/\D/g, "");
 
@@ -226,120 +250,296 @@ export default function LoginPage({ onLogin }: Props) {
     setMode("login");
   }
 
+  const isLoginMode = mode === "login";
+  const inputClass =
+    "h-12 w-full rounded-lg border border-slate-200 bg-white/90 px-4 text-[15px] text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10";
+  const primaryButtonClass =
+    "h-12 w-full rounded-lg bg-blue-700 text-[15px] font-bold text-white shadow-lg shadow-blue-900/20 transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-60";
+  const secondaryButtonClass =
+    "h-12 w-full rounded-lg border border-slate-200 bg-white/70 text-[15px] font-bold text-slate-700 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60";
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-100">
-      <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-xl">
-        <h1 className="mb-2 text-3xl font-bold text-slate-900">ERP 로그인</h1>
+    <main className="login-showcase relative min-h-screen overflow-hidden bg-[#edf4fb] text-slate-900">
+      <style>
+        {`
+          .login-showcase {
+            background:
+              linear-gradient(to bottom, rgba(248,252,255,0.12), rgba(234,244,253,0.18)),
+              url("/login-background.png") center / cover no-repeat,
+              linear-gradient(135deg, #f9fcff 0%, #e8f1fa 48%, #cddff1 100%);
+          }
 
-        <p className="mb-6 text-sm text-slate-500">
-          자동차공업사 업무 시스템
-        </p>
+          .logo-animation-stage {
+            position: absolute;
+            left: 50%;
+            top: clamp(132px, 22vh, 216px);
+            width: min(560px, 58vw);
+            height: clamp(96px, 14vh, 144px);
+            transform: translateX(-50%);
+            z-index: 5;
+            pointer-events: none;
+          }
 
-        {mode === "login" ? (
-          <div className="space-y-4">
-            <input
-              value={userId}
-              onChange={(event) => setUserId(event.target.value)}
-              placeholder="이메일 아이디"
-              className="w-full rounded-xl border border-slate-300 px-4 py-3"
-            />
+          .logo-animation-stage::before {
+            content: "";
+            position: absolute;
+            inset: -30px -72px;
+            border-radius: 999px;
+            background: radial-gradient(circle, rgba(255,255,255,0.96) 0 30%, rgba(255,255,255,0.78) 44%, rgba(255,255,255,0) 72%);
+            filter: blur(4px);
+            animation: logoBackdrop 2.2s ease forwards;
+          }
 
-            <input
-              type="password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              placeholder="비밀번호"
-              className="w-full rounded-xl border border-slate-300 px-4 py-3"
-            />
+          .spotlight-mark,
+          .final-genesis-glow {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+          }
 
-            <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-600">
-              <input
-                type="checkbox"
-                checked={rememberId}
-                onChange={(event) => setRememberId(event.target.checked)}
-                className="h-4 w-4"
-              />
-              아이디 기억하기
-            </label>
+          .spotlight-mark {
+            animation: logoFlash 0.3s ease both;
+          }
 
-            <button
-              type="button"
-              onClick={handleLogin}
-              disabled={loading}
-              className="w-full rounded-xl bg-blue-600 py-3 font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
-            >
-              {loading ? "로그인 중..." : "로그인"}
-            </button>
+          .spotlight-mark::before {
+            content: "";
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            width: 300px;
+            height: 130px;
+            transform: translate(-50%, -50%);
+            border-radius: 999px;
+            background: radial-gradient(circle, rgba(255,255,255,0.95) 0 18%, rgba(82,150,226,0.34) 36%, transparent 72%);
+            filter: blur(14px);
+            animation: logoGlow 0.3s ease both;
+          }
 
-            <button
-              type="button"
-              onClick={() => setMode("signup")}
-              className="w-full rounded-xl border border-slate-300 py-3 font-semibold text-slate-700 hover:bg-slate-50"
-            >
-              회원가입 신청
-            </button>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            <input
-              value={signupUserId}
-              onChange={(event) => setSignupUserId(event.target.value)}
-              placeholder="이메일 아이디"
-              className="w-full rounded-xl border border-slate-300 px-4 py-3"
-            />
+          .spotlight-mark:nth-child(1) { animation-delay: 0s; }
+          .spotlight-mark:nth-child(2) { animation-delay: 0.3s; }
+          .spotlight-mark:nth-child(3) { animation-delay: 0.6s; }
+          .spotlight-mark:nth-child(4) { animation-delay: 0.9s; }
+          .spotlight-mark:nth-child(5) { animation-delay: 1.2s; }
+          .spotlight-mark:nth-child(1)::before { animation-delay: 0s; }
+          .spotlight-mark:nth-child(2)::before { animation-delay: 0.3s; }
+          .spotlight-mark:nth-child(3)::before { animation-delay: 0.6s; }
+          .spotlight-mark:nth-child(4)::before { animation-delay: 0.9s; }
+          .spotlight-mark:nth-child(5)::before { animation-delay: 1.2s; }
 
-            <input
-              value={signupName}
-              onChange={(event) => setSignupName(event.target.value)}
-              placeholder="이름"
-              className="w-full rounded-xl border border-slate-300 px-4 py-3"
-            />
+          .animated-logo-chip {
+            position: relative;
+            z-index: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: min(240px, 34vw);
+            height: 124px;
+            filter:
+              drop-shadow(0 0 8px rgba(255,255,255,0.92))
+              drop-shadow(0 18px 24px rgba(32,70,106,0.18));
+          }
 
-            <select
-              value={signupDepartment}
-              onChange={(event) => setSignupDepartment(event.target.value)}
-              className="w-full rounded-xl border border-slate-300 px-4 py-3"
-            >
-              {departments.map((department) => (
-                <option key={department} value={department}>
-                  {department}
-                </option>
-              ))}
-            </select>
+          .animated-logo-chip img {
+            display: block;
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+          }
 
-            <input
-              value={signupPhone}
-              onChange={(event) =>
-                setSignupPhone(formatPhoneNumber(event.target.value))
-              }
-              placeholder="전화번호"
-              className="w-full rounded-xl border border-slate-300 px-4 py-3"
-            />
+          .final-genesis-glow {
+            animation: finalGenesisGlow 1s ease 1.52s forwards;
+          }
 
-            <div className="rounded-xl bg-slate-50 p-3 text-xs text-slate-500">
-              신청 후 관리자가 승인해야 로그인할 수 있습니다. 초기 비밀번호는
-              전화번호 뒤 4자리 + !! 입니다.
+          .final-genesis-glow::before {
+            content: "";
+            width: min(520px, 54vw);
+            height: 128px;
+            border-radius: 999px;
+            background:
+              radial-gradient(circle, rgba(255,255,255,0.58) 0 18%, rgba(94,157,224,0.26) 38%, transparent 72%);
+            filter: blur(12px);
+          }
+
+          .login-card-panel {
+            width: min(510px, calc(100vw - 40px));
+          }
+
+          @keyframes logoFlash {
+            0% { opacity: 0; transform: scale(0.58); filter: blur(12px); }
+            24% { opacity: 1; transform: scale(1.06); filter: blur(0); }
+            68% { opacity: 1; transform: scale(1); filter: blur(0); }
+            100% { opacity: 0; transform: scale(1.18); filter: blur(8px); }
+          }
+
+          @keyframes logoGlow {
+            0% { opacity: 0; transform: translate(-50%, -50%) scale(0.48); }
+            35% { opacity: 1; transform: translate(-50%, -50%) scale(1.08); }
+            100% { opacity: 0; transform: translate(-50%, -50%) scale(1.28); }
+          }
+
+          @keyframes finalGenesisGlow {
+            0% { opacity: 0; transform: scale(0.72); }
+            42% { opacity: 1; transform: scale(1.06); }
+            100% { opacity: 0.18; transform: scale(1); }
+          }
+
+          @keyframes logoBackdrop {
+            0%, 68% { opacity: 0.95; }
+            100% { opacity: 0.08; }
+          }
+
+          @media (max-width: 760px) {
+            .logo-animation-stage {
+              top: 18vh;
+              width: 82vw;
+            }
+
+            .final-genesis-glow::before {
+              width: 78vw;
+            }
+
+            .login-card-panel {
+              margin-top: 50vh;
+            }
+          }
+        `}
+      </style>
+
+      <div className="logo-animation-stage" aria-hidden="true">
+        {brandMarks.map((brand) => (
+          <div key={brand.name} className="spotlight-mark">
+            <div className="animated-logo-chip">
+              <img src={brand.logoSrc} alt="" />
             </div>
-
-            <button
-              type="button"
-              onClick={handleSignup}
-              disabled={loading}
-              className="w-full rounded-xl bg-blue-600 py-3 font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
-            >
-              {loading ? "신청 중..." : "회원가입 신청"}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setMode("login")}
-              className="w-full rounded-xl border border-slate-300 py-3 font-semibold text-slate-700 hover:bg-slate-50"
-            >
-              로그인으로 돌아가기
-            </button>
           </div>
-        )}
+        ))}
+        <div className="final-genesis-glow" />
       </div>
-    </div>
+
+      <section className="relative z-10 mx-auto flex min-h-screen w-full max-w-6xl flex-col items-center px-5 pb-10 pt-[52.5vh] md:px-8">
+        <div className="login-card-panel relative z-10 rounded-[14px] border border-white/80 bg-white/82 p-11 shadow-2xl shadow-slate-900/10 backdrop-blur-md">
+            {isLoginMode ? (
+              <form
+                className="space-y-4"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void handleLogin();
+                }}
+              >
+                <input
+                  type="email"
+                  value={userId}
+                  onChange={(event) => setUserId(event.target.value)}
+                  placeholder="이메일 아이디"
+                  autoComplete="username"
+                  className={inputClass}
+                />
+
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  placeholder="비밀번호"
+                  autoComplete="current-password"
+                  className={inputClass}
+                />
+
+                <label className="flex w-fit cursor-pointer items-center gap-2 text-sm font-medium text-slate-600">
+                  <input
+                    type="checkbox"
+                    checked={rememberId}
+                    onChange={(event) => setRememberId(event.target.checked)}
+                    className="h-4 w-4 rounded border-slate-300 accent-blue-700"
+                  />
+                  아이디 기억하기
+                </label>
+
+                <button type="submit" disabled={loading} className={primaryButtonClass}>
+                  {loading ? "로그인 중..." : "로그인"}
+                </button>
+
+                <div className="flex items-center justify-between pt-1 text-sm font-medium text-slate-600">
+                  <span />
+                  <button
+                    type="button"
+                    onClick={() => setMode("signup")}
+                    disabled={loading}
+                    className="transition hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    회원가입 신청
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <form
+                className="space-y-4"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void handleSignup();
+                }}
+              >
+                <input
+                  type="email"
+                  value={signupUserId}
+                  onChange={(event) => setSignupUserId(event.target.value)}
+                  placeholder="이메일 아이디"
+                  autoComplete="username"
+                  className={inputClass}
+                />
+
+                <input
+                  value={signupName}
+                  onChange={(event) => setSignupName(event.target.value)}
+                  placeholder="이름"
+                  autoComplete="name"
+                  className={inputClass}
+                />
+
+                <select
+                  value={signupDepartment}
+                  onChange={(event) => setSignupDepartment(event.target.value)}
+                  className={inputClass}
+                >
+                  {departments.map((department) => (
+                    <option key={department} value={department}>
+                      {department}
+                    </option>
+                  ))}
+                </select>
+
+                <input
+                  value={signupPhone}
+                  onChange={(event) =>
+                    setSignupPhone(formatPhoneNumber(event.target.value))
+                  }
+                  placeholder="전화번호"
+                  autoComplete="tel"
+                  className={inputClass}
+                />
+
+                <div className="rounded-lg bg-blue-50 px-4 py-3 text-xs font-medium leading-5 text-blue-900">
+                  초기 비밀번호는 전화번호 뒤 4자리 + !! 입니다.
+                </div>
+
+                <button type="submit" disabled={loading} className={primaryButtonClass}>
+                  {loading ? "신청 중..." : "회원가입 신청"}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setMode("login")}
+                  disabled={loading}
+                  className={secondaryButtonClass}
+                >
+                  로그인으로 돌아가기
+                </button>
+              </form>
+            )}
+        </div>
+      </section>
+    </main>
   );
 }

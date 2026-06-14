@@ -86,12 +86,12 @@ type SortDirection = "asc" | "desc";
 
 const pageSize = 30;
 const defaultSupportTargetPartners = [
-  "SK렌터카",
   "김병진",
   "경인렌터카",
   "블루모터스",
   "상동점",
 ] as const;
+const excludedSupportTargetPartners = new Set(["SK렌터카"]);
 
 const formatWon = (amount: number) => amount.toLocaleString();
 const normalizeText = (value: unknown) => String(value ?? "").trim();
@@ -103,6 +103,8 @@ const hasDateValue = (value: unknown) => {
 };
 const includesKeyword = (value: unknown, keyword: string) =>
   normalizeText(value).replace(/\s+/g, "").includes(keyword);
+const isExcludedSupportTargetPartner = (value: unknown) =>
+  excludedSupportTargetPartners.has(normalizeText(value));
 
 type QueryBuilder = any;
 
@@ -185,12 +187,18 @@ export default function PartnerSupportPage({
 
       const supportTargetPartners = new Set([
         ...defaultSupportTargetPartners,
-        ...(businessRows ?? []).map((row) => normalizeText(row.name)).filter(Boolean),
+        ...(businessRows ?? [])
+          .map((row) => normalizeText(row.name))
+          .filter((name) => name && !isExcludedSupportTargetPartner(name)),
       ]);
 
       const targetWorkOrders = (workOrders ?? []).filter((workOrder) => {
         const partnerCompany = normalizeText(workOrder.partner_company);
-        return Boolean(normalizeText(workOrder.work_name) && supportTargetPartners.has(partnerCompany));
+        return Boolean(
+          normalizeText(workOrder.work_name) &&
+            supportTargetPartners.has(partnerCompany) &&
+            !isExcludedSupportTargetPartner(partnerCompany)
+        );
       });
       const workNames = Array.from(new Set(targetWorkOrders.map((row) => normalizeText(row.work_name))));
 

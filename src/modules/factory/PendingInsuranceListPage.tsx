@@ -56,6 +56,18 @@ type InsuranceListRow = {
 };
 
 type StatusFilter = "all" | "pending" | "complete" | "closed";
+type SortKey =
+  | "workName"
+  | "carNumber"
+  | "carModel"
+  | "insuranceCompany"
+  | "claimSide"
+  | "status"
+  | "claimDate"
+  | "claimAmount"
+  | "paidAmount"
+  | "receivableAmount";
+type SortDirection = "asc" | "desc";
 
 async function fetchAllRows<T>(
   tableName: string,
@@ -110,6 +122,13 @@ const matchesPaymentSide = (detail: unknown, side: "자차" | "대물") => {
   return text.includes("대물") || text.includes("상대");
 };
 
+const isInsuranceReceivablePayment = (payment: PaymentRow) => {
+  const paymentType = normalizeText(payment.payment_type);
+  const paymentDetail = normalizeText(payment.payment_detail);
+
+  return paymentType !== "청구" && paymentType !== "면책금" && paymentDetail !== "일반";
+};
+
 export default function PendingInsuranceListPage({
   onSelectMenu,
 }: {
@@ -124,6 +143,8 @@ export default function PendingInsuranceListPage({
   const [endDate, setEndDate] = useState("");
   const [searchText, setSearchText] = useState("");
   const [loadError, setLoadError] = useState("");
+  const [sortKey, setSortKey] = useState<SortKey>("claimDate");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
 
   const fetchRows = useCallback(async () => {
     setLoadError("");
@@ -263,7 +284,7 @@ export default function PendingInsuranceListPage({
 
         const paidAmountForSide = (side?: "자차" | "대물") =>
           workPayments
-            .filter((payment) => normalizeText(payment.payment_type) !== "청구")
+            .filter(isInsuranceReceivablePayment)
             .filter((payment) =>
               side ? matchesPaymentSide(payment.payment_detail, side) : true
             )
@@ -367,30 +388,53 @@ export default function PendingInsuranceListPage({
           .join(" ")
           .toLowerCase()
           .includes(keyword);
-      })
-      .sort((a, b) => {
-        const dateCompare = String(b.claimDate).localeCompare(String(a.claimDate));
-
-        if (dateCompare !== 0) return dateCompare;
-        return a.insuranceCompany.localeCompare(b.insuranceCompany, "ko");
       });
   }, [endDate, insuranceFilter, listRows, searchText, startDate, statusFilter]);
 
+  const sortedRows = useMemo(() => {
+    const direction = sortDirection === "asc" ? 1 : -1;
+
+    return [...filteredRows].sort((a, b) => {
+      const aValue = a[sortKey];
+      const bValue = b[sortKey];
+
+      if (typeof aValue === "number" && typeof bValue === "number") {
+        return (aValue - bValue) * direction;
+      }
+
+      const primaryCompare =
+        String(aValue ?? "").localeCompare(String(bValue ?? ""), "ko") * direction;
+
+      if (primaryCompare !== 0) return primaryCompare;
+      return String(b.claimDate).localeCompare(String(a.claimDate));
+    });
+  }, [filteredRows, sortDirection, sortKey]);
+
+  const handleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
+      return;
+    }
+
+    setSortKey(key);
+    setSortDirection("asc");
+  };
+
   const summary = useMemo(() => {
-    const claimAmount = filteredRows.reduce((sum, row) => sum + row.claimAmount, 0);
-    const paidAmount = filteredRows.reduce((sum, row) => sum + row.paidAmount, 0);
+    const claimAmount = sortedRows.reduce((sum, row) => sum + row.claimAmount, 0);
+    const paidAmount = sortedRows.reduce((sum, row) => sum + row.paidAmount, 0);
     const receivableAmount = filteredRows.reduce(
       (sum, row) => sum + row.receivableAmount,
       0
     );
 
     return {
-      count: filteredRows.length,
+      count: sortedRows.length,
       claimAmount,
       paidAmount,
       receivableAmount,
     };
-  }, [filteredRows]);
+  }, [filteredRows, sortedRows]);
 
   return (
     <div className="space-y-5 text-slate-900">
@@ -484,27 +528,27 @@ export default function PendingInsuranceListPage({
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr className="bg-slate-50 text-slate-700">
-              <th className="border-b border-slate-200 px-3 py-2 text-left">작명</th>
-              <th className="border-b border-slate-200 px-3 py-2 text-left">차량번호</th>
-              <th className="border-b border-slate-200 px-3 py-2 text-left">차량명</th>
-              <th className="border-b border-slate-200 px-3 py-2 text-left">보험사</th>
-              <th className="border-b border-slate-200 px-3 py-2 text-center">구분</th>
-              <th className="border-b border-slate-200 px-3 py-2 text-center">상태</th>
-              <th className="border-b border-slate-200 px-3 py-2 text-left">청구일</th>
-              <th className="border-b border-slate-200 px-3 py-2 text-right">청구금액</th>
-              <th className="border-b border-slate-200 px-3 py-2 text-right">입금금액</th>
-              <th className="border-b border-slate-200 px-3 py-2 text-right">미수금</th>
+              <SortableHeader label="작명" sortKey="workName" activeKey={sortKey} direction={sortDirection} onSort={handleSort} />
+              <SortableHeader label="차량번호" sortKey="carNumber" activeKey={sortKey} direction={sortDirection} onSort={handleSort} />
+              <SortableHeader label="차량명" sortKey="carModel" activeKey={sortKey} direction={sortDirection} onSort={handleSort} />
+              <SortableHeader label="보험사" sortKey="insuranceCompany" activeKey={sortKey} direction={sortDirection} onSort={handleSort} />
+              <SortableHeader label="구분" sortKey="claimSide" activeKey={sortKey} direction={sortDirection} align="center" onSort={handleSort} />
+              <SortableHeader label="상태" sortKey="status" activeKey={sortKey} direction={sortDirection} align="center" onSort={handleSort} />
+              <SortableHeader label="청구일" sortKey="claimDate" activeKey={sortKey} direction={sortDirection} onSort={handleSort} />
+              <SortableHeader label="청구금액" sortKey="claimAmount" activeKey={sortKey} direction={sortDirection} align="right" onSort={handleSort} />
+              <SortableHeader label="입금금액" sortKey="paidAmount" activeKey={sortKey} direction={sortDirection} align="right" onSort={handleSort} />
+              <SortableHeader label="미수금" sortKey="receivableAmount" activeKey={sortKey} direction={sortDirection} align="right" onSort={handleSort} />
             </tr>
           </thead>
           <tbody>
-            {filteredRows.length === 0 ? (
+            {sortedRows.length === 0 ? (
               <tr>
                 <td colSpan={10} className="px-3 py-8 text-center text-slate-500">
                   조건에 맞는 내역이 없습니다.
                 </td>
               </tr>
             ) : (
-              filteredRows.map((row, index) => (
+              sortedRows.map((row, index) => (
                 <tr
                   key={`${row.id}-${row.workName}-${row.insuranceCompany}-${row.claimSide}-${index}`}
                   className="hover:bg-blue-50"
@@ -591,5 +635,44 @@ function StatusBadge({ status }: { status: InsuranceListRow["status"] }) {
     <span className={`rounded-full px-2 py-1 text-xs font-bold ${className}`}>
       {status}
     </span>
+  );
+}
+
+function SortableHeader({
+  label,
+  sortKey,
+  activeKey,
+  direction,
+  align = "left",
+  onSort,
+}: {
+  label: string;
+  sortKey: SortKey;
+  activeKey: SortKey;
+  direction: SortDirection;
+  align?: "left" | "center" | "right";
+  onSort: (key: SortKey) => void;
+}) {
+  const isActive = sortKey === activeKey;
+  const alignClass =
+    align === "right"
+      ? "justify-end text-right"
+      : align === "center"
+        ? "justify-center text-center"
+        : "justify-start text-left";
+
+  return (
+    <th className="border-b border-slate-200 px-3 py-2">
+      <button
+        type="button"
+        onClick={() => onSort(sortKey)}
+        className={`flex w-full items-center gap-1 font-bold hover:text-blue-700 ${alignClass}`}
+      >
+        <span>{label}</span>
+        <span className={isActive ? "text-blue-600" : "text-slate-400"}>
+          {isActive ? (direction === "asc" ? "▲" : "▼") : "↕"}
+        </span>
+      </button>
+    </th>
   );
 }
