@@ -277,6 +277,7 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
     );
 
     if (visibleChildren.length > 0) {
+      handleSelectMenu(menu);
       setMobileMenuPath((prev) => [...prev, menu]);
       return;
     }
