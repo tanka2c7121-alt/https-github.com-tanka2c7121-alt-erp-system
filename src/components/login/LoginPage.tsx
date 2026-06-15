@@ -27,6 +27,7 @@ type Props = {
 };
 
 const rememberedUserIdKey = "erpRememberedUserId";
+const showLogoAnimation = false;
 const departments = ["관리부", "도장부", "판금부", "정비부"];
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const brandMarks = [
@@ -452,18 +453,20 @@ export default function LoginPage({ onLogin }: Props) {
         `}
       </style>
 
-      <div className="logo-animation-stage" aria-hidden="true">
-        {brandMarks.map((brand) => (
-          <div key={brand.name} className="spotlight-mark">
-            <div className="animated-logo-chip">
-              <img src={brand.logoSrc} alt="" />
+      {showLogoAnimation && (
+        <div className="logo-animation-stage" aria-hidden="true">
+          {brandMarks.map((brand) => (
+            <div key={brand.name} className="spotlight-mark">
+              <div className="animated-logo-chip">
+                <img src={brand.logoSrc} alt="" />
+              </div>
             </div>
+          ))}
+          <div className="final-genesis-mark">
+            <img className="final-genesis-svg" src="/genesis-mark.png" alt="" />
           </div>
-        ))}
-        <div className="final-genesis-mark">
-          <img className="final-genesis-svg" src="/genesis-mark.png" alt="" />
         </div>
-      </div>
+      )}
 
       <section className="relative z-10 mx-auto flex min-h-screen w-full max-w-6xl flex-col items-center px-5 pb-10 pt-[53.5vh] md:px-8">
         <div className="login-card-panel relative z-10 rounded-[14px] border border-white/80 bg-white/82 p-8 shadow-2xl shadow-slate-900/10 backdrop-blur-md">
