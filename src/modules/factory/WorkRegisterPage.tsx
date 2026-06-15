@@ -1409,7 +1409,6 @@ async function handleSave() {
       ["칼라코드", colorCode],
       ["입고일", inboundDate],
       ["출고예정", outboundDate],
-      ["출고일", releaseDate],
       ["렌터카 업체", rentalCompany],
       ["렌터카 전화번호", rentalPhoneNumber],
       ["견인", towYn],

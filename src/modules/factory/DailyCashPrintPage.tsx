@@ -17,8 +17,8 @@ type DailyCashRow = {
   memo: string | null;
 };
 const formatWon = (amount: number) => amount.toLocaleString();
-const firstPageRows = 19;
-const nextPageRows = 23;
+const firstPageRows = 18;
+const nextPageRows = 21;
 const formatPrintAccount = (account: string) => {
   if (account.toUpperCase() === "BLUE POINT") return "BLUE";
 
@@ -135,12 +135,12 @@ const fetchRows = useCallback(async (dateValue = printDate) => {
         className={`daily-cash-print-page mx-auto mb-6 bg-white text-slate-900 shadow-lg print:m-0 print:shadow-none ${isFirstPage ? "" : "daily-cash-print-page-next"}`}
         style={{
           width: "190mm",
-          minHeight: "275mm",
-          padding: isFirstPage ? "7mm" : "9mm 7mm 5mm",
+          minHeight: "268mm",
+          padding: isFirstPage ? "6mm" : "8mm 6mm 4mm",
         }}
       
       >
-        <div className="min-h-[261mm] border-2 border-slate-900 p-3">
+        <div className="min-h-[256mm] border-2 border-slate-900 p-3">
           {isFirstPage ? (
             <>
               <div className="relative mb-3 text-center">
@@ -207,7 +207,7 @@ const fetchRows = useCallback(async (dateValue = printDate) => {
 
             <tbody>
               {rowsWithBlanks.map((item, index) => (
-                <tr key={index} className="h-[10.5mm]">
+                <tr key={index} className="h-[9.8mm]">
                   <td className="border border-slate-900 px-1 py-1 text-center whitespace-nowrap">{item.date || "\u00A0"}</td>
                   <td className="border border-slate-900 px-1 py-1 text-center whitespace-nowrap">{item.account ? formatPrintAccount(item.account) : "\u00A0"}</td>
                   <td className="border border-slate-900 px-1 py-1 text-center whitespace-nowrap">{item.type || "\u00A0"}</td>

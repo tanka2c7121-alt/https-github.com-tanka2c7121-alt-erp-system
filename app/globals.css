@@ -39,14 +39,23 @@ body {
 @media print {
   @page {
     size: A4 portrait;
-    margin: 5mm;
+    margin: 6mm;
   }
 
   html,
   body {
     margin: 0 !important;
     padding: 0 !important;
+    width: auto !important;
+    height: auto !important;
+    min-height: auto !important;
+    max-width: none !important;
+    overflow: visible !important;
     background: white !important;
+  }
+
+  * {
+    overflow: visible !important;
   }
 
   body * {
@@ -59,16 +68,29 @@ body {
   }
 
   .print-area {
-    position: fixed !important;
+    position: absolute !important;
     left: 0 !important;
     top: 0 !important;
     transform: none !important;
 
-    width: 200mm !important;
-    min-height: 285mm !important;
-    padding: 5mm !important;
+    width: 198mm !important;
+    min-height: auto !important;
+    padding: 0 !important;
+    margin: 0 !important;
     box-sizing: border-box !important;
 
+    background: white !important;
+    box-shadow: none !important;
+  }
+
+  .print-area:not(.settlement-complete-print) > article,
+  .print-area:not(.settlement-complete-print) > section:not(.no-print),
+  .print-area:not(.settlement-complete-print) > div:not(.no-print) {
+    width: 198mm !important;
+    min-height: 285mm !important;
+    margin: 0 !important;
+    padding: 6mm !important;
+    box-sizing: border-box !important;
     background: white !important;
     box-shadow: none !important;
   }
@@ -80,12 +102,23 @@ body {
 
   .print-only {
     display: block !important;
-    position: fixed !important;
+    position: absolute !important;
     left: 0 !important;
     top: 0 !important;
-    width: 200mm !important;
+    width: 198mm !important;
+    min-height: auto !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: white !important;
+    box-shadow: none !important;
+  }
+
+  .print-only > div {
+    width: 198mm !important;
     min-height: 285mm !important;
-    padding: 5mm !important;
+    margin: 0 !important;
+    padding: 6mm !important;
+    box-sizing: border-box !important;
     background: white !important;
     box-shadow: none !important;
   }
@@ -94,6 +127,13 @@ body {
   .no-print * {
     display: none !important;
     visibility: hidden !important;
+  }
+
+  body > div,
+  main {
+    height: auto !important;
+    min-height: auto !important;
+    max-height: none !important;
   }
 }
 @media print {
@@ -111,9 +151,9 @@ body {
     left: 0 !important;
     top: 0 !important;
     transform: none !important;
-    width: 200mm !important;
+    width: 198mm !important;
     min-height: auto !important;
-    padding: 5mm !important;
+    padding: 4mm !important;
     margin: 0 !important;
     background: white !important;
     box-sizing: border-box !important;
@@ -125,14 +165,15 @@ body {
     page-break-inside: avoid !important;
     break-inside: avoid !important;
     width: 190mm !important;
-    min-height: 275mm !important;
-    padding: 7mm !important;
+    min-height: 268mm !important;
+    height: 268mm !important;
+    padding: 6mm !important;
     margin: 0 auto !important;
     box-shadow: none !important;
   }
 
   .daily-cash-print-page-next {
-    padding: 11mm 7mm 3mm !important;
+    padding: 8mm 6mm 4mm !important;
   }
 
   .daily-cash-print-page:last-child {
@@ -143,11 +184,11 @@ body {
 
 @media print {
   .settlement-complete-print {
-    left: 6mm !important;
-    top: 6mm !important;
-    width: 184mm !important;
-    min-height: 266mm !important;
-    padding: 5mm !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 198mm !important;
+    min-height: 285mm !important;
+    padding: 6mm !important;
     overflow: visible !important;
   }
 

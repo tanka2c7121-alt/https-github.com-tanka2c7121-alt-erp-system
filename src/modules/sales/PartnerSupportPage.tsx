@@ -57,11 +57,10 @@ type SupportRow = {
   carNumber: string;
   carModel: string;
   status: "미결" | "완결" | "종결";
-  paymentTotal: number;
-  vatAmount: number;
-  materialAmount: number;
-  partsAmount: number;
-  baseAmount: number;
+  paymentAmount: number;
+  deductibleAmount: number;
+  totalPaymentAmount: number;
+  expenseAmount: number;
   supportRate: number;
   expectedSupportAmount: number;
   supportAmount: number;
@@ -76,11 +75,10 @@ type SortKey =
   | "workName"
   | "carNumber"
   | "carModel"
-  | "paymentTotal"
-  | "vatAmount"
-  | "materialAmount"
-  | "partsAmount"
-  | "baseAmount"
+  | "paymentAmount"
+  | "deductibleAmount"
+  | "totalPaymentAmount"
+  | "expenseAmount"
   | "expectedSupportAmount"
   | "supportAmount";
 type SortDirection = "asc" | "desc";
@@ -251,7 +249,7 @@ export default function PartnerSupportPage({
 
       const paymentsByWorkName = new Map<string, PaymentRow[]>();
       const supportByWorkName = new Map<string, { amount: number; date: string }>();
-      const partsByWorkName = new Map<string, number>();
+      const expenseByWorkName = new Map<string, number>();
 
       (paymentResult.data ?? []).forEach((row) => {
         const workName = normalizeText(row.work_name);
@@ -268,6 +266,12 @@ export default function PartnerSupportPage({
         const amount = toAmountNumber(row.expense_amount);
 
         if (!workName || amount <= 0 || normalizeText(row.expense_type) !== "입고지원") {
+          if (workName && amount > 0) {
+            expenseByWorkName.set(
+              workName,
+              (expenseByWorkName.get(workName) ?? 0) + amount
+            );
+          }
           return;
         }
 
@@ -286,9 +290,9 @@ export default function PartnerSupportPage({
 
         if (!workName || !isPartsRow) return;
 
-        partsByWorkName.set(
+        expenseByWorkName.set(
           workName,
-          (partsByWorkName.get(workName) ?? 0) + toAmountNumber(row.expense)
+          (expenseByWorkName.get(workName) ?? 0) + toAmountNumber(row.expense)
         );
       });
 
@@ -308,29 +312,40 @@ export default function PartnerSupportPage({
             const paidRows = paymentRows.filter(
               (row) => toAmountNumber(row.payment_amount) > 0 && hasDateValue(row.payment_date)
             );
-            const paymentTotal = paidRows.reduce(
-              (sum, row) => sum + toAmountNumber(row.payment_amount),
-              0
-            );
-            const explicitVatAmount = paidRows
+            const deductibleAmount = paidRows
+              .filter(
+                (row) =>
+                  includesKeyword(row.payment_type, "면책금") ||
+                  includesKeyword(row.payment_detail, "면책금")
+              )
+              .reduce((sum, row) => sum + toAmountNumber(row.payment_amount), 0);
+            const vatAmount = paidRows
               .filter(
                 (row) =>
                   includesKeyword(row.payment_type, "부가세") ||
                   includesKeyword(row.payment_detail, "부가세")
               )
               .reduce((sum, row) => sum + toAmountNumber(row.payment_amount), 0);
-            const vatAmount =
-              explicitVatAmount > 0
-                ? explicitVatAmount
-                : paymentTotal - Math.round(paymentTotal / 1.1);
-            const materialAmount = Math.round(paymentTotal * 0.15);
-            const partsAmount = partsByWorkName.get(workName) ?? 0;
-            const baseAmount = Math.max(
-              0,
-              paymentTotal - vatAmount - materialAmount - partsAmount
+            const paymentAmount = paidRows
+              .filter(
+                (row) =>
+                  !includesKeyword(row.payment_type, "면책금") &&
+                  !includesKeyword(row.payment_detail, "면책금") &&
+                  !includesKeyword(row.payment_type, "부가세") &&
+                  !includesKeyword(row.payment_detail, "부가세")
+              )
+              .reduce(
+              (sum, row) => sum + toAmountNumber(row.payment_amount),
+              0
             );
+            const totalPaymentAmount = paymentAmount + deductibleAmount + vatAmount;
+            const expenseAmount = expenseByWorkName.get(workName) ?? 0;
             const supportRate = partnerCompany === "상동점" ? 0.15 : 0.1;
-            const expectedSupportAmount = Math.round(baseAmount * supportRate);
+            const supportBase =
+              paymentAmount > 0
+                ? Math.max(0, ((totalPaymentAmount - expenseAmount) / 1.1) * 0.85)
+                : 0;
+            const expectedSupportAmount = Math.round(supportBase * supportRate);
 
             return [{
               id: workOrder.id,
@@ -341,11 +356,10 @@ export default function PartnerSupportPage({
               carNumber: normalizeText(workOrder.car_number),
               carModel: normalizeText(workOrder.car_model),
               status: "미결",
-              paymentTotal,
-              vatAmount,
-              materialAmount,
-              partsAmount,
-              baseAmount,
+              paymentAmount,
+              deductibleAmount,
+              totalPaymentAmount,
+              expenseAmount,
               supportRate,
               expectedSupportAmount,
               supportAmount: support?.amount ?? 0,
@@ -600,7 +614,7 @@ export default function PartnerSupportPage({
         </div>
 
         <div className="overflow-x-auto">
-          <table className="partner-support-table w-full min-w-[1180px] border-collapse text-sm">
+          <table className="partner-support-table w-full min-w-[1080px] border-collapse text-sm">
             <thead>
               <tr className="bg-slate-100 text-slate-700">
                 <th className="hidden">상태</th>
@@ -609,13 +623,11 @@ export default function PartnerSupportPage({
                 <SortableHeader label="작업명" sortKey="workName" activeKey={sortKey} direction={sortDirection} onSort={handleSort} />
                 <SortableHeader label="차량번호" sortKey="carNumber" activeKey={sortKey} direction={sortDirection} onSort={handleSort} />
                 <SortableHeader label="차량명" sortKey="carModel" activeKey={sortKey} direction={sortDirection} onSort={handleSort} />
-                <SortableHeader label="입금총액" sortKey="paymentTotal" activeKey={sortKey} direction={sortDirection} align="right" onSort={handleSort} />
-                <SortableHeader label="부가세" sortKey="vatAmount" activeKey={sortKey} direction={sortDirection} align="right" onSort={handleSort} />
-                <SortableHeader label="총액15%" sortKey="materialAmount" activeKey={sortKey} direction={sortDirection} align="right" onSort={handleSort} />
-                <SortableHeader label="부품비" sortKey="partsAmount" activeKey={sortKey} direction={sortDirection} align="right" onSort={handleSort} />
-                <SortableHeader label="기준금액" sortKey="baseAmount" activeKey={sortKey} direction={sortDirection} align="right" onSort={handleSort} />
-                <SortableHeader label="예상지원" sortKey="expectedSupportAmount" activeKey={sortKey} direction={sortDirection} align="right" onSort={handleSort} />
-                <SortableHeader label="입력금액" sortKey="supportAmount" activeKey={sortKey} direction={sortDirection} align="right" onSort={handleSort} />
+                <SortableHeader label="입금금액" sortKey="paymentAmount" activeKey={sortKey} direction={sortDirection} align="right" onSort={handleSort} />
+                <SortableHeader label="면책금" sortKey="deductibleAmount" activeKey={sortKey} direction={sortDirection} align="right" onSort={handleSort} />
+                <SortableHeader label="총입금액" sortKey="totalPaymentAmount" activeKey={sortKey} direction={sortDirection} align="right" onSort={handleSort} />
+                <SortableHeader label="지출금액" sortKey="expenseAmount" activeKey={sortKey} direction={sortDirection} align="right" onSort={handleSort} />
+                <SortableHeader label="지원금" sortKey="expectedSupportAmount" activeKey={sortKey} direction={sortDirection} align="right" onSort={handleSort} />
                 <th className="border border-slate-300 px-2 py-2">관리</th>
               </tr>
               <tr className="bg-slate-100 text-slate-700">
@@ -625,26 +637,24 @@ export default function PartnerSupportPage({
                 <th className="border border-slate-300 px-2 py-2">작명</th>
                 <th className="border border-slate-300 px-2 py-2">차량번호</th>
                 <th className="border border-slate-300 px-2 py-2">차량명</th>
-                <th className="border border-slate-300 px-2 py-2 text-right">입금총액</th>
-                <th className="border border-slate-300 px-2 py-2 text-right">부가세</th>
-                <th className="border border-slate-300 px-2 py-2 text-right">총액15% 차감</th>
-                <th className="border border-slate-300 px-2 py-2 text-right">부품대</th>
-                <th className="border border-slate-300 px-2 py-2 text-right">기준금액</th>
-                <th className="border border-slate-300 px-2 py-2 text-right">예상지원</th>
-                <th className="border border-slate-300 px-2 py-2 text-right">입력금액</th>
+                <th className="border border-slate-300 px-2 py-2 text-right">입금금액</th>
+                <th className="border border-slate-300 px-2 py-2 text-right">면책금</th>
+                <th className="border border-slate-300 px-2 py-2 text-right">총입금액</th>
+                <th className="border border-slate-300 px-2 py-2 text-right">지출금액</th>
+                <th className="border border-slate-300 px-2 py-2 text-right">지원금</th>
                 <th className="border border-slate-300 px-2 py-2">관리</th>
               </tr>
             </thead>
             <tbody>
               {isLoading ? (
                 <tr>
-                  <td colSpan={14} className="border border-slate-300 px-3 py-8 text-center text-slate-500">
+                  <td colSpan={12} className="border border-slate-300 px-3 py-8 text-center text-slate-500">
                     조회 중입니다.
                   </td>
                 </tr>
               ) : pagedRows.length === 0 ? (
                 <tr>
-                  <td colSpan={14} className="border border-slate-300 px-3 py-8 text-center text-slate-500">
+                  <td colSpan={12} className="border border-slate-300 px-3 py-8 text-center text-slate-500">
                     표시할 입고지원 데이터가 없습니다.
                   </td>
                 </tr>
@@ -687,19 +697,15 @@ export default function PartnerSupportPage({
                     <td className="border border-slate-300 px-2 py-2 font-semibold text-blue-700">{row.workName}</td>
                     <td className="border border-slate-300 px-2 py-2">{row.carNumber || "-"}</td>
                     <td className="border border-slate-300 px-2 py-2">{row.carModel || "-"}</td>
-                    <td className="border border-slate-300 px-2 py-2 text-right">{formatWon(row.paymentTotal)}</td>
-                    <td className="border border-slate-300 px-2 py-2 text-right">{formatWon(row.vatAmount)}</td>
-                    <td className="border border-slate-300 px-2 py-2 text-right">{formatWon(row.materialAmount)}</td>
-                    <td className="border border-slate-300 px-2 py-2 text-right">{formatWon(row.partsAmount)}</td>
-                    <td className="border border-slate-300 px-2 py-2 text-right">{formatWon(row.baseAmount)}</td>
+                    <td className="border border-slate-300 px-2 py-2 text-right">{formatWon(row.paymentAmount)}</td>
+                    <td className="border border-slate-300 px-2 py-2 text-right">{formatWon(row.deductibleAmount)}</td>
+                    <td className="border border-slate-300 px-2 py-2 text-right">{formatWon(row.totalPaymentAmount)}</td>
+                    <td className="border border-slate-300 px-2 py-2 text-right">{formatWon(row.expenseAmount)}</td>
                     <td className="border border-slate-300 px-2 py-2 text-right font-bold text-blue-700">
                       {formatWon(row.expectedSupportAmount)}
                       <span className="ml-1 text-xs text-slate-500">
                         {Math.round(row.supportRate * 100)}%
                       </span>
-                    </td>
-                    <td className="border border-slate-300 px-2 py-2 text-right font-semibold">
-                      {row.isSupportEntered ? formatWon(row.supportAmount) : "-"}
                     </td>
                     <td className="border border-slate-300 px-2 py-2 text-center">
                       <button

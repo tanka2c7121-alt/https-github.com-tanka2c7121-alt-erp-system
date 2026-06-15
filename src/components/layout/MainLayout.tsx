@@ -18,7 +18,7 @@ import FactorySettlementPage from "../../modules/factory/FactorySettlementPage";
 import SettlementRegisterPage from "../../modules/factory/SettlementRegisterPage";
 import SettlementCompletePrintPage from "../../modules/factory/SettlementCompletePrintPage";
 import DailyCashPage from "../../modules/factory/DailyCashPage";
-import DailyCashPrintPage from "../../modules/factory/DailyCashPrintPage";
+import DailyCashPrintPageNew from "../../modules/factory/DailyCashPrintPageNew";
 import DailyCashRegisterPage from "../../modules/factory/DailyCashRegisterPage";
 import SettlementMainPage from "../../modules/factory/SettlementMainPage";
 import PendingSettlementPage from "../../modules/factory/PendingSettlementPage";
@@ -565,7 +565,7 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
       return <DailyCashRegisterPage editData={menu.data as any} />;
     }
     if (menu.id === "factory-settlement-daily-cash-print") {
-      return <DailyCashPrintPage user={user} />;
+      return <DailyCashPrintPageNew user={user} />;
     }
     if (menu.id === "factory-settlement-daily-cash") {
       return <DailyCashPage onSelectMenu={handleSelectMenu} />;
@@ -692,6 +692,18 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
       </div>
     );
   };
+
+  if (selectedMenu.id.includes("print")) {
+    const printKey = `${menuCacheKey(selectedMenu)}:${
+      refreshKeys[menuCacheKey(selectedMenu)] ?? 0
+    }`;
+
+    return (
+      <div key={printKey} className="min-h-screen bg-slate-200 print:bg-white">
+        {renderMenuPage(selectedMenu)}
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen w-full flex-col overflow-x-hidden bg-transparent">
