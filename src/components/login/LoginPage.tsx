@@ -71,7 +71,6 @@ const brandMarks = [
     logoSrc: "https://cdn.simpleicons.org/hyundai/05141F",
   },
 ];
-
 const phoneDigits = (value: string) => value.replace(/\D/g, "");
 
 const formatPhoneNumber = (value: string) => {
@@ -272,11 +271,11 @@ export default function LoginPage({ onLogin }: Props) {
 
   const isLoginMode = mode === "login";
   const inputClass =
-    "h-12 w-full rounded-lg border border-slate-200 bg-white/90 px-4 text-[15px] text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10";
+    "h-11 w-full rounded-lg border border-slate-200 bg-white/90 px-4 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10";
   const primaryButtonClass =
-    "h-12 w-full rounded-lg bg-blue-700 text-[15px] font-bold text-white shadow-lg shadow-blue-900/20 transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-60";
+    "h-11 w-full rounded-lg bg-blue-700 text-sm font-bold text-white shadow-lg shadow-blue-900/20 transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-60";
   const secondaryButtonClass =
-    "h-12 w-full rounded-lg border border-slate-200 bg-white/70 text-[15px] font-bold text-slate-700 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60";
+    "h-11 w-full rounded-lg border border-slate-200 bg-white/70 text-sm font-bold text-slate-700 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60";
 
   return (
     <main className="login-showcase relative min-h-screen overflow-hidden bg-[#edf4fb] text-slate-900">
@@ -311,7 +310,7 @@ export default function LoginPage({ onLogin }: Props) {
           }
 
           .spotlight-mark,
-          .final-genesis-glow {
+          .final-genesis-mark {
             position: absolute;
             inset: 0;
             display: flex;
@@ -379,12 +378,13 @@ export default function LoginPage({ onLogin }: Props) {
             object-fit: contain;
           }
 
-          .final-genesis-glow {
+          .final-genesis-mark {
             animation: finalGenesisGlow 1s ease 3.02s forwards;
           }
 
-          .final-genesis-glow::before {
+          .final-genesis-mark::before {
             content: "";
+            position: absolute;
             width: min(520px, 54vw);
             height: 128px;
             border-radius: 999px;
@@ -393,8 +393,18 @@ export default function LoginPage({ onLogin }: Props) {
             filter: blur(12px);
           }
 
+          .final-genesis-svg {
+            position: relative;
+            z-index: 1;
+            width: min(300px, 40vw);
+            height: auto;
+            filter:
+              drop-shadow(0 0 12px rgba(255,255,255,0.92))
+              drop-shadow(0 18px 26px rgba(10,28,47,0.18));
+          }
+
           .login-card-panel {
-            width: min(510px, calc(100vw - 40px));
+            width: min(430px, calc(100vw - 40px));
           }
 
           @keyframes logoFlash {
@@ -413,7 +423,7 @@ export default function LoginPage({ onLogin }: Props) {
           @keyframes finalGenesisGlow {
             0% { opacity: 0; transform: scale(0.72); }
             42% { opacity: 1; transform: scale(1.06); }
-            100% { opacity: 0.18; transform: scale(1); }
+            100% { opacity: 1; transform: scale(1); }
           }
 
           @keyframes logoBackdrop {
@@ -427,8 +437,12 @@ export default function LoginPage({ onLogin }: Props) {
               width: 82vw;
             }
 
-            .final-genesis-glow::before {
+            .final-genesis-mark::before {
               width: 78vw;
+            }
+
+            .final-genesis-svg {
+              width: 54vw;
             }
 
             .login-card-panel {
@@ -446,11 +460,13 @@ export default function LoginPage({ onLogin }: Props) {
             </div>
           </div>
         ))}
-        <div className="final-genesis-glow" />
+        <div className="final-genesis-mark">
+          <img className="final-genesis-svg" src="/genesis-mark.png" alt="" />
+        </div>
       </div>
 
-      <section className="relative z-10 mx-auto flex min-h-screen w-full max-w-6xl flex-col items-center px-5 pb-10 pt-[52.5vh] md:px-8">
-        <div className="login-card-panel relative z-10 rounded-[14px] border border-white/80 bg-white/82 p-11 shadow-2xl shadow-slate-900/10 backdrop-blur-md">
+      <section className="relative z-10 mx-auto flex min-h-screen w-full max-w-6xl flex-col items-center px-5 pb-10 pt-[53.5vh] md:px-8">
+        <div className="login-card-panel relative z-10 rounded-[14px] border border-white/80 bg-white/82 p-8 shadow-2xl shadow-slate-900/10 backdrop-blur-md">
             {isLoginMode ? (
               <form
                 className="space-y-4"
