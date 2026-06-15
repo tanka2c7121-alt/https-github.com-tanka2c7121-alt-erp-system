@@ -25,8 +25,8 @@ type DailyCashPrintPageNewProps = {
   };
 };
 
-const firstPageRows = 31;
-const nextPageRows = 31;
+const firstPageRows = 33;
+const nextPageRows = 33;
 const emptyRow: DailyCashRow = {
   date: "",
   account: "",
@@ -121,7 +121,7 @@ export default function DailyCashPrintPageNew({
             key={pageIndex}
             className="daily-cash-v2-sheet mx-auto mb-6 h-[297mm] w-[210mm] bg-white p-[8mm] text-slate-900 shadow-lg"
           >
-            <div className="daily-cash-v2-border h-[281mm] border-2 border-slate-900 p-3">
+            <div className="daily-cash-v2-border h-[281mm] p-3">
               {isFirstPage ? (
                 <FirstPageHeader
                   pageCount={pages.length}
@@ -155,7 +155,7 @@ export default function DailyCashPrintPageNew({
           @media print {
             @page {
               size: A4 portrait;
-              margin: 6mm;
+              margin: 10mm;
             }
 
             html,
@@ -180,7 +180,7 @@ export default function DailyCashPrintPageNew({
               left: 0 !important;
               top: 0 !important;
               display: block !important;
-              width: 198mm !important;
+              width: 190mm !important;
               min-height: auto !important;
               margin: 0 !important;
               padding: 0 !important;
@@ -198,7 +198,7 @@ export default function DailyCashPrintPageNew({
             }
 
             body.daily-cash-v2-mode .daily-cash-v2-sheet {
-              width: 198mm !important;
+              width: 190mm !important;
               height: auto !important;
               min-height: auto !important;
               margin: 0 !important;
@@ -219,7 +219,7 @@ export default function DailyCashPrintPageNew({
 
             body.daily-cash-v2-mode .daily-cash-v2-border {
               height: auto !important;
-              min-height: 285mm !important;
+              min-height: 277mm !important;
             }
           }
         `}
@@ -340,7 +340,7 @@ function DailyCashTable({ rows }: { rows: DailyCashRow[] }) {
       </thead>
       <tbody>
         {rows.map((row, index) => (
-          <tr key={`${row.id ?? "empty"}-${index}`} className="h-[6.8mm]">
+          <tr key={`${row.id ?? "empty"}-${index}`} className="h-[6.4mm]">
             <td className="whitespace-nowrap border border-slate-900 px-1 py-1 text-center">
               {row.date || "\u00A0"}
             </td>

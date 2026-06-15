@@ -152,7 +152,7 @@ export default function WorkPrintPage({
   </button>
 </div>
 
-        <div className="border border-slate-900 p-3">
+        <div className="p-3">
   <div className="mb-6 flex items-start justify-between">
     <div className="flex-1 text-center">
       <h1 className="text-3xl font-bold tracking-widest">

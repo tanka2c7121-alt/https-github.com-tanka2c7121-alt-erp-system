@@ -700,6 +700,18 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
 
     return (
       <div key={printKey} className="min-h-screen bg-slate-200 print:bg-white">
+        <div className="no-print sticky top-0 z-50 flex items-center justify-between gap-3 border-b border-slate-200 bg-white/95 px-4 py-3 shadow-sm backdrop-blur">
+          <button
+            type="button"
+            onClick={handleBackMenu}
+            className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 shadow-sm hover:bg-slate-50"
+          >
+            뒤로
+          </button>
+          <div className="min-w-0 truncate text-sm font-bold text-slate-700">
+            {selectedMenu.title}
+          </div>
+        </div>
         {renderMenuPage(selectedMenu)}
       </div>
     );
