@@ -25,8 +25,8 @@ type DailyCashPrintPageNewProps = {
   };
 };
 
-const firstPageRows = 33;
-const nextPageRows = 33;
+const firstPageRows = 34;
+const nextPageRows = 41;
 const emptyRow: DailyCashRow = {
   date: "",
   account: "",
@@ -119,11 +119,11 @@ export default function DailyCashPrintPageNew({
         return (
           <section
             key={pageIndex}
-            className={`daily-cash-v2-sheet mx-auto mb-6 h-[297mm] w-[210mm] bg-white p-[8mm] text-slate-900 shadow-lg ${
+            className={`daily-cash-v2-sheet mx-auto mb-6 h-[282mm] w-[198mm] bg-white px-[7mm] pb-[2mm] pt-[12mm] text-slate-900 shadow-lg ${
               isFirstPage ? "" : "daily-cash-v2-sheet-next"
             }`}
           >
-            <div className="daily-cash-v2-border h-[281mm] p-3">
+            <div className="daily-cash-v2-content h-full">
               {isFirstPage ? (
                 <FirstPageHeader
                   pageCount={pages.length}
@@ -157,7 +157,7 @@ export default function DailyCashPrintPageNew({
           @media print {
             @page {
               size: A4 portrait;
-              margin: 10mm;
+              margin: 0;
             }
 
             html,
@@ -172,19 +172,23 @@ export default function DailyCashPrintPageNew({
               visibility: hidden !important;
             }
 
+            body.daily-cash-v2-mode > :not(.daily-cash-v2-portal) {
+              display: none !important;
+            }
+
             body.daily-cash-v2-mode .daily-cash-v2-portal,
             body.daily-cash-v2-mode .daily-cash-v2-portal * {
               visibility: visible !important;
             }
 
             body.daily-cash-v2-mode .daily-cash-v2-portal {
-              position: absolute !important;
+              position: static !important;
               left: 0 !important;
-              top: 2mm !important;
+              top: 0 !important;
               display: block !important;
-              width: 190mm !important;
+              width: 198mm !important;
               min-height: auto !important;
-              margin: 0 !important;
+              margin: 0 auto !important;
               padding: 0 !important;
               background: #ffffff !important;
             }
@@ -200,11 +204,11 @@ export default function DailyCashPrintPageNew({
             }
 
             body.daily-cash-v2-mode .daily-cash-v2-sheet {
-              width: 190mm !important;
-              height: auto !important;
-              min-height: auto !important;
-              margin: 0 !important;
-              padding: 0 !important;
+              width: 198mm !important;
+              height: 282mm !important;
+              min-height: 282mm !important;
+              margin: 0 auto !important;
+              padding: 12mm 7mm 2mm !important;
               box-sizing: border-box !important;
               overflow: visible !important;
               box-shadow: none !important;
@@ -219,20 +223,24 @@ export default function DailyCashPrintPageNew({
               break-after: auto !important;
             }
 
-            body.daily-cash-v2-mode .daily-cash-v2-border {
-              height: auto !important;
-              min-height: auto !important;
+            body.daily-cash-v2-mode .daily-cash-v2-content {
+              height: 268mm !important;
+              min-height: 268mm !important;
             }
 
             body.daily-cash-v2-mode .daily-cash-v2-sheet-next {
-              padding-top: 2mm !important;
-              padding-bottom: 2mm !important;
+              padding-top: 0 !important;
+              padding-bottom: 0 !important;
+            }
+
+            body.daily-cash-v2-mode .daily-cash-v2-sheet-next {
+              padding: 12mm 7mm 2mm !important;
             }
           }
         `}
       </style>
 
-      <div className="no-print mx-auto mb-4 flex max-w-[190mm] items-center justify-end gap-2">
+      <div className="no-print mx-auto mb-4 flex max-w-[198mm] items-center justify-end gap-2">
         <input
           type="date"
           value={printDate}
@@ -322,16 +330,16 @@ function FirstPageHeader({
 
 function DailyCashTable({ rows }: { rows: DailyCashRow[] }) {
   return (
-    <table className="w-full table-fixed border-collapse text-[11px] leading-tight">
+    <table className="w-full table-fixed border-collapse text-[10px] leading-tight">
       <colgroup>
-        <col className="w-[20mm]" />
         <col className="w-[18mm]" />
-        <col className="w-[11mm]" />
         <col className="w-[16mm]" />
+        <col className="w-[10mm]" />
+        <col className="w-[15mm]" />
         <col />
-        <col className="w-[24mm]" />
-        <col className="w-[24mm]" />
-        <col className="w-[20mm]" />
+        <col className="w-[22mm]" />
+        <col className="w-[22mm]" />
+        <col className="w-[18mm]" />
       </colgroup>
       <thead className="text-center">
         <tr className="bg-slate-50">
@@ -347,7 +355,7 @@ function DailyCashTable({ rows }: { rows: DailyCashRow[] }) {
       </thead>
       <tbody>
         {rows.map((row, index) => (
-          <tr key={`${row.id ?? "empty"}-${index}`} className="h-[6.4mm]">
+          <tr key={`${row.id ?? "empty"}-${index}`} className="h-[6.15mm]">
             <td className="whitespace-nowrap border border-slate-900 px-1 py-1 text-center">
               {row.date || "\u00A0"}
             </td>

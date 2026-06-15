@@ -367,7 +367,7 @@ export default function SalesDashboardPage({
       {printPortalRoot
         ? createPortal(
             <section className="print-only sales-print-sheet mx-auto bg-white text-black">
-        <div className="mx-auto min-h-[275mm] w-[190mm] px-[5mm] pb-[4mm] pt-[1mm]">
+        <div className="mx-auto min-h-[283mm] w-[196mm] px-[3mm] pb-[4mm] pt-[2mm]">
           <div className="mb-2 text-center">
             <h1 className="text-2xl font-bold">매출현황 요약</h1>
             <p className="mt-1 text-xs">

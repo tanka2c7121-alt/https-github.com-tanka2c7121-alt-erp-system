@@ -376,14 +376,14 @@ export default function ReleaseListPage({ onSelectMenu }: ReleaseListPageProps) 
       </section>
 
       <section
-        className="hidden bg-white text-slate-900 print:block"
+        className="release-list-print-sheet hidden bg-white text-slate-900 print:block"
         style={{
-          width: "190mm",
-          minHeight: "275mm",
-          padding: "7mm",
+          width: "196mm",
+          minHeight: "283mm",
+          padding: "3mm",
         }}
       >
-        <div className="mb-4 flex items-end justify-between border-b border-slate-900 pb-3">
+        <div className="release-list-print-header mb-4 flex items-end justify-between border-b border-slate-900 pb-3">
           <div>
             <h1 className="text-2xl font-bold">출고리스트</h1>
             <p className="mt-1 text-xs text-slate-600">출력일: {today}</p>

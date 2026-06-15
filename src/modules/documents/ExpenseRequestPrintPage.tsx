@@ -240,9 +240,9 @@ export default function ExpenseRequestPrintPage({
       <article
         className="mx-auto bg-white text-slate-900 shadow-lg print:m-0 print:shadow-none"
         style={{
-          width: "190mm",
-          minHeight: "275mm",
-          padding: "7mm",
+          width: "196mm",
+          minHeight: "283mm",
+          padding: "3mm",
         }}
       >
         <header className="mb-6 grid grid-cols-[1fr_260px] gap-4">

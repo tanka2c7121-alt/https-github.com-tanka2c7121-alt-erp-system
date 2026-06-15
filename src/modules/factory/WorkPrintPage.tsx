@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
 type WorkOrder = {
@@ -38,6 +38,33 @@ type WorkDetail = {
   part: string;
   work_type: string;
 };
+
+const firstPageDetailRows = 19;
+const nextPageDetailRows = 36;
+const emptyDetail: WorkDetail = {
+  line_no: 0,
+  side: "",
+  part: "",
+  work_type: "",
+};
+
+function fillDetailRows(rows: WorkDetail[], minRows: number) {
+  return [
+    ...rows,
+    ...Array.from({ length: Math.max(0, minRows - rows.length) }, () => emptyDetail),
+  ];
+}
+
+function chunkDetailRows(rows: WorkDetail[], size: number) {
+  const chunks: WorkDetail[][] = [];
+
+  for (let index = 0; index < rows.length; index += size) {
+    chunks.push(rows.slice(index, index + size));
+  }
+
+  return chunks;
+}
+
 function formatWorkName(value: string) {
   const numbers = value.replace(/\D/g, "");
 
@@ -60,6 +87,14 @@ export default function WorkPrintPage({
   const [searchWorkName, setSearchWorkName] = useState(workName ?? "");
   const [order, setOrder] = useState<WorkOrder | null>(null);
   const [details, setDetails] = useState<WorkDetail[]>([]);
+  const firstPageDetails = useMemo(
+    () => fillDetailRows(details.slice(0, firstPageDetailRows), firstPageDetailRows),
+    [details]
+  );
+  const nextDetailPages = useMemo(
+    () => chunkDetailRows(details.slice(firstPageDetailRows), nextPageDetailRows),
+    [details]
+  );
 
   const handleLoadPrintData = useCallback(async (
     targetWorkName = searchWorkName,
@@ -113,14 +148,14 @@ export default function WorkPrintPage({
   }, [handleLoadPrintData, workName]);
 
   return (
-    <div className="print-area flex min-h-screen items-center justify-center bg-slate-200 p-6 print:block print:bg-white print:p-0">
+    <div className="print-area min-h-screen bg-slate-200 p-6 print:block print:bg-white print:p-0">
     
       <div
         className="mx-auto bg-white text-slate-900 shadow-lg print:m-0 print:shadow-none"
         style={{
-          width: "190mm",
-          minHeight: "275mm",
-          padding: "7mm",
+          width: "196mm",
+          minHeight: "283mm",
+          padding: "3mm",
         }}
       >
         <div className="no-print mb-4 flex justify-end gap-2">
@@ -368,49 +403,18 @@ export default function WorkPrintPage({
                 </tr>
               </thead>
               <tbody>
-  {[
-  ...details.map((item) => [
-    item.side,
-    item.part,
-    item.work_type,
-  ]),
-  ...Array.from({ length: Math.max(0, 19 - details.length) }, () => [
-    ["", "", ""],
-    ["", "", ""],
-
-    ["", "", ""],
-    ["", "", ""],
-    ["", "", ""],
-    ["", "", ""],
-    ["", "", ""],
-
-    ["", "", ""],
-    ["", "", ""],
-    ["", "", ""],
-    ["", "", ""],
-    ["", "", ""],
-
-    ["", "", ""],
-    ["", "", ""],
-    ["", "", ""],
-    ["", "", ""],
-    ["", "", ""],
-    ["", "", ""],
-    ["", "", ""],
- 
-  ]),
-].map((row, index) => (
+  {firstPageDetails.map((row, index) => (
     <tr key={index} className="h-6 text-[12px] leading-none">
   <td className="border border-slate-900 px-2 py-0 text-center align-middle">
-    {row[0] || "\u00A0"}
+    {row.side || "\u00A0"}
   </td>
 
   <td className="border border-slate-900 px-2 py-0 align-middle">
-    {row[1] || "\u00A0"}
+    {row.part || "\u00A0"}
   </td>
 
   <td className="border border-slate-900 px-2 py-0 text-center align-middle">
-    {row[2] || "\u00A0"}
+    {row.work_type || "\u00A0"}
   </td>
 </tr>
   ))}
@@ -419,6 +423,54 @@ export default function WorkPrintPage({
                     </div>
         </div>
       </div>
+
+      {nextDetailPages.map((pageRows, pageIndex) => (
+        <div
+          key={`work-detail-page-${pageIndex}`}
+          className="mx-auto mt-6 bg-white text-slate-900 shadow-lg print:mt-0 print:shadow-none"
+          style={{
+            width: "196mm",
+            minHeight: "283mm",
+            padding: "3mm",
+          }}
+        >
+          <div className="mb-4 flex items-end justify-between border-b border-slate-900 pb-2">
+            <div>
+              <h1 className="text-2xl font-bold tracking-widest">작업지시서</h1>
+              <p className="mt-1 text-xs font-semibold">작업내용</p>
+            </div>
+            <div className="text-right text-xs font-bold">
+              <div>{order?.work_name || searchWorkName || "\u00A0"}</div>
+              <div>{pageIndex + 2} 페이지</div>
+            </div>
+          </div>
+
+          <table className="w-full border-collapse text-[11px]">
+            <thead>
+              <tr>
+                <th className="w-20 border border-slate-900 bg-slate-100 p-2">좌우</th>
+                <th className="border border-slate-900 bg-slate-100 p-2">부위</th>
+                <th className="w-16 border border-slate-900 bg-slate-100 px-2 py-1 text-center">작업</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pageRows.map((row, rowIndex) => (
+                <tr key={`${row.line_no}-${rowIndex}`} className="h-6 text-[12px] leading-none">
+                  <td className="border border-slate-900 px-2 py-0 text-center align-middle">
+                    {row.side || "\u00A0"}
+                  </td>
+                  <td className="border border-slate-900 px-2 py-0 align-middle">
+                    {row.part || "\u00A0"}
+                  </td>
+                  <td className="border border-slate-900 px-2 py-0 text-center align-middle">
+                    {row.work_type || "\u00A0"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ))}
     </div>
   );
 }

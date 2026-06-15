@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import type { MenuItem } from "../../data/menuData";
 import { supabase } from "../../lib/supabase";
 import { useRealtimeRefresh } from "../../lib/useRealtimeRefresh";
@@ -158,6 +159,7 @@ export default function PartnerSupportPage({
   const [currentPage, setCurrentPage] = useState(1);
   const [sortKey, setSortKey] = useState<SortKey>("inboundDate");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
+  const [printPortalRoot, setPrintPortalRoot] = useState<HTMLElement | null>(null);
 
   const loadRows = useCallback(async () => {
     setIsLoading(true);
@@ -383,6 +385,17 @@ export default function PartnerSupportPage({
     void loadRows();
   }, [loadRows]);
 
+  useEffect(() => {
+    const root = document.createElement("div");
+    root.className = "partner-support-print-portal";
+    document.body.appendChild(root);
+    setPrintPortalRoot(root);
+
+    return () => {
+      root.remove();
+    };
+  }, []);
+
   useRealtimeRefresh({
     channelName: "partner-support-page",
     tables: realtimeTables,
@@ -588,6 +601,13 @@ export default function PartnerSupportPage({
             value={searchText}
             onChange={(event) => setSearchText(event.target.value)}
           />
+          <button
+            type="button"
+            onClick={() => window.print()}
+            className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+          >
+            출력
+          </button>
         </div>
 
         <div className="mb-4 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
@@ -767,6 +787,16 @@ export default function PartnerSupportPage({
           </button>
         </div>
       </section>
+      {printPortalRoot
+        ? createPortal(
+            <PartnerSupportPrintSheet
+              rows={sortedRows}
+              selectedPartner={selectedPartner}
+              summary={summary}
+            />,
+            printPortalRoot
+          )
+        : null}
     </div>
   );
 }
@@ -793,6 +823,156 @@ function SummaryCard({
       <p className="text-sm font-semibold">{label}</p>
       <p className="mt-2 text-2xl font-bold">{value}</p>
     </div>
+  );
+}
+
+function PartnerSupportPrintSheet({
+  rows,
+  selectedPartner,
+  summary,
+}: {
+  rows: SupportRow[];
+  selectedPartner: string;
+  summary: {
+    totalCount: number;
+    pendingCount: number;
+    enteredCount: number;
+    expectedAmount: number;
+    enteredAmount: number;
+  };
+}) {
+  const printTotals = rows.reduce(
+    (totals, row) => ({
+      paymentAmount: totals.paymentAmount + row.paymentAmount,
+      deductibleAmount: totals.deductibleAmount + row.deductibleAmount,
+      totalPaymentAmount: totals.totalPaymentAmount + row.totalPaymentAmount,
+      expenseAmount: totals.expenseAmount + row.expenseAmount,
+      expectedSupportAmount:
+        totals.expectedSupportAmount + row.expectedSupportAmount,
+    }),
+    {
+      paymentAmount: 0,
+      deductibleAmount: 0,
+      totalPaymentAmount: 0,
+      expenseAmount: 0,
+      expectedSupportAmount: 0,
+    }
+  );
+
+  return (
+    <section className="print-only partner-support-print-sheet mx-auto bg-white text-black">
+      <div className="partner-support-print-content mx-auto w-[196mm] px-[3mm] pb-[4mm] pt-[2mm]">
+        <div className="mb-3 text-center">
+          <h1 className="text-3xl font-bold">입고지원관리</h1>
+          <p className="mt-1 text-base font-semibold">
+            {selectedPartner ? `거래처: ${selectedPartner}` : "전체 거래처"} / 총{" "}
+            {rows.length.toLocaleString()}건 / 예상 지원금{" "}
+            {formatWon(summary.expectedAmount)}원
+          </p>
+        </div>
+
+        <table className="partner-support-print-table w-full table-fixed border-collapse text-[12px] leading-tight">
+          <colgroup>
+            <col className="w-[16mm]" />
+            <col className="w-[19mm]" />
+            <col className="w-[17mm]" />
+            <col className="w-[19mm]" />
+            <col />
+            <col className="w-[17mm]" />
+            <col className="w-[17mm]" />
+            <col className="w-[17mm]" />
+            <col className="w-[17mm]" />
+            <col className="w-[17mm]" />
+          </colgroup>
+          <thead className="bg-slate-100 text-slate-800">
+            <tr>
+              <th className="border border-slate-400 px-[2px] py-[3px]">입고일</th>
+              <th className="border border-slate-400 px-[2px] py-[3px]">거래처</th>
+              <th className="border border-slate-400 px-[2px] py-[3px]">작명</th>
+              <th className="border border-slate-400 px-[2px] py-[3px]">차량번호</th>
+              <th className="border border-slate-400 px-[2px] py-[3px]">차량명</th>
+              <th className="border border-slate-400 px-[2px] py-[3px] text-right">입금금액</th>
+              <th className="border border-slate-400 px-[2px] py-[3px] text-right">면책금</th>
+              <th className="border border-slate-400 px-[2px] py-[3px] text-right">총입금액</th>
+              <th className="border border-slate-400 px-[2px] py-[3px] text-right">지출금액</th>
+              <th className="border border-slate-400 px-[2px] py-[3px] text-right">지원금</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 ? (
+              <tr>
+                <td
+                  className="border border-slate-400 px-2 py-8 text-center text-slate-500"
+                  colSpan={10}
+                >
+                  출력할 입고지원 데이터가 없습니다.
+                </td>
+              </tr>
+            ) : (
+              rows.map((row) => (
+                <tr key={`print-${row.workName}-${row.id}`}>
+                  <td className="border border-slate-400 px-[2px] py-[3px] text-center">
+                    {row.inboundDate || "-"}
+                  </td>
+                  <td className="border border-slate-400 px-[2px] py-[3px]">
+                    {row.partnerCompany || "-"}
+                  </td>
+                  <td className="border border-slate-400 px-[2px] py-[3px] text-center font-semibold">
+                    {row.workName || "-"}
+                  </td>
+                  <td className="border border-slate-400 px-[2px] py-[3px] text-center">
+                    {row.carNumber || "-"}
+                  </td>
+                  <td className="break-words border border-slate-400 px-[2px] py-[3px]">
+                    {row.carModel || "-"}
+                  </td>
+                  <td className="border border-slate-400 px-[2px] py-[3px] text-right">
+                    {formatWon(row.paymentAmount)}
+                  </td>
+                  <td className="border border-slate-400 px-[2px] py-[3px] text-right">
+                    {formatWon(row.deductibleAmount)}
+                  </td>
+                  <td className="border border-slate-400 px-[2px] py-[3px] text-right">
+                    {formatWon(row.totalPaymentAmount)}
+                  </td>
+                  <td className="border border-slate-400 px-[2px] py-[3px] text-right">
+                    {formatWon(row.expenseAmount)}
+                  </td>
+                  <td className="border border-slate-400 px-[2px] py-[3px] text-right font-bold">
+                    {formatWon(row.expectedSupportAmount)}
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+          <tfoot>
+            <tr className="bg-slate-100 font-bold">
+              <td
+                className="border border-slate-500 px-[2px] py-[4px] text-center"
+                colSpan={5}
+              >
+                합계
+              </td>
+              <td className="border border-slate-500 px-[2px] py-[4px] text-right">
+                {formatWon(printTotals.paymentAmount)}
+              </td>
+              <td className="border border-slate-500 px-[2px] py-[4px] text-right">
+                {formatWon(printTotals.deductibleAmount)}
+              </td>
+              <td className="border border-slate-500 px-[2px] py-[4px] text-right">
+                {formatWon(printTotals.totalPaymentAmount)}
+              </td>
+              <td className="border border-slate-500 px-[2px] py-[4px] text-right">
+                {formatWon(printTotals.expenseAmount)}
+              </td>
+              <td className="border border-slate-500 px-[2px] py-[4px] text-right text-blue-900">
+                {formatWon(printTotals.expectedSupportAmount)}
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </section>
   );
 }
 
