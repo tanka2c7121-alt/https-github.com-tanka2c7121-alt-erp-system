@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import type { MenuItem } from "../../data/menuData";
 import { localDateText } from "../../lib/date";
 import { supabase } from "../../lib/supabase";
@@ -55,6 +56,7 @@ export default function SalesDashboardPage({
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [selectedMonth, setSelectedMonth] = useState(currentMonth);
   const [isLoading, setIsLoading] = useState(false);
+  const [printPortalRoot, setPrintPortalRoot] = useState<HTMLElement | null>(null);
 
   const loadRows = useCallback(async () => {
     setIsLoading(true);
@@ -146,6 +148,17 @@ export default function SalesDashboardPage({
   useEffect(() => {
     void loadRows();
   }, [loadRows]);
+
+  useEffect(() => {
+    const root = document.createElement("div");
+    root.className = "sales-print-portal";
+    document.body.appendChild(root);
+    setPrintPortalRoot(root);
+
+    return () => {
+      root.remove();
+    };
+  }, []);
 
   const totals = useMemo(() => {
     const result = {
@@ -351,17 +364,19 @@ export default function SalesDashboardPage({
         />
       </section>
 
-      <section className="print-only mx-auto bg-white text-black">
-        <div className="mx-auto min-h-[275mm] w-[190mm] p-[7mm]">
-          <div className="mb-5 text-center">
+      {printPortalRoot
+        ? createPortal(
+            <section className="print-only sales-print-sheet mx-auto bg-white text-black">
+        <div className="mx-auto min-h-[275mm] w-[190mm] px-[5mm] pb-[4mm] pt-[1mm]">
+          <div className="mb-2 text-center">
             <h1 className="text-2xl font-bold">매출현황 요약</h1>
-            <p className="mt-2 text-sm">
+            <p className="mt-1 text-xs">
               조회기간: {selectedYear}년{" "}
               {selectedMonth ? `${Number(selectedMonth)}월` : "전체"}
             </p>
           </div>
 
-          <table className="mb-5 w-full border-collapse text-sm">
+          <table className="mb-3 w-full border-collapse text-sm">
             <tbody>
               <PrintSummaryRow label="총매출" value={totals.total} />
               <PrintSummaryRow label="보험매출" value={totals.insurance} />
@@ -370,7 +385,10 @@ export default function SalesDashboardPage({
             </tbody>
           </table>
         </div>
-      </section>
+            </section>,
+            printPortalRoot
+          )
+        : null}
     </div>
   );
 }

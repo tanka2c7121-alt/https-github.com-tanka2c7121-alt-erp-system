@@ -119,7 +119,9 @@ export default function DailyCashPrintPageNew({
         return (
           <section
             key={pageIndex}
-            className="daily-cash-v2-sheet mx-auto mb-6 h-[297mm] w-[210mm] bg-white p-[8mm] text-slate-900 shadow-lg"
+            className={`daily-cash-v2-sheet mx-auto mb-6 h-[297mm] w-[210mm] bg-white p-[8mm] text-slate-900 shadow-lg ${
+              isFirstPage ? "" : "daily-cash-v2-sheet-next"
+            }`}
           >
             <div className="daily-cash-v2-border h-[281mm] p-3">
               {isFirstPage ? (
@@ -178,7 +180,7 @@ export default function DailyCashPrintPageNew({
             body.daily-cash-v2-mode .daily-cash-v2-portal {
               position: absolute !important;
               left: 0 !important;
-              top: 0 !important;
+              top: 2mm !important;
               display: block !important;
               width: 190mm !important;
               min-height: auto !important;
@@ -219,7 +221,12 @@ export default function DailyCashPrintPageNew({
 
             body.daily-cash-v2-mode .daily-cash-v2-border {
               height: auto !important;
-              min-height: 277mm !important;
+              min-height: auto !important;
+            }
+
+            body.daily-cash-v2-mode .daily-cash-v2-sheet-next {
+              padding-top: 2mm !important;
+              padding-bottom: 2mm !important;
             }
           }
         `}

@@ -70,7 +70,7 @@ body {
   .print-area {
     position: absolute !important;
     left: 0 !important;
-    top: 0 !important;
+    top: 2mm !important;
     transform: none !important;
 
     width: 190mm !important;
@@ -87,7 +87,7 @@ body {
   .print-area:not(.settlement-complete-print) > section:not(.no-print),
   .print-area:not(.settlement-complete-print) > div:not(.no-print) {
     width: 190mm !important;
-    min-height: 277mm !important;
+    min-height: 269mm !important;
     margin: 0 !important;
     padding: 5mm !important;
     box-sizing: border-box !important;
@@ -104,7 +104,7 @@ body {
     display: block !important;
     position: absolute !important;
     left: 0 !important;
-    top: 0 !important;
+    top: 2mm !important;
     width: 190mm !important;
     min-height: auto !important;
     padding: 0 !important;
@@ -115,12 +115,16 @@ body {
 
   .print-only > div {
     width: 190mm !important;
-    min-height: 277mm !important;
+    min-height: 269mm !important;
     margin: 0 !important;
     padding: 5mm !important;
     box-sizing: border-box !important;
     background: white !important;
     box-shadow: none !important;
+  }
+
+  .sales-print-sheet > div {
+    padding: 1mm 5mm 4mm !important;
   }
 
   .no-print,
@@ -149,7 +153,7 @@ body {
   .daily-cash-print-root {
     position: absolute !important;
     left: 0 !important;
-    top: 0 !important;
+    top: 2mm !important;
     transform: none !important;
     width: 190mm !important;
     min-height: auto !important;
@@ -185,9 +189,9 @@ body {
 @media print {
   .settlement-complete-print {
     left: 0 !important;
-    top: 0 !important;
+    top: 2mm !important;
     width: 190mm !important;
-    min-height: 277mm !important;
+    min-height: 269mm !important;
     padding: 5mm !important;
     overflow: visible !important;
   }

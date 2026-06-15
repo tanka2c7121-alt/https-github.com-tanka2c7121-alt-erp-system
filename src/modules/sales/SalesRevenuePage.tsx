@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { localDateText } from "../../lib/date";
 import { supabase } from "../../lib/supabase";
 
@@ -91,6 +92,7 @@ export default function SalesRevenuePage({
   const [isLoading, setIsLoading] = useState(false);
   const [sortField, setSortField] = useState<SortField>("date");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+  const [printPortalRoot, setPrintPortalRoot] = useState<HTMLElement | null>(null);
 
   const dateRange = useMemo(() => {
     const startDate = selectedMonth
@@ -474,6 +476,17 @@ export default function SalesRevenuePage({
     void loadRows();
   }, [loadRows]);
 
+  useEffect(() => {
+    const root = document.createElement("div");
+    root.className = "sales-print-portal";
+    document.body.appendChild(root);
+    setPrintPortalRoot(root);
+
+    return () => {
+      root.remove();
+    };
+  }, []);
+
   const filteredRows = useMemo(() => {
     const keyword = searchText.trim().toLowerCase();
 
@@ -708,17 +721,19 @@ export default function SalesRevenuePage({
         </div>
       )}
 
-      <section className="print-only mx-auto bg-white text-black">
-        <div className="mx-auto min-h-[275mm] w-[190mm] p-[7mm]">
-          <div className="mb-4 text-center">
+      {printPortalRoot
+        ? createPortal(
+            <section className="print-only sales-print-sheet mx-auto bg-white text-black">
+        <div className="mx-auto min-h-[275mm] w-[190mm] px-[5mm] pb-[4mm] pt-[1mm]">
+          <div className="mb-2 text-center">
             <h1 className="text-2xl font-bold">{title} 내역</h1>
-            <p className="mt-2 text-sm">
+            <p className="mt-1 text-xs">
               조회기간: {selectedYear}년{" "}
               {selectedMonth ? `${Number(selectedMonth)}월` : "전체"}
             </p>
           </div>
 
-          <div className="mb-3 flex justify-between text-sm font-semibold">
+          <div className="mb-2 flex justify-between text-xs font-semibold">
             <span>총 {filteredRows.length.toLocaleString()}건</span>
             <span>결제금액 {formatWon(totalPayment)}원</span>
           </div>
@@ -733,7 +748,10 @@ export default function SalesRevenuePage({
             printMode
           />
         </div>
-      </section>
+            </section>,
+            printPortalRoot
+          )
+        : null}
     </div>
   );
 }
@@ -771,10 +789,10 @@ function RevenueTable({
   printMode?: boolean;
 }) {
   const tableClassName = printMode
-    ? "w-full border-collapse text-[9px]"
+    ? "w-full table-fixed border-collapse text-[8px] leading-tight"
     : "min-w-[980px] w-full border-collapse text-sm";
   const cellClassName = printMode
-    ? "border border-slate-400 px-1 py-1"
+    ? "border border-slate-400 px-[2px] py-[3px] align-middle break-words"
     : "border px-2 py-2";
   const colSpan = kind === "card" ? 8 : kind === "partner" ? 10 : 11;
 
