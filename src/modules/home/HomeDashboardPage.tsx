@@ -351,6 +351,42 @@ export default function HomeDashboardPage({
     void loadDashboard();
   }, [loadDashboard]);
 
+  const openDocumentDetail = async ({
+    id,
+    menuId,
+    title,
+    dataKey,
+    tableName,
+  }: {
+    id: number;
+    menuId: string;
+    title: string;
+    dataKey: string;
+    tableName: string;
+  }) => {
+    const { data, error } = await supabase
+      .from(tableName)
+      .select("*")
+      .eq("id", id)
+      .maybeSingle();
+
+    if (error) {
+      alert("문서 조회 실패: " + error.message);
+      return;
+    }
+
+    if (!data) {
+      alert("문서를 찾을 수 없습니다.");
+      return;
+    }
+
+    onSelectMenu({
+      id: menuId,
+      title,
+      data: { [dataKey]: data },
+    });
+  };
+
   useEffect(() => {
     try {
       const saved = localStorage.getItem(manualScheduleStorageKey);
@@ -851,16 +887,43 @@ export default function HomeDashboardPage({
                   title: "지출결의서",
                 })
               }
+              onOpenExpenseRequest={(row) =>
+                void openDocumentDetail({
+                  id: row.id,
+                  menuId: "documents-expense-request-print",
+                  title: "지출결의서 출력",
+                  dataKey: "expenseRequest",
+                  tableName: "expense_requests",
+                })
+              }
               onOpenAttendanceRequests={() =>
                 onSelectMenu({
                   id: "documents-attendance-request",
                   title: "근태신청서",
                 })
               }
+              onOpenAttendanceRequest={(row) =>
+                void openDocumentDetail({
+                  id: row.id,
+                  menuId: "documents-attendance-request-print",
+                  title: "근태신청서 출력",
+                  dataKey: "attendanceRequest",
+                  tableName: "attendance_requests",
+                })
+              }
               onOpenIncidentReports={() =>
                 onSelectMenu({
                   id: "documents-incident-report",
                   title: "경위서",
+                })
+              }
+              onOpenIncidentReport={(row) =>
+                void openDocumentDetail({
+                  id: row.id,
+                  menuId: "documents-incident-report-print",
+                  title: "경위서 출력",
+                  dataKey: "incidentReport",
+                  tableName: "incident_reports",
                 })
               }
               onCheckIncident={(row) => {
@@ -1720,8 +1783,11 @@ function AdminApprovalPanel({
   pendingIncidents,
   onOpenManage,
   onOpenExpenseRequests,
+  onOpenExpenseRequest,
   onOpenAttendanceRequests,
+  onOpenAttendanceRequest,
   onOpenIncidentReports,
+  onOpenIncidentReport,
   onCheckIncident,
   onRejectIncident,
 }: {
@@ -1735,8 +1801,11 @@ function AdminApprovalPanel({
   pendingIncidents: PendingIncidentReport[];
   onOpenManage: () => void;
   onOpenExpenseRequests: () => void;
+  onOpenExpenseRequest: (row: PendingExpenseRequest) => void;
   onOpenAttendanceRequests: () => void;
+  onOpenAttendanceRequest: (row: PendingAttendanceRequest) => void;
   onOpenIncidentReports: () => void;
+  onOpenIncidentReport: (row: PendingIncidentReport) => void;
   onCheckIncident: (row: PendingIncidentReport) => void;
   onRejectIncident: (row: PendingIncidentReport) => void;
 }) {
@@ -1808,7 +1877,7 @@ function AdminApprovalPanel({
                 <button
                   key={row.id}
                   type="button"
-                  onClick={onOpenExpenseRequests}
+                  onClick={() => onOpenExpenseRequest(row)}
                   className="flex w-full items-center justify-between rounded-lg border border-slate-100 p-2 text-left hover:bg-blue-50"
                 >
                   <div className="min-w-0">
@@ -1852,7 +1921,7 @@ function AdminApprovalPanel({
                 <button
                   key={row.id}
                   type="button"
-                  onClick={onOpenAttendanceRequests}
+                  onClick={() => onOpenAttendanceRequest(row)}
                   className="flex w-full items-center justify-between rounded-lg border border-slate-100 p-2 text-left hover:bg-blue-50"
                 >
                   <div className="min-w-0">
@@ -1903,7 +1972,7 @@ function AdminApprovalPanel({
                 >
                   <button
                     type="button"
-                    onClick={onOpenIncidentReports}
+                    onClick={() => onOpenIncidentReport(row)}
                     className="block w-full text-left hover:text-blue-700"
                   >
                     <div className="truncate font-semibold">

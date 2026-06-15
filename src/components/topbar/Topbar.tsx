@@ -50,7 +50,7 @@ export default function Topbar({
             <button
               type="button"
               onClick={() => setIsOpen((value) => !value)}
-            className="relative rounded-full border border-slate-200 bg-white/80 px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm hover:bg-white md:text-sm"
+              className="relative rounded-full border border-slate-200 bg-white/80 px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm hover:bg-white md:text-sm"
             >
               알림
               {totalCount > 0 && (
@@ -61,12 +61,21 @@ export default function Topbar({
             </button>
 
             {isOpen && (
-              <div className="absolute right-0 top-11 z-50 w-72 rounded-2xl border border-white/80 bg-white/90 p-3 text-sm shadow-2xl shadow-slate-300/50 backdrop-blur-xl">
-                <div className="mb-2 font-bold text-slate-900">안내</div>
+              <div className="absolute right-0 top-11 z-[1000] w-80 rounded-2xl border border-slate-200 bg-white p-3 text-sm shadow-2xl shadow-slate-300/60">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <div className="font-bold text-slate-900">알림</div>
+                  <button
+                    type="button"
+                    onClick={() => setIsOpen(false)}
+                    className="rounded px-2 py-1 text-xs font-semibold text-slate-500 hover:bg-slate-100"
+                  >
+                    닫기
+                  </button>
+                </div>
 
                 {activeNotifications.length === 0 ? (
                   <div className="rounded-lg bg-slate-50 p-4 text-center text-slate-500">
-                    항목없음.
+                    확인할 알림이 없습니다.
                   </div>
                 ) : (
                   <div className="space-y-2">
@@ -80,8 +89,13 @@ export default function Topbar({
                         }}
                         className="flex w-full items-center justify-between rounded-lg border border-slate-100 p-3 text-left hover:bg-blue-50"
                       >
-                        <span className="font-semibold text-slate-800">
-                          {item.title}
+                        <span className="min-w-0">
+                          <span className="block truncate font-semibold text-slate-800">
+                            {item.title}
+                          </span>
+                          <span className="mt-1 block text-xs text-slate-500">
+                            클릭하면 해당 목록으로 이동합니다.
+                          </span>
                         </span>
                         <span className="rounded-full bg-red-100 px-2 py-1 text-xs font-bold text-red-700">
                           {item.count}건
