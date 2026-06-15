@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import type { MenuItem } from "../../data/menuData";
 import { supabase } from "../../lib/supabase";
@@ -92,6 +92,8 @@ const realtimeTables = [
 ];
 
 const pageSize = 30;
+const printFirstPageRows = 34;
+const printNextPageRows = 41;
 const defaultSupportTargetPartners = [
   "김병진",
   "경인렌터카",
@@ -112,6 +114,21 @@ const includesKeyword = (value: unknown, keyword: string) =>
   normalizeText(value).replace(/\s+/g, "").includes(keyword);
 const isExcludedSupportTargetPartner = (value: unknown) =>
   excludedSupportTargetPartners.has(normalizeText(value));
+
+function buildPrintPages(rows: SupportRow[]) {
+  const pages: SupportRow[][] = [];
+  let cursor = 0;
+
+  pages.push(rows.slice(cursor, cursor + printFirstPageRows));
+  cursor += printFirstPageRows;
+
+  while (cursor < rows.length) {
+    pages.push(rows.slice(cursor, cursor + printNextPageRows));
+    cursor += printNextPageRows;
+  }
+
+  return pages;
+}
 
 type QueryBuilder = any;
 
@@ -387,7 +404,7 @@ export default function PartnerSupportPage({
 
   useEffect(() => {
     const root = document.createElement("div");
-    root.className = "partner-support-print-portal";
+    root.className = "partner-support-v2-portal";
     document.body.appendChild(root);
     setPrintPortalRoot(root);
 
@@ -463,6 +480,27 @@ export default function PartnerSupportPage({
     setSortDirection("asc");
   };
 
+  const handlePrint = () => {
+    document
+      .querySelectorAll(".partner-support-v2-portal-active")
+      .forEach((portal) =>
+        portal.classList.remove("partner-support-v2-portal-active")
+      );
+
+    printPortalRoot?.classList.add("partner-support-v2-portal-active");
+    document.body.classList.add("partner-support-v2-mode");
+
+    const cleanupPrintMode = () => {
+      printPortalRoot?.classList.remove("partner-support-v2-portal-active");
+      document.body.classList.remove("partner-support-v2-mode");
+      window.removeEventListener("afterprint", cleanupPrintMode);
+    };
+
+    window.addEventListener("afterprint", cleanupPrintMode);
+    window.print();
+    window.setTimeout(cleanupPrintMode, 1000);
+  };
+
   const summary = useMemo(() => {
     return {
       totalCount: rows.length,
@@ -512,9 +550,98 @@ export default function PartnerSupportPage({
     (safeCurrentPage - 1) * pageSize,
     safeCurrentPage * pageSize
   );
+  const printPages = useMemo(() => buildPrintPages(sortedRows), [sortedRows]);
 
   return (
     <div className="space-y-5 text-slate-900">
+      <style>
+        {`
+          .partner-support-v2-portal {
+            display: none;
+          }
+
+          @media print {
+            @page {
+              size: A4 portrait;
+              margin: 0;
+            }
+
+            html,
+            body.partner-support-v2-mode {
+              margin: 0 !important;
+              padding: 0 !important;
+              background: #ffffff !important;
+              overflow: visible !important;
+            }
+
+            body.partner-support-v2-mode * {
+              visibility: hidden !important;
+            }
+
+            body.partner-support-v2-mode > :not(.partner-support-v2-portal-active) {
+              display: none !important;
+            }
+
+            body.partner-support-v2-mode .partner-support-v2-portal-active,
+            body.partner-support-v2-mode .partner-support-v2-portal-active * {
+              visibility: visible !important;
+            }
+
+            body.partner-support-v2-mode .partner-support-v2-portal-active {
+              position: static !important;
+              left: 0 !important;
+              top: 0 !important;
+              display: block !important;
+              width: 198mm !important;
+              min-height: auto !important;
+              margin: 0 auto !important;
+              padding: 0 !important;
+              background: #ffffff !important;
+            }
+
+            body.partner-support-v2-mode .partner-support-v2-sheet {
+              width: 198mm !important;
+              height: 282mm !important;
+              min-height: 282mm !important;
+              margin: 7.5mm auto !important;
+              padding: 12mm 7mm 2mm !important;
+              box-sizing: border-box !important;
+              overflow: hidden !important;
+              box-shadow: none !important;
+              page-break-after: always !important;
+              break-after: page !important;
+              page-break-inside: avoid !important;
+              break-inside: avoid !important;
+            }
+
+            body.partner-support-v2-mode .partner-support-v2-sheet:last-child {
+              page-break-after: auto !important;
+              break-after: auto !important;
+            }
+
+            body.partner-support-v2-mode .partner-support-v2-table thead {
+              display: table-header-group !important;
+            }
+
+            body.partner-support-v2-mode .partner-support-v2-table tfoot {
+              display: table-footer-group !important;
+            }
+
+            body.partner-support-v2-mode .partner-support-v2-table th,
+            body.partner-support-v2-mode .partner-support-v2-table td,
+            body.partner-support-v2-mode .partner-support-v2-total-row th,
+            body.partner-support-v2-mode .partner-support-v2-total-row td {
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+
+            body.partner-support-v2-mode .partner-support-v2-table tr {
+              break-inside: avoid !important;
+              page-break-inside: avoid !important;
+            }
+          }
+        `}
+      </style>
       <style jsx>{`
         .partner-support-table thead th:first-child,
         .partner-support-table tbody tr.data-row td:first-child {
@@ -603,7 +730,7 @@ export default function PartnerSupportPage({
           />
           <button
             type="button"
-            onClick={() => window.print()}
+            onClick={handlePrint}
             className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
           >
             출력
@@ -789,11 +916,20 @@ export default function PartnerSupportPage({
       </section>
       {printPortalRoot
         ? createPortal(
-            <PartnerSupportPrintSheet
-              rows={sortedRows}
-              selectedPartner={selectedPartner}
-              summary={summary}
-            />,
+            <div className="partner-support-v2-root">
+              {printPages.map((pageRows, pageIndex) => (
+                <PartnerSupportPrintSheet
+                  key={pageIndex}
+                  pageCount={printPages.length}
+                  pageIndex={pageIndex}
+                  rows={pageRows}
+                  selectedPartner={selectedPartner}
+                  summary={summary}
+                  totalRows={sortedRows.length}
+                  allRows={sortedRows}
+                />
+              ))}
+            </div>,
             printPortalRoot
           )
         : null}
@@ -827,10 +963,17 @@ function SummaryCard({
 }
 
 function PartnerSupportPrintSheet({
+  allRows,
+  pageCount,
+  pageIndex,
   rows,
   selectedPartner,
   summary,
+  totalRows,
 }: {
+  allRows: SupportRow[];
+  pageCount: number;
+  pageIndex: number;
   rows: SupportRow[];
   selectedPartner: string;
   summary: {
@@ -840,8 +983,9 @@ function PartnerSupportPrintSheet({
     expectedAmount: number;
     enteredAmount: number;
   };
+  totalRows: number;
 }) {
-  const printTotals = rows.reduce(
+  const printTotals = allRows.reduce(
     (totals, row) => ({
       paymentAmount: totals.paymentAmount + row.paymentAmount,
       deductibleAmount: totals.deductibleAmount + row.deductibleAmount,
@@ -858,121 +1002,199 @@ function PartnerSupportPrintSheet({
       expectedSupportAmount: 0,
     }
   );
+  const isFirstPage = pageIndex === 0;
 
   return (
-    <section className="print-only partner-support-print-sheet mx-auto bg-white text-black">
-      <div className="partner-support-print-content mx-auto w-[196mm] px-[3mm] pb-[4mm] pt-[2mm]">
-        <div className="mb-3 text-center">
-          <h1 className="text-3xl font-bold">입고지원관리</h1>
-          <p className="mt-1 text-base font-semibold">
-            {selectedPartner ? `거래처: ${selectedPartner}` : "전체 거래처"} / 총{" "}
-            {rows.length.toLocaleString()}건 / 예상 지원금{" "}
-            {formatWon(summary.expectedAmount)}원
-          </p>
-        </div>
+    <section className="partner-support-v2-sheet mx-auto mb-6 h-[282mm] w-[198mm] bg-white px-[7mm] pb-[2mm] pt-[12mm] text-slate-900 shadow-lg">
+      {isFirstPage ? (
+        <>
+          <div className="relative mb-3 text-center">
+            <h1 className="text-3xl font-bold tracking-widest">입고지원관리</h1>
+            <p className="mt-1 text-sm font-semibold">신흥현대서비스 ERP</p>
+            <p className="absolute right-0 top-1 text-xs font-semibold text-slate-600">
+              1 / {pageCount}
+            </p>
+          </div>
 
-        <table className="partner-support-print-table w-full table-fixed border-collapse text-[12px] leading-tight">
-          <colgroup>
-            <col className="w-[16mm]" />
-            <col className="w-[19mm]" />
-            <col className="w-[17mm]" />
-            <col className="w-[19mm]" />
-            <col />
-            <col className="w-[17mm]" />
-            <col className="w-[17mm]" />
-            <col className="w-[17mm]" />
-            <col className="w-[17mm]" />
-            <col className="w-[17mm]" />
-          </colgroup>
-          <thead className="bg-slate-100 text-slate-800">
-            <tr>
-              <th className="border border-slate-400 px-[2px] py-[3px]">입고일</th>
-              <th className="border border-slate-400 px-[2px] py-[3px]">거래처</th>
-              <th className="border border-slate-400 px-[2px] py-[3px]">작명</th>
-              <th className="border border-slate-400 px-[2px] py-[3px]">차량번호</th>
-              <th className="border border-slate-400 px-[2px] py-[3px]">차량명</th>
-              <th className="border border-slate-400 px-[2px] py-[3px] text-right">입금금액</th>
-              <th className="border border-slate-400 px-[2px] py-[3px] text-right">면책금</th>
-              <th className="border border-slate-400 px-[2px] py-[3px] text-right">총입금액</th>
-              <th className="border border-slate-400 px-[2px] py-[3px] text-right">지출금액</th>
-              <th className="border border-slate-400 px-[2px] py-[3px] text-right">지원금</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.length === 0 ? (
+          <table className="mb-4 w-full border-collapse text-[12px] font-semibold">
+            <tbody>
               <tr>
-                <td
-                  className="border border-slate-400 px-2 py-8 text-center text-slate-500"
-                  colSpan={10}
-                >
-                  출력할 입고지원 데이터가 없습니다.
+                <th className="w-20 border border-slate-900 bg-slate-50 px-2 py-2">
+                  거래처
+                </th>
+                <td className="border border-slate-900 px-2 py-2">
+                  {selectedPartner || "전체 거래처"}
+                </td>
+                <th className="w-20 border border-slate-900 bg-slate-50 px-2 py-2">
+                  건수
+                </th>
+                <td className="border border-slate-900 px-2 py-2 text-right">
+                  {totalRows.toLocaleString()}건
+                </td>
+                <th className="w-20 border border-slate-900 bg-slate-50 px-2 py-2">
+                  지원금
+                </th>
+                <td className="border border-slate-900 px-2 py-2 text-right font-bold text-blue-700">
+                  {formatWon(printTotals.expectedSupportAmount)}
                 </td>
               </tr>
-            ) : (
-              rows.map((row) => (
-                <tr key={`print-${row.workName}-${row.id}`}>
-                  <td className="border border-slate-400 px-[2px] py-[3px] text-center">
-                    {row.inboundDate || "-"}
-                  </td>
-                  <td className="border border-slate-400 px-[2px] py-[3px]">
-                    {row.partnerCompany || "-"}
-                  </td>
-                  <td className="border border-slate-400 px-[2px] py-[3px] text-center font-semibold">
-                    {row.workName || "-"}
-                  </td>
-                  <td className="border border-slate-400 px-[2px] py-[3px] text-center">
-                    {row.carNumber || "-"}
-                  </td>
-                  <td className="break-words border border-slate-400 px-[2px] py-[3px]">
-                    {row.carModel || "-"}
-                  </td>
-                  <td className="border border-slate-400 px-[2px] py-[3px] text-right">
-                    {formatWon(row.paymentAmount)}
-                  </td>
-                  <td className="border border-slate-400 px-[2px] py-[3px] text-right">
-                    {formatWon(row.deductibleAmount)}
-                  </td>
-                  <td className="border border-slate-400 px-[2px] py-[3px] text-right">
-                    {formatWon(row.totalPaymentAmount)}
-                  </td>
-                  <td className="border border-slate-400 px-[2px] py-[3px] text-right">
-                    {formatWon(row.expenseAmount)}
-                  </td>
-                  <td className="border border-slate-400 px-[2px] py-[3px] text-right font-bold">
-                    {formatWon(row.expectedSupportAmount)}
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-          <tfoot>
-            <tr className="bg-slate-100 font-bold">
-              <td
-                className="border border-slate-500 px-[2px] py-[4px] text-center"
-                colSpan={5}
-              >
-                합계
-              </td>
-              <td className="border border-slate-500 px-[2px] py-[4px] text-right">
-                {formatWon(printTotals.paymentAmount)}
-              </td>
-              <td className="border border-slate-500 px-[2px] py-[4px] text-right">
-                {formatWon(printTotals.deductibleAmount)}
-              </td>
-              <td className="border border-slate-500 px-[2px] py-[4px] text-right">
-                {formatWon(printTotals.totalPaymentAmount)}
-              </td>
-              <td className="border border-slate-500 px-[2px] py-[4px] text-right">
-                {formatWon(printTotals.expenseAmount)}
-              </td>
-              <td className="border border-slate-500 px-[2px] py-[4px] text-right text-blue-900">
-                {formatWon(printTotals.expectedSupportAmount)}
-              </td>
-            </tr>
-          </tfoot>
-        </table>
-      </div>
+              <tr>
+                <th className="border border-slate-900 bg-slate-50 px-2 py-2">
+                  대상 차량
+                </th>
+                <td className="border border-slate-900 px-2 py-2 text-right">
+                  {summary.totalCount.toLocaleString()}건
+                </td>
+                <th className="border border-slate-900 bg-slate-50 px-2 py-2">
+                  입금합계
+                </th>
+                <td className="border border-slate-900 px-2 py-2 text-right">
+                  {formatWon(printTotals.totalPaymentAmount)}
+                </td>
+                <th className="border border-slate-900 bg-slate-50 px-2 py-2">
+                  비고
+                </th>
+                <td className="border border-slate-900 px-2 py-2">입력대기 기준</td>
+              </tr>
+            </tbody>
+          </table>
+        </>
+      ) : (
+        <div className="mb-2 text-right text-xs font-semibold text-slate-600">
+          {pageIndex + 1} / {pageCount}
+        </div>
+      )}
+
+      <PartnerSupportPrintTable
+        rows={rows}
+        showTotal={pageIndex === pageCount - 1}
+        totals={printTotals}
+      />
     </section>
+  );
+}
+
+function PartnerSupportPrintTable({
+  rows,
+  showTotal,
+  totals,
+}: {
+  rows: SupportRow[];
+  showTotal: boolean;
+  totals: {
+    paymentAmount: number;
+    deductibleAmount: number;
+    totalPaymentAmount: number;
+    expenseAmount: number;
+    expectedSupportAmount: number;
+  };
+}) {
+  return (
+    <table className="partner-support-v2-table w-full table-fixed border-collapse text-[8.5px] leading-tight">
+      <colgroup>
+        <col className="w-[15mm]" />
+        <col className="w-[20mm]" />
+        <col className="w-[18mm]" />
+        <col className="w-[18mm]" />
+        <col className="w-[31mm]" />
+        <col className="w-[17mm]" />
+        <col className="w-[17mm]" />
+        <col className="w-[17mm]" />
+        <col className="w-[17mm]" />
+        <col className="w-[16mm]" />
+      </colgroup>
+      <thead className="text-center">
+        <tr className="bg-slate-50">
+          <PrintHeaderCell>입고일</PrintHeaderCell>
+          <PrintHeaderCell>거래처</PrintHeaderCell>
+          <PrintHeaderCell>작명</PrintHeaderCell>
+          <PrintHeaderCell>차량번호</PrintHeaderCell>
+          <PrintHeaderCell>차량명</PrintHeaderCell>
+          <PrintHeaderCell>입금금액</PrintHeaderCell>
+          <PrintHeaderCell>면책금</PrintHeaderCell>
+          <PrintHeaderCell>총입금액</PrintHeaderCell>
+          <PrintHeaderCell>지출금액</PrintHeaderCell>
+          <PrintHeaderCell>지원금</PrintHeaderCell>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.length === 0 ? (
+          <tr>
+            <td
+              className="border border-slate-900 px-3 py-12 text-center text-slate-500"
+              colSpan={10}
+            >
+              출력할 입고지원 데이터가 없습니다.
+            </td>
+          </tr>
+        ) : (
+          rows.map((row) => (
+            <tr key={`print-${row.workName}-${row.id}`} className="h-[5.8mm]">
+              <PrintCell center>{row.inboundDate || "\u00A0"}</PrintCell>
+              <PrintCell strong>{row.partnerCompany || "\u00A0"}</PrintCell>
+              <PrintCell strong>{row.workName || "\u00A0"}</PrintCell>
+              <PrintCell center>{row.carNumber || "\u00A0"}</PrintCell>
+              <PrintCell>{row.carModel || "\u00A0"}</PrintCell>
+              <PrintCell amount>{formatWon(row.paymentAmount)}</PrintCell>
+              <PrintCell amount>{formatWon(row.deductibleAmount)}</PrintCell>
+              <PrintCell amount>{formatWon(row.totalPaymentAmount)}</PrintCell>
+              <PrintCell amount>{formatWon(row.expenseAmount)}</PrintCell>
+              <PrintCell amount strong>{formatWon(row.expectedSupportAmount)}</PrintCell>
+            </tr>
+          ))
+        )}
+      </tbody>
+      {showTotal && rows.length > 0 && (
+        <tfoot>
+          <tr className="partner-support-v2-total-row bg-blue-50 font-bold text-blue-900">
+            <th className="border border-slate-900 px-1 py-2 text-right" colSpan={5}>
+              합계
+            </th>
+            <td className="border border-slate-900 px-1 py-2 text-right">
+              {formatWon(totals.paymentAmount)}
+            </td>
+            <td className="border border-slate-900 px-1 py-2 text-right">
+              {formatWon(totals.deductibleAmount)}
+            </td>
+            <td className="border border-slate-900 px-1 py-2 text-right">
+              {formatWon(totals.totalPaymentAmount)}
+            </td>
+            <td className="border border-slate-900 px-1 py-2 text-right">
+              {formatWon(totals.expenseAmount)}
+            </td>
+            <td className="border border-slate-900 px-1 py-2 text-right">
+              {formatWon(totals.expectedSupportAmount)}
+            </td>
+          </tr>
+        </tfoot>
+      )}
+    </table>
+  );
+}
+
+function PrintHeaderCell({ children }: { children: ReactNode }) {
+  return <th className="border border-slate-900 px-1 py-2">{children}</th>;
+}
+
+function PrintCell({
+  amount = false,
+  center = false,
+  children,
+  strong = false,
+}: {
+  amount?: boolean;
+  center?: boolean;
+  children: ReactNode;
+  strong?: boolean;
+}) {
+  return (
+    <td
+      className={`overflow-hidden whitespace-nowrap border border-slate-900 px-1 py-1 ${
+        amount ? "text-right" : center ? "text-center" : ""
+      } ${strong ? "font-semibold" : ""}`}
+    >
+      {children}
+    </td>
   );
 }
 

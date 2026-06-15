@@ -90,6 +90,18 @@ const formatRequesterName = (user: LoginUser) => {
 const getApprovalRole = (user: LoginUser) =>
   user.approval_role ?? (user.role === "ADMIN" ? "관리자" : "직원");
 
+const getInitialAttendanceStatus = (
+  user: LoginUser
+): AttendanceStatus => {
+  const approvalRole = getApprovalRole(user);
+
+  if (user.role === "CHIEF" || approvalRole === "총괄관리") {
+    return "관리자 승인대기";
+  }
+
+  return "부서장 승인대기";
+};
+
 export default function AttendanceRequestPage({
   user,
   isAdmin,
@@ -207,6 +219,7 @@ export default function AttendanceRequestPage({
     }
 
     setSaving(true);
+    const initialStatus = getInitialAttendanceStatus(user);
 
     const { error } = await supabase.from("attendance_requests").insert({
       request_type: form.requestType,
@@ -216,7 +229,7 @@ export default function AttendanceRequestPage({
       end_time: form.endTime || null,
       reason: form.reason,
       memo: form.memo,
-      status: "부서장 승인대기",
+      status: initialStatus,
       requested_by: user.user_id,
       requested_name: formatRequesterName(user),
       requested_department: user.department ?? "",
