@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import type { MenuItem } from "../../data/menuData";
 import { localDateText } from "../../lib/date";
 import { supabase } from "../../lib/supabase";
@@ -36,6 +37,8 @@ type SortField =
 
 const dayMs = 24 * 60 * 60 * 1000;
 const realtimeTables = [{ table: "work_orders" }];
+const firstPrintPageRows = 23;
+const nextPrintPageRows = 27;
 
 const daysBetween = (from: string, to: string) => {
   if (!from || !to) return 0;
@@ -66,6 +69,28 @@ const rowTone = (item: ReleaseItem, today: string) => {
   return "bg-white text-slate-900";
 };
 
+const printRowTone = (item: ReleaseItem, today: string) => {
+  if (!item.outbound_date) return "release-list-v2-row-undecided";
+  if (item.outbound_date < today) return "release-list-v2-row-delayed";
+  if (item.outbound_date === today) return "release-list-v2-row-today";
+  return "";
+};
+
+function buildPrintPages(items: ReleaseItem[]) {
+  const pages: ReleaseItem[][] = [];
+  let cursor = 0;
+
+  pages.push(items.slice(cursor, cursor + firstPrintPageRows));
+  cursor += firstPrintPageRows;
+
+  while (cursor < items.length) {
+    pages.push(items.slice(cursor, cursor + nextPrintPageRows));
+    cursor += nextPrintPageRows;
+  }
+
+  return pages;
+}
+
 export default function ReleaseListPage({ onSelectMenu }: ReleaseListPageProps) {
   const today = localDateText();
   const [items, setItems] = useState<ReleaseItem[]>([]);
@@ -73,6 +98,7 @@ export default function ReleaseListPage({ onSelectMenu }: ReleaseListPageProps) 
   const [loading, setLoading] = useState(true);
   const [sortField, setSortField] = useState<SortField>("outbound_date");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
+  const [printPortalRoot, setPrintPortalRoot] = useState<HTMLElement | null>(null);
 
   const loadItems = useCallback(async () => {
     setLoading(true);
@@ -135,6 +161,19 @@ export default function ReleaseListPage({ onSelectMenu }: ReleaseListPageProps) 
   useEffect(() => {
     void loadItems();
   }, [loadItems]);
+
+  useEffect(() => {
+    document.body.classList.add("release-list-v2-mode");
+    const root = document.createElement("div");
+    root.className = "release-list-v2-portal";
+    document.body.appendChild(root);
+    setPrintPortalRoot(root);
+
+    return () => {
+      document.body.classList.remove("release-list-v2-mode");
+      root.remove();
+    };
+  }, []);
 
   useRealtimeRefresh({
     channelName: "release-list-page",
@@ -235,6 +274,23 @@ export default function ReleaseListPage({ onSelectMenu }: ReleaseListPageProps) 
     };
   }, [items, today]);
 
+  const printPages = useMemo(() => buildPrintPages(filteredItems), [filteredItems]);
+  const printableSheets = (
+    <div className="release-list-v2-root">
+      {printPages.map((pageItems, pageIndex) => (
+        <PrintReleaseSheet
+          key={pageIndex}
+          items={pageItems}
+          pageIndex={pageIndex}
+          pageCount={printPages.length}
+          summary={summary}
+          today={today}
+          totalRows={filteredItems.length}
+        />
+      ))}
+    </div>
+  );
+
   const handleRelease = async (item: ReleaseItem) => {
     if (!confirm(`${item.work_name} 차량을 오늘 출고 처리할까요?`)) {
       return;
@@ -262,7 +318,113 @@ export default function ReleaseListPage({ onSelectMenu }: ReleaseListPageProps) 
   };
 
   return (
-    <div className="print-area space-y-5 text-slate-900 print:space-y-2">
+    <div className="space-y-5 text-slate-900">
+      <style>
+        {`
+          .release-list-v2-portal {
+            display: none;
+          }
+
+          @media print {
+            @page {
+              size: A4 landscape;
+              margin: 0;
+            }
+
+            html,
+            body.release-list-v2-mode {
+              margin: 0 !important;
+              padding: 0 !important;
+              background: #ffffff !important;
+              overflow: visible !important;
+            }
+
+            body.release-list-v2-mode * {
+              visibility: hidden !important;
+            }
+
+            body.release-list-v2-mode > :not(.release-list-v2-portal) {
+              display: none !important;
+            }
+
+            body.release-list-v2-mode .release-list-v2-portal,
+            body.release-list-v2-mode .release-list-v2-portal * {
+              visibility: visible !important;
+            }
+
+            body.release-list-v2-mode .release-list-v2-portal {
+              position: static !important;
+              left: 0 !important;
+              top: 0 !important;
+              display: block !important;
+              width: 285mm !important;
+              min-height: auto !important;
+              margin: 0 auto !important;
+              padding: 0 !important;
+              background: #ffffff !important;
+            }
+
+            body.release-list-v2-mode .no-print {
+              display: none !important;
+              visibility: hidden !important;
+            }
+
+            body.release-list-v2-mode .release-list-v2-sheet {
+              width: 285mm !important;
+              height: 198mm !important;
+              min-height: 198mm !important;
+              margin: 0 auto !important;
+              padding: 8mm 7mm 5mm !important;
+              box-sizing: border-box !important;
+              overflow: hidden !important;
+              box-shadow: none !important;
+              page-break-after: always !important;
+              break-after: page !important;
+              page-break-inside: avoid !important;
+              break-inside: avoid !important;
+            }
+
+            body.release-list-v2-mode .release-list-v2-sheet:last-child {
+              page-break-after: auto !important;
+              break-after: auto !important;
+            }
+
+            body.release-list-v2-mode .release-list-v2-table thead {
+              display: table-header-group !important;
+            }
+
+            body.release-list-v2-mode .release-list-v2-table tr {
+              break-inside: avoid !important;
+              page-break-inside: avoid !important;
+            }
+
+            body.release-list-v2-mode .release-list-v2-table th,
+            body.release-list-v2-mode .release-list-v2-table td,
+            body.release-list-v2-mode .release-list-v2-row-delayed,
+            body.release-list-v2-mode .release-list-v2-row-today,
+            body.release-list-v2-mode .release-list-v2-row-undecided {
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+
+            body.release-list-v2-mode .release-list-v2-row-delayed td {
+              background: #fee2e2 !important;
+              color: #7f1d1d !important;
+            }
+
+            body.release-list-v2-mode .release-list-v2-row-today td {
+              background: #dbeafe !important;
+              color: #1e3a8a !important;
+            }
+
+            body.release-list-v2-mode .release-list-v2-row-undecided td {
+              background: #f1f5f9 !important;
+              color: #334155 !important;
+            }
+          }
+        `}
+      </style>
+
       <div className="no-print flex flex-wrap items-end justify-between gap-3">
         <div>
           <h3 className="text-2xl font-bold">출고리스트</h3>
@@ -375,38 +537,131 @@ export default function ReleaseListPage({ onSelectMenu }: ReleaseListPageProps) 
         </div>
       </section>
 
-      <section
-        className="release-list-print-sheet hidden bg-white text-slate-900 print:block"
-        style={{
-          width: "196mm",
-          minHeight: "283mm",
-          padding: "3mm",
-        }}
-      >
-        <div className="release-list-print-header mb-4 flex items-end justify-between border-b border-slate-900 pb-3">
+      {printPortalRoot ? createPortal(printableSheets, printPortalRoot) : null}
+    </div>
+  );
+}
+
+function PrintReleaseSheet({
+  items,
+  pageIndex,
+  pageCount,
+  summary,
+  today,
+  totalRows,
+}: {
+  items: ReleaseItem[];
+  pageIndex: number;
+  pageCount: number;
+  summary: {
+    total: number;
+    delayed: number;
+    todayRelease: number;
+    upcoming: number;
+    undecided: number;
+  };
+  today: string;
+  totalRows: number;
+}) {
+  return (
+    <section className="release-list-v2-sheet mx-auto mb-6 h-[198mm] w-[285mm] bg-white px-[7mm] pb-[5mm] pt-[8mm] text-slate-900 shadow-lg">
+      <div className="mb-3 flex items-end justify-between border-b border-slate-900 pb-2">
+        <div>
+          <h1 className="text-2xl font-bold tracking-wide">출고리스트</h1>
+          <p className="mt-1 text-[11px] font-semibold text-slate-600">
+            출력일: {today} / 표시 {totalRows}대
+          </p>
+        </div>
+        <div className="text-right text-[11px] font-semibold leading-relaxed text-slate-700">
           <div>
-            <h1 className="text-2xl font-bold">출고리스트</h1>
-            <p className="mt-1 text-xs text-slate-600">출력일: {today}</p>
+            전체 {summary.total}대 / 지연 {summary.delayed}대 / 오늘 {summary.todayRelease}대
           </div>
-          <div className="text-right text-xs text-slate-700">
-            <div>전체 {summary.total}대</div>
-            <div>지연 {summary.delayed}대 / 오늘 {summary.todayRelease}대</div>
+          <div>
+            예정 {summary.upcoming}대 / 미정 {summary.undecided}대 / {pageIndex + 1} / {pageCount}
           </div>
         </div>
+      </div>
 
-        <ReleaseTable
-          items={filteredItems}
-          today={today}
-          sortField={sortField}
-          sortOrder={sortOrder}
-          onSort={handleSort}
-          onRelease={handleRelease}
-          onOpenWork={openWorkRegister}
-          showActions={false}
-          printMode
-        />
-      </section>
-    </div>
+      <PrintReleaseTable items={items} today={today} />
+    </section>
+  );
+}
+
+function PrintReleaseTable({
+  items,
+  today,
+}: {
+  items: ReleaseItem[];
+  today: string;
+}) {
+  return (
+    <table className="release-list-v2-table w-full table-fixed border-collapse text-[9px] leading-tight">
+      <colgroup>
+        <col className="w-[23mm]" />
+        <col className="w-[20mm]" />
+        <col className="w-[34mm]" />
+        <col className="w-[19mm]" />
+        <col className="w-[22mm]" />
+        <col className="w-[14mm]" />
+        <col className="w-[36mm]" />
+        <col className="w-[24mm]" />
+        <col className="w-[22mm]" />
+        <col className="w-[20mm]" />
+        <col className="w-[22mm]" />
+      </colgroup>
+      <thead>
+        <tr className="bg-slate-100 text-center font-bold text-slate-800">
+          <th className="border border-slate-900 px-1 py-2">작명</th>
+          <th className="border border-slate-900 px-1 py-2">차량번호</th>
+          <th className="border border-slate-900 px-1 py-2">차량명</th>
+          <th className="border border-slate-900 px-1 py-2">입고일</th>
+          <th className="border border-slate-900 px-1 py-2">출고예정일</th>
+          <th className="border border-slate-900 px-1 py-2">지연</th>
+          <th className="border border-slate-900 px-1 py-2">보험사</th>
+          <th className="border border-slate-900 px-1 py-2">담당자</th>
+          <th className="border border-slate-900 px-1 py-2">담보</th>
+          <th className="border border-slate-900 px-1 py-2">연식</th>
+          <th className="border border-slate-900 px-1 py-2">칼라코드</th>
+        </tr>
+      </thead>
+      <tbody>
+        {items.map((item) => {
+          const delay = delayDays(item, today);
+
+          return (
+            <tr
+              key={item.id}
+              className={`h-[5.5mm] ${printRowTone(item, today)}`}
+            >
+              <PrintCell strong>{displayValue(item.work_name)}</PrintCell>
+              <PrintCell>{displayValue(item.car_number)}</PrintCell>
+              <PrintCell>{displayValue(item.car_model)}</PrintCell>
+              <PrintCell center>{displayValue(item.inbound_date)}</PrintCell>
+              <PrintCell center>{displayValue(item.outbound_date)}</PrintCell>
+              <PrintCell center>
+                {delay > 0 ? `${delay}일` : item.outbound_date === today ? "오늘" : "-"}
+              </PrintCell>
+              <PrintCell>{displayValue(insuranceName(item))}</PrintCell>
+              <PrintCell>{displayValue(managerName(item))}</PrintCell>
+              <PrintCell center>{displayValue(item.coverage_type)}</PrintCell>
+              <PrintCell center>{displayValue(item.car_year)}</PrintCell>
+              <PrintCell center>{displayValue(item.color_code)}</PrintCell>
+            </tr>
+          );
+        })}
+
+        {items.length === 0 && (
+          <tr>
+            <td
+              colSpan={11}
+              className="border border-slate-900 px-3 py-12 text-center text-slate-500"
+            >
+              표시할 출고 예정 차량이 없습니다.
+            </td>
+          </tr>
+        )}
+      </tbody>
+    </table>
   );
 }
 
@@ -419,7 +674,6 @@ function ReleaseTable({
   onRelease,
   onOpenWork,
   showActions,
-  printMode = false,
 }: {
   items: ReleaseItem[];
   today: string;
@@ -429,10 +683,9 @@ function ReleaseTable({
   onRelease: (item: ReleaseItem) => void;
   onOpenWork: (workName: string) => void;
   showActions: boolean;
-  printMode?: boolean;
 }) {
   return (
-    <table className={`w-full border-collapse ${printMode ? "text-[10px]" : "min-w-[1180px] text-sm"}`}>
+    <table className="w-full min-w-[1180px] border-collapse text-sm">
       <thead>
         <tr className="bg-slate-100 text-xs text-slate-700">
           <SortableHeader field="work_name" sortField={sortField} sortOrder={sortOrder} onSort={onSort}>작명</SortableHeader>
@@ -567,6 +820,26 @@ function BodyCell({
   className?: string;
 }) {
   return <td className={`border border-slate-200 px-2 py-2 ${className}`}>{children}</td>;
+}
+
+function PrintCell({
+  children,
+  center = false,
+  strong = false,
+}: {
+  children: ReactNode;
+  center?: boolean;
+  strong?: boolean;
+}) {
+  return (
+    <td
+      className={`overflow-hidden whitespace-nowrap border border-slate-900 px-1 py-1 ${
+        center ? "text-center" : ""
+      } ${strong ? "font-semibold" : ""}`}
+    >
+      {children}
+    </td>
+  );
 }
 
 function MobileField({ label, value }: { label: string; value: string }) {

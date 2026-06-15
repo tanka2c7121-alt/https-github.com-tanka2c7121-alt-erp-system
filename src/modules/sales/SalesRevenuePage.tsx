@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { localDateText } from "../../lib/date";
 import { supabase } from "../../lib/supabase";
@@ -73,12 +73,29 @@ type SortField =
 const currentDateText = localDateText();
 const currentYear = currentDateText.slice(0, 4);
 const currentMonth = currentDateText.slice(5, 7);
+const salesRevenuePrintFirstPageRows = 34;
+const salesRevenuePrintNextPageRows = 41;
 
 const formatWon = (amount: number) => amount.toLocaleString();
 const calculateSupplyAmount = (paymentAmount: number) =>
   Math.round(paymentAmount / 1.1);
 const calculateVatAmount = (paymentAmount: number) =>
   paymentAmount - calculateSupplyAmount(paymentAmount);
+
+function buildSalesRevenuePrintPages(rows: RevenueRow[]) {
+  const pages: RevenueRow[][] = [];
+  let cursor = 0;
+
+  pages.push(rows.slice(cursor, cursor + salesRevenuePrintFirstPageRows));
+  cursor += salesRevenuePrintFirstPageRows;
+
+  while (cursor < rows.length) {
+    pages.push(rows.slice(cursor, cursor + salesRevenuePrintNextPageRows));
+    cursor += salesRevenuePrintNextPageRows;
+  }
+
+  return pages;
+}
 
 export default function SalesRevenuePage({
   kind,
@@ -478,7 +495,7 @@ export default function SalesRevenuePage({
 
   useEffect(() => {
     const root = document.createElement("div");
-    root.className = "sales-print-portal";
+    root.className = "sales-revenue-v2-portal";
     document.body.appendChild(root);
     setPrintPortalRoot(root);
 
@@ -540,6 +557,27 @@ export default function SalesRevenuePage({
     setSortOrder("asc");
   };
 
+  const handlePrint = () => {
+    document
+      .querySelectorAll(".sales-revenue-v2-portal-active")
+      .forEach((portal) =>
+        portal.classList.remove("sales-revenue-v2-portal-active")
+      );
+
+    printPortalRoot?.classList.add("sales-revenue-v2-portal-active");
+    document.body.classList.add("sales-revenue-v2-mode");
+
+    const cleanupPrintMode = () => {
+      printPortalRoot?.classList.remove("sales-revenue-v2-portal-active");
+      document.body.classList.remove("sales-revenue-v2-mode");
+      window.removeEventListener("afterprint", cleanupPrintMode);
+    };
+
+    window.addEventListener("afterprint", cleanupPrintMode);
+    window.print();
+    window.setTimeout(cleanupPrintMode, 1000);
+  };
+
   const totalPayment = filteredRows.reduce(
     (sum, row) => sum + row.paymentAmount,
     0
@@ -574,9 +612,127 @@ export default function SalesRevenuePage({
     return Array.from({ length: 5 }, (_, index) => String(baseYear - 2 + index))
       .sort((a, b) => b.localeCompare(a));
   }, []);
+  const printPages = useMemo(
+    () => buildSalesRevenuePrintPages(filteredRows),
+    [filteredRows]
+  );
+  const printableSheets = (
+    <div className="sales-revenue-v2-root">
+      {printPages.map((pageRows, pageIndex) => (
+        <SalesRevenuePrintSheet
+          key={pageIndex}
+          kind={kind}
+          pageIndex={pageIndex}
+          pageCount={printPages.length}
+          rows={pageRows}
+          selectedMonth={selectedMonth}
+          selectedYear={selectedYear}
+          title={title}
+          totalPayment={totalPayment}
+          totalRows={filteredRows.length}
+          totalSupply={totalSupply}
+          totalVat={totalVat}
+        />
+      ))}
+    </div>
+  );
 
   return (
     <div className="space-y-5 text-slate-900">
+      <style>
+        {`
+          .sales-revenue-v2-portal {
+            display: none;
+          }
+
+          @media print {
+            @page {
+              size: A4 portrait;
+              margin: 0;
+            }
+
+            html,
+            body.sales-revenue-v2-mode {
+              margin: 0 !important;
+              padding: 0 !important;
+              background: #ffffff !important;
+              overflow: visible !important;
+            }
+
+            body.sales-revenue-v2-mode * {
+              visibility: hidden !important;
+            }
+
+            body.sales-revenue-v2-mode > :not(.sales-revenue-v2-portal-active) {
+              display: none !important;
+            }
+
+            body.sales-revenue-v2-mode .sales-revenue-v2-portal-active,
+            body.sales-revenue-v2-mode .sales-revenue-v2-portal-active * {
+              visibility: visible !important;
+            }
+
+            body.sales-revenue-v2-mode .sales-revenue-v2-portal-active {
+              position: static !important;
+              left: 0 !important;
+              top: 0 !important;
+              display: block !important;
+              width: 198mm !important;
+              min-height: auto !important;
+              margin: 0 auto !important;
+              padding: 0 !important;
+              background: #ffffff !important;
+            }
+
+            body.sales-revenue-v2-mode .no-print {
+              display: none !important;
+              visibility: hidden !important;
+            }
+
+            body.sales-revenue-v2-mode .sales-revenue-v2-sheet {
+              width: 198mm !important;
+              height: 282mm !important;
+              min-height: 282mm !important;
+              margin: 7.5mm auto !important;
+              padding: 12mm 7mm 2mm !important;
+              box-sizing: border-box !important;
+              overflow: hidden !important;
+              box-shadow: none !important;
+              page-break-after: always !important;
+              break-after: page !important;
+              page-break-inside: avoid !important;
+              break-inside: avoid !important;
+            }
+
+            body.sales-revenue-v2-mode .sales-revenue-v2-sheet:last-child {
+              page-break-after: auto !important;
+              break-after: auto !important;
+            }
+
+            body.sales-revenue-v2-mode .sales-revenue-v2-table thead {
+              display: table-header-group !important;
+            }
+
+            body.sales-revenue-v2-mode .sales-revenue-v2-table tfoot {
+              display: table-footer-group !important;
+            }
+
+            body.sales-revenue-v2-mode .sales-revenue-v2-table th,
+            body.sales-revenue-v2-mode .sales-revenue-v2-table td,
+            body.sales-revenue-v2-mode .sales-revenue-v2-total-row th,
+            body.sales-revenue-v2-mode .sales-revenue-v2-total-row td {
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+
+            body.sales-revenue-v2-mode .sales-revenue-v2-table tr {
+              break-inside: avoid !important;
+              page-break-inside: avoid !important;
+            }
+          }
+        `}
+      </style>
+
       <div className="no-print flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div>
           <h3 className="text-xl font-bold md:text-2xl">{title}</h3>
@@ -587,7 +743,7 @@ export default function SalesRevenuePage({
 
         <button
           type="button"
-          onClick={() => window.print()}
+          onClick={handlePrint}
           className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
         >
           출력
@@ -722,37 +878,326 @@ export default function SalesRevenuePage({
       )}
 
       {printPortalRoot
-        ? createPortal(
-            <section className="print-only sales-print-sheet mx-auto bg-white text-black">
-        <div className="mx-auto min-h-[283mm] w-[196mm] px-[3mm] pb-[4mm] pt-[2mm]">
-          <div className="mb-2 text-center">
-            <h1 className="text-2xl font-bold">{title} 내역</h1>
-            <p className="mt-1 text-xs">
-              조회기간: {selectedYear}년{" "}
-              {selectedMonth ? `${Number(selectedMonth)}월` : "전체"}
+        ? createPortal(printableSheets, printPortalRoot)
+        : null}
+    </div>
+  );
+}
+
+function SalesRevenuePrintSheet({
+  kind,
+  pageIndex,
+  pageCount,
+  rows,
+  selectedMonth,
+  selectedYear,
+  title,
+  totalPayment,
+  totalRows,
+  totalSupply,
+  totalVat,
+}: {
+  kind: "insurance" | "capital" | "card" | "general" | "partner" | "blue";
+  pageIndex: number;
+  pageCount: number;
+  rows: RevenueRow[];
+  selectedMonth: string;
+  selectedYear: string;
+  title: string;
+  totalPayment: number;
+  totalRows: number;
+  totalSupply: number;
+  totalVat: number;
+}) {
+  const periodText = `${selectedYear}년 ${
+    selectedMonth ? `${Number(selectedMonth)}월` : "전체"
+  }`;
+  const isFirstPage = pageIndex === 0;
+
+  return (
+    <section className="sales-revenue-v2-sheet mx-auto mb-6 h-[282mm] w-[198mm] bg-white px-[7mm] pb-[2mm] pt-[12mm] text-slate-900 shadow-lg">
+      {isFirstPage ? (
+        <>
+          <div className="relative mb-3 text-center">
+            <h1 className="text-3xl font-bold tracking-widest">{title}내역</h1>
+            <p className="mt-1 text-sm font-semibold">신흥현대서비스 ERP</p>
+            <p className="absolute right-0 top-1 text-xs font-semibold text-slate-600">
+              1 / {pageCount}
             </p>
           </div>
 
-          <div className="mb-2 flex justify-between text-xs font-semibold">
-            <span>총 {filteredRows.length.toLocaleString()}건</span>
-            <span>결제금액 {formatWon(totalPayment)}원</span>
-          </div>
-
-          <RevenueTable
-            kind={kind}
-            rows={filteredRows}
-            isLoading={false}
-            totalPayment={totalPayment}
-            totalSupply={totalSupply}
-            totalVat={totalVat}
-            printMode
-          />
+          <table className="mb-4 w-full border-collapse text-[12px] font-semibold">
+            <tbody>
+              <tr>
+                <th className="w-20 border border-slate-900 bg-slate-50 px-2 py-2">
+                  조회기간
+                </th>
+                <td className="border border-slate-900 px-2 py-2">{periodText}</td>
+                <th className="w-20 border border-slate-900 bg-slate-50 px-2 py-2">
+                  건수
+                </th>
+                <td className="border border-slate-900 px-2 py-2 text-right">
+                  {totalRows.toLocaleString()}건
+                </td>
+                <th className="w-20 border border-slate-900 bg-slate-50 px-2 py-2">
+                  결제합계
+                </th>
+                <td className="border border-slate-900 px-2 py-2 text-right font-bold text-blue-700">
+                  {formatWon(totalPayment)}
+                </td>
+              </tr>
+              <tr>
+                <th className="border border-slate-900 bg-slate-50 px-2 py-2">
+                  공급가
+                </th>
+                <td className="border border-slate-900 px-2 py-2 text-right">
+                  {formatWon(totalSupply)}
+                </td>
+                <th className="border border-slate-900 bg-slate-50 px-2 py-2">
+                  부가세
+                </th>
+                <td className="border border-slate-900 px-2 py-2 text-right">
+                  {formatWon(totalVat)}
+                </td>
+                <th className="border border-slate-900 bg-slate-50 px-2 py-2">
+                  비고
+                </th>
+                <td className="border border-slate-900 px-2 py-2">입금일 기준</td>
+              </tr>
+            </tbody>
+          </table>
+        </>
+      ) : (
+        <div className="mb-2 text-right text-xs font-semibold text-slate-600">
+          {pageIndex + 1} / {pageCount}
         </div>
-            </section>,
-            printPortalRoot
+      )}
+
+      <SalesRevenuePrintTable
+        kind={kind}
+        rows={rows}
+        showTotal={pageIndex === pageCount - 1}
+        title={title}
+        totalPayment={totalPayment}
+        totalSupply={totalSupply}
+        totalVat={totalVat}
+      />
+    </section>
+  );
+}
+
+function SalesRevenuePrintTable({
+  kind,
+  rows,
+  showTotal,
+  title,
+  totalPayment,
+  totalSupply,
+  totalVat,
+}: {
+  kind: "insurance" | "capital" | "card" | "general" | "partner" | "blue";
+  rows: RevenueRow[];
+  showTotal: boolean;
+  title: string;
+  totalPayment: number;
+  totalSupply: number;
+  totalVat: number;
+}) {
+  const isCard = kind === "card";
+  const isPartner = kind === "partner";
+  const colSpan = isCard ? 8 : isPartner ? 10 : 11;
+  const totalLabelColSpan = isCard ? 4 : isPartner ? 7 : 8;
+
+  return (
+    <table className="sales-revenue-v2-table w-full table-fixed border-collapse text-[8.5px] leading-tight">
+      {isCard ? (
+        <colgroup>
+          <col className="w-[18mm]" />
+          <col className="w-[24mm]" />
+          <col className="w-[22mm]" />
+          <col className="w-[24mm]" />
+          <col className="w-[22mm]" />
+          <col className="w-[26mm]" />
+          <col className="w-[24mm]" />
+          <col className="w-[24mm]" />
+        </colgroup>
+      ) : isPartner ? (
+        <colgroup>
+          <col className="w-[16mm]" />
+          <col className="w-[26mm]" />
+          <col className="w-[20mm]" />
+          <col className="w-[13mm]" />
+          <col className="w-[19mm]" />
+          <col className="w-[25mm]" />
+          <col className="w-[16mm]" />
+          <col className="w-[17mm]" />
+          <col className="w-[17mm]" />
+          <col className="w-[15mm]" />
+        </colgroup>
+      ) : (
+        <colgroup>
+          <col className="w-[15mm]" />
+          <col className="w-[19mm]" />
+          <col className="w-[23mm]" />
+          <col className="w-[13mm]" />
+          <col className="w-[13mm]" />
+          <col className="w-[18mm]" />
+          <col className="w-[22mm]" />
+          <col className="w-[14mm]" />
+          <col className="w-[16mm]" />
+          <col className="w-[16mm]" />
+          <col className="w-[15mm]" />
+        </colgroup>
+      )}
+      <thead className="text-center">
+        {isCard ? (
+          <tr className="bg-slate-50">
+            <PrintHeaderCell>결제일</PrintHeaderCell>
+            <PrintHeaderCell>작명</PrintHeaderCell>
+            <PrintHeaderCell>차량번호</PrintHeaderCell>
+            <PrintHeaderCell>입금정보</PrintHeaderCell>
+            <PrintHeaderCell>결제금액</PrintHeaderCell>
+            <PrintHeaderCell>승인번호</PrintHeaderCell>
+            <PrintHeaderCell>가맹번호</PrintHeaderCell>
+            <PrintHeaderCell>카드번호</PrintHeaderCell>
+          </tr>
+        ) : isPartner ? (
+          <tr className="bg-slate-50">
+            <PrintHeaderCell>입금일</PrintHeaderCell>
+            <PrintHeaderCell>거래처</PrintHeaderCell>
+            <PrintHeaderCell>작명</PrintHeaderCell>
+            <PrintHeaderCell>구분</PrintHeaderCell>
+            <PrintHeaderCell>차량번호</PrintHeaderCell>
+            <PrintHeaderCell>차량명</PrintHeaderCell>
+            <PrintHeaderCell>입금</PrintHeaderCell>
+            <PrintHeaderCell>결제금액</PrintHeaderCell>
+            <PrintHeaderCell>공급가</PrintHeaderCell>
+            <PrintHeaderCell>부가세</PrintHeaderCell>
+          </tr>
+        ) : (
+          <tr className="bg-slate-50">
+            <PrintHeaderCell>입금일</PrintHeaderCell>
+            <PrintHeaderCell>작명</PrintHeaderCell>
+            <PrintHeaderCell>보험사</PrintHeaderCell>
+            <PrintHeaderCell>구분</PrintHeaderCell>
+            <PrintHeaderCell>담보</PrintHeaderCell>
+            <PrintHeaderCell>차량번호</PrintHeaderCell>
+            <PrintHeaderCell>차량명</PrintHeaderCell>
+            <PrintHeaderCell>입금</PrintHeaderCell>
+            <PrintHeaderCell>결제금액</PrintHeaderCell>
+            <PrintHeaderCell>공급가</PrintHeaderCell>
+            <PrintHeaderCell>부가세</PrintHeaderCell>
+          </tr>
+        )}
+      </thead>
+      <tbody>
+        {rows.map((row) =>
+          isCard ? (
+            <tr key={row.id} className="h-[5.8mm]">
+              <SalesRevenuePrintCell center>{row.date || "\u00A0"}</SalesRevenuePrintCell>
+              <SalesRevenuePrintCell strong>{row.workName || "\u00A0"}</SalesRevenuePrintCell>
+              <SalesRevenuePrintCell center>{row.carNumber || "\u00A0"}</SalesRevenuePrintCell>
+              <SalesRevenuePrintCell center>{row.paymentInfo || "\u00A0"}</SalesRevenuePrintCell>
+              <SalesRevenuePrintCell amount>{formatWon(row.paymentAmount)}</SalesRevenuePrintCell>
+              <SalesRevenuePrintCell center>{row.approvalNumber || "\u00A0"}</SalesRevenuePrintCell>
+              <SalesRevenuePrintCell center>{row.merchantNumber || "\u00A0"}</SalesRevenuePrintCell>
+              <SalesRevenuePrintCell center>{row.cardNumber || "\u00A0"}</SalesRevenuePrintCell>
+            </tr>
+          ) : isPartner ? (
+            <tr key={row.id} className="h-[5.8mm]">
+              <SalesRevenuePrintCell center>{row.date || "\u00A0"}</SalesRevenuePrintCell>
+              <SalesRevenuePrintCell strong>{row.partnerCompany || "\u00A0"}</SalesRevenuePrintCell>
+              <SalesRevenuePrintCell strong>{row.workName || "\u00A0"}</SalesRevenuePrintCell>
+              <SalesRevenuePrintCell center>{row.saleType || "\u00A0"}</SalesRevenuePrintCell>
+              <SalesRevenuePrintCell center>{row.carNumber || "\u00A0"}</SalesRevenuePrintCell>
+              <SalesRevenuePrintCell>{row.carModel || "\u00A0"}</SalesRevenuePrintCell>
+              <SalesRevenuePrintCell center>{row.paymentInfo || "\u00A0"}</SalesRevenuePrintCell>
+              <SalesRevenuePrintCell amount>{formatWon(row.paymentAmount)}</SalesRevenuePrintCell>
+              <SalesRevenuePrintCell amount>{formatWon(row.supplyAmount)}</SalesRevenuePrintCell>
+              <SalesRevenuePrintCell amount>{formatWon(row.vatAmount)}</SalesRevenuePrintCell>
+            </tr>
+          ) : (
+            <tr key={row.id} className="h-[5.8mm]">
+              <SalesRevenuePrintCell center>{row.date || "\u00A0"}</SalesRevenuePrintCell>
+              <SalesRevenuePrintCell strong>{row.workName || "\u00A0"}</SalesRevenuePrintCell>
+              <SalesRevenuePrintCell>{row.insuranceCompany || "\u00A0"}</SalesRevenuePrintCell>
+              <SalesRevenuePrintCell center>{row.saleType || "\u00A0"}</SalesRevenuePrintCell>
+              <SalesRevenuePrintCell center>{row.coverageType || "\u00A0"}</SalesRevenuePrintCell>
+              <SalesRevenuePrintCell center>{row.carNumber || "\u00A0"}</SalesRevenuePrintCell>
+              <SalesRevenuePrintCell>{row.carModel || "\u00A0"}</SalesRevenuePrintCell>
+              <SalesRevenuePrintCell center>{row.paymentInfo || "\u00A0"}</SalesRevenuePrintCell>
+              <SalesRevenuePrintCell amount>{formatWon(row.paymentAmount)}</SalesRevenuePrintCell>
+              <SalesRevenuePrintCell amount>{formatWon(row.supplyAmount)}</SalesRevenuePrintCell>
+              <SalesRevenuePrintCell amount>{formatWon(row.vatAmount)}</SalesRevenuePrintCell>
+            </tr>
           )
-        : null}
-    </div>
+        )}
+
+        {rows.length === 0 && (
+          <tr>
+            <td
+              className="border border-slate-900 px-3 py-12 text-center text-slate-500"
+              colSpan={colSpan}
+            >
+              조회된 {title} 내역이 없습니다.
+            </td>
+          </tr>
+        )}
+      </tbody>
+      {showTotal && rows.length > 0 && (
+        <tfoot>
+          <tr className="sales-revenue-v2-total-row bg-blue-50 font-bold text-blue-900">
+            <th
+              className="border border-slate-900 px-1 py-2 text-right"
+              colSpan={totalLabelColSpan}
+            >
+              합계
+            </th>
+            <td className="border border-slate-900 px-1 py-2 text-right">
+              {formatWon(totalPayment)}
+            </td>
+            {isCard ? (
+              <td className="border border-slate-900 px-1 py-2" colSpan={3} />
+            ) : (
+              <>
+                <td className="border border-slate-900 px-1 py-2 text-right">
+                  {formatWon(totalSupply)}
+                </td>
+                <td className="border border-slate-900 px-1 py-2 text-right">
+                  {formatWon(totalVat)}
+                </td>
+              </>
+            )}
+          </tr>
+        </tfoot>
+      )}
+    </table>
+  );
+}
+
+function PrintHeaderCell({ children }: { children: ReactNode }) {
+  return <th className="border border-slate-900 px-1 py-2">{children}</th>;
+}
+
+function SalesRevenuePrintCell({
+  amount = false,
+  center = false,
+  children,
+  strong = false,
+}: {
+  amount?: boolean;
+  center?: boolean;
+  children: ReactNode;
+  strong?: boolean;
+}) {
+  return (
+    <td
+      className={`overflow-hidden whitespace-nowrap border border-slate-900 px-1 py-1 ${
+        amount ? "text-right" : center ? "text-center" : ""
+      } ${strong ? "font-semibold" : ""}`}
+    >
+      {children}
+    </td>
   );
 }
 
