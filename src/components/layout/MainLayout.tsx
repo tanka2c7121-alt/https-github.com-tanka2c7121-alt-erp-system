@@ -160,7 +160,7 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
     userRole,
     user.department
   );
-  const mobileMenuTitle = mobileMenuParent?.title ?? "硫붾돱";
+  const mobileMenuTitle = mobileMenuParent?.title ?? "업무목록";
   const hideRefreshButton = realtimeRefreshMenuIds.has(selectedMenu.id);
 
   useEffect(() => {
@@ -796,7 +796,7 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
               )}
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
+            <div className="flex gap-2 overflow-x-auto">
               {displayedMobileMenus.map((menu) => {
                 const visibleChildren = getVisibleMenuItems(
                   menu.children ?? [],
@@ -812,7 +812,7 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
                     type="button"
                     onClick={() => handleMobileMenuClick(menu)}
                     className={[
-                      "min-h-12 min-w-0 rounded-xl border px-3 py-2 text-left text-xs font-bold leading-snug shadow-sm transition",
+                      "min-h-9 shrink-0 rounded-full border px-3 py-2 text-left text-xs font-bold leading-snug shadow-sm transition",
                       isSelected
                         ? "border-blue-600 bg-blue-600 text-white"
                         : "border-white/70 bg-white/70 text-slate-800 shadow-sm hover:border-blue-200 hover:bg-white",

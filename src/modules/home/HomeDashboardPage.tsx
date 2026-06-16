@@ -110,6 +110,7 @@ type KoreanHoliday = {
 const todayText = localDateText;
 const manualScheduleStorageKey = "erpHomeManualSchedules";
 const holidayStorageKey = (year: string) => `erpKoreanHolidays:${year}`;
+const calendarWeekDays = ["일", "월", "화", "수", "목", "금", "토"];
 const weekDays = ["일", "월", "화", "수", "목", "금", "토"];
 const dismissedNoticeKey = (noticeId: number) =>
   `erpDismissedHomeNotice:${noticeId}:${todayText()}`;
@@ -915,7 +916,7 @@ export default function HomeDashboardPage({
         </div>
       </div>
 
-      <section className="grid grid-cols-1 gap-3 md:grid-cols-5">
+      <section className="grid grid-cols-5 gap-1.5 md:gap-3">
         <SummaryCard title="현재 입고" value={dashboard.activeOrders.length} tone="blue" />
         <SummaryCard title="오늘 입고" value={dashboard.todayInbound.length} tone="green" />
         <SummaryCard title="오늘 출고" value={dashboard.todayOutbound.length} tone="indigo" />
@@ -1048,9 +1049,11 @@ function SummaryCard({
   }[tone];
 
   return (
-    <div className={`rounded-xl border p-4 ${toneClass}`}>
-      <p className="text-sm font-semibold">{title}</p>
-      <p className="mt-3 text-3xl font-bold">{value}</p>
+    <div className={`rounded-xl border p-2 text-center md:p-4 md:text-left ${toneClass}`}>
+      <p className="break-keep text-[10px] font-semibold leading-tight md:text-sm">
+        {title}
+      </p>
+      <p className="mt-1 text-xl font-bold md:mt-3 md:text-3xl">{value}</p>
     </div>
   );
 }
@@ -1473,8 +1476,8 @@ function ScheduleBoard({
         </div>
       </div>
 
-      <div className="p-4">
-        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+      <div className="p-2 md:p-4">
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-2 md:p-3">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-2">
               <button
@@ -1522,8 +1525,8 @@ function ScheduleBoard({
             </div>
           </div>
 
-          <div className="grid grid-cols-7 gap-1 text-center text-xs font-bold text-slate-500">
-            {weekDays.map((day, index) => (
+          <div className="grid grid-cols-7 gap-1 text-center text-[11px] font-bold text-slate-500 md:text-xs">
+            {calendarWeekDays.map((day, index) => (
               <div
                 key={`${day}-${index}`}
                 className={[
@@ -1536,7 +1539,7 @@ function ScheduleBoard({
             ))}
           </div>
 
-          <div className="grid grid-cols-7 gap-2">
+          <div className="grid grid-cols-7 gap-1 md:gap-2">
             {monthDays.map((day) => {
               const dayEvents = eventsByDate[day.date] ?? [];
               const daySummary = summarizeDayEvents(dayEvents);
@@ -1563,7 +1566,7 @@ function ScheduleBoard({
                     onOpenSchedulePopup(day.date);
                   }}
                   className={[
-                    "group relative min-h-24 rounded-lg border p-2 text-left transition",
+                    "group relative min-h-12 rounded-lg border p-1 text-left transition md:min-h-24 md:p-2",
                     day.inMonth
                       ? isHoliday
                         ? "border-red-100 bg-red-50 text-red-900 shadow-sm"
@@ -1589,13 +1592,35 @@ function ScheduleBoard({
                       {day.day}
                     </span>
                     {dayEvents.length > 0 && (
-                      <span className="text-[11px] font-bold text-slate-400">
+                      <span className="hidden text-[11px] font-bold text-slate-400 md:inline">
                         {dayEvents.length}
                       </span>
                     )}
                   </div>
 
-                  <div className="mt-3 space-y-1">
+                  {dayEvents.length > 0 && (
+                    <div className="mt-1 flex flex-wrap gap-0.5 md:hidden">
+                      {compactDaySummary.slice(0, 4).map((event) => (
+                        <span
+                          key={`dot-${event.key}`}
+                          className={[
+                            "h-1.5 w-1.5 rounded-full",
+                            event.tone === "green"
+                              ? "bg-green-500"
+                              : event.tone === "blue"
+                                ? "bg-blue-500"
+                                : event.tone === "red"
+                                  ? "bg-red-500"
+                                  : event.tone === "amber"
+                                    ? "bg-amber-500"
+                                    : "bg-indigo-500",
+                          ].join(" ")}
+                        />
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="mt-3 hidden space-y-1 md:block">
                     {compactDaySummary.slice(0, 4).map((event) => (
                       <span
                         key={event.key}
