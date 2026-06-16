@@ -1,6 +1,7 @@
 "use client";
 
 import type { MenuItem } from "../../data/menuData";
+import { isAdminUser } from "../../lib/approval";
 import { supabase } from "../../lib/supabase";
 import type { UserRole } from "../../types/roles";
 
@@ -67,8 +68,7 @@ export default function IncidentReportPrintPage({
     );
   }
 
-  const canCheck =
-    isAdmin || user.approval_role === "관리부" || user.department === "관리부";
+  const canCheck = isAdmin || isAdminUser(user);
   const showCheck = canCheck && incidentReport.status === "확인대기";
   const goList = () =>
     onSelectMenu({

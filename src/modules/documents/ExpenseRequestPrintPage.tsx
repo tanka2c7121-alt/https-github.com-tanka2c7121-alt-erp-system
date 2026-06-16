@@ -1,6 +1,12 @@
 "use client";
 
 import type { MenuItem } from "../../data/menuData";
+import {
+  isAdminUser,
+  isChiefUser,
+  isDepartmentHeadUser,
+  isSameDepartment,
+} from "../../lib/approval";
 import { localDateText } from "../../lib/date";
 import { supabase } from "../../lib/supabase";
 import type { UserRole } from "../../types/roles";
@@ -29,15 +35,26 @@ type ExpenseRequest = {
   memo: string | null;
   status:
     | "승인대기"
+    | "부서장 승인대기"
     | "총괄관리 승인대기"
     | "관리자 승인대기"
     | "승인완료"
     | "반려";
   requested_by: string;
   requested_name: string | null;
+  requested_department: string | null;
   approved_by: string | null;
   approved_name: string | null;
   approved_at: string | null;
+  department_approved_by: string | null;
+  department_approved_name: string | null;
+  department_approved_at: string | null;
+  chief_approved_by: string | null;
+  chief_approved_name: string | null;
+  chief_approved_at: string | null;
+  final_approved_by: string | null;
+  final_approved_name: string | null;
+  final_approved_at: string | null;
   reject_reason: string | null;
   created_at: string | null;
 };
@@ -58,13 +75,9 @@ const formatDateTime = (value?: string | null) => {
   return value.slice(0, 16).replace("T", " ");
 };
 
-const isChiefUser = (user: LoginUser) =>
-  user.role === "CHIEF" || user.approval_role === "총괄관리";
-
 export default function ExpenseRequestPrintPage({
   expenseRequest,
   user,
-  isAdmin,
   onSelectMenu,
 }: ExpenseRequestPrintPageProps) {
   if (!expenseRequest) {
@@ -81,12 +94,17 @@ export default function ExpenseRequestPrintPage({
       title: "지출결의서",
     });
 
-  const canApprove =
-    isAdmin
-      ? ["승인대기", "관리자 승인대기"].includes(expenseRequest.status)
-      : isChiefUser(user) &&
-        ["승인대기", "총괄관리 승인대기"].includes(expenseRequest.status) &&
-        expenseRequest.requested_by !== user.user_id;
+  const canApprove = isAdminUser(user)
+    ? ["승인대기", "관리자 승인대기"].includes(expenseRequest.status)
+    : isChiefUser(user)
+      ? expenseRequest.requested_by !== user.user_id &&
+        (expenseRequest.status === "총괄관리 승인대기" ||
+          (expenseRequest.status === "부서장 승인대기" &&
+            expenseRequest.requested_department === "관리부"))
+      : isDepartmentHeadUser(user) &&
+        expenseRequest.status === "부서장 승인대기" &&
+        expenseRequest.requested_by !== user.user_id &&
+        isSameDepartment(user, expenseRequest.requested_department);
 
   const approveRequest = async () => {
     if (!canApprove) {
@@ -95,22 +113,38 @@ export default function ExpenseRequestPrintPage({
 
     if (
       !confirm(
-        isAdmin
+        isAdminUser(user)
           ? "이 지출결의서를 승인하고 일일입출금에 반영할까요?"
-          : "이 지출결의서를 총괄관리 승인 후 관리자 단계로 넘길까요?"
+          : "이 지출결의서를 다음 단계로 승인할까요?"
       )
     ) {
       return;
     }
 
-    if (!isAdmin) {
+    const approvedAt = new Date().toISOString();
+
+    if (!isAdminUser(user)) {
+      const nextStatus =
+        expenseRequest.status === "부서장 승인대기"
+          ? "총괄관리 승인대기"
+          : "관리자 승인대기";
+      const stagePayload =
+        expenseRequest.status === "부서장 승인대기"
+          ? {
+              department_approved_by: user.user_id,
+              department_approved_name: user.user_name,
+              department_approved_at: approvedAt,
+            }
+          : {
+              chief_approved_by: user.user_id,
+              chief_approved_name: user.user_name,
+              chief_approved_at: approvedAt,
+            };
       const { error } = await supabase
         .from("expense_requests")
         .update({
-          status: "관리자 승인대기",
-          approved_by: user.user_id,
-          approved_name: user.user_name,
-          approved_at: new Date().toISOString(),
+          status: nextStatus,
+          ...stagePayload,
           reject_reason: null,
         })
         .eq("id", expenseRequest.id);
@@ -120,7 +154,7 @@ export default function ExpenseRequestPrintPage({
         return;
       }
 
-      alert("총괄관리 승인 후 관리자 단계로 넘겼습니다.");
+      alert("다음 단계로 승인되었습니다.");
       goList();
       return;
     }
@@ -154,7 +188,10 @@ export default function ExpenseRequestPrintPage({
         status: "승인완료",
         approved_by: user.user_id,
         approved_name: user.user_name,
-        approved_at: new Date().toISOString(),
+        approved_at: approvedAt,
+        final_approved_by: user.user_id,
+        final_approved_name: user.user_name,
+        final_approved_at: approvedAt,
         reject_reason: null,
       })
       .eq("id", expenseRequest.id);

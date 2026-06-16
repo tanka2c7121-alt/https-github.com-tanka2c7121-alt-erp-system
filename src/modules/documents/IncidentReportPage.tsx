@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { MenuItem } from "../../data/menuData";
+import { isAdminUser } from "../../lib/approval";
 import { localDateText } from "../../lib/date";
 import { supabase } from "../../lib/supabase";
 import type { UserRole } from "../../types/roles";
@@ -81,8 +82,7 @@ export default function IncidentReportPage({
     memo: "",
   });
 
-  const canCheck =
-    isAdmin || user.approval_role === "관리부" || user.department === "관리부";
+  const canCheck = isAdmin || isAdminUser(user);
 
   const loadRows = useCallback(async () => {
     const { data, error } = await supabase

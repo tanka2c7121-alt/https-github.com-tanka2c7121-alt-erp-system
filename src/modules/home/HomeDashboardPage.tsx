@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { MenuItem } from "../../data/menuData";
+import { isAdminUser, isChiefUser, isDepartmentHeadUser } from "../../lib/approval";
 import { localDateText } from "../../lib/date";
 import { supabase } from "../../lib/supabase";
 import { useRealtimeRefresh } from "../../lib/useRealtimeRefresh";
@@ -173,16 +174,15 @@ export default function HomeDashboardPage({
   quickActionMenus,
   onSelectMenu,
 }: HomeDashboardPageProps) {
-  const approvalRole = user?.approval_role ?? (isAdmin ? "관리자" : "직원");
-  const isFinalAttendanceApprover = isAdmin || approvalRole === "관리자";
-  const isAdminDeptApprover =
-    approvalRole === "관리부" || user?.department === "관리부";
+  const isFinalAttendanceApprover = isAdmin || isAdminUser(user);
+  const isChiefApprover = isChiefUser(user);
+  const isDepartmentHead = isDepartmentHeadUser(user);
   const canApproveAttendance =
-    isFinalAttendanceApprover || isAdminDeptApprover || approvalRole === "부서장";
+    isFinalAttendanceApprover || isChiefApprover || isDepartmentHead;
   const canApproveExpenses =
-    isAdmin || user?.role === "CHIEF" || approvalRole === "총괄관리";
+    isFinalAttendanceApprover || isChiefApprover || isDepartmentHead;
   const canViewExpenses = Boolean(user) || canApproveExpenses;
-  const canCheckIncident = isAdmin || isAdminDeptApprover;
+  const canCheckIncident = isFinalAttendanceApprover;
   const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
   const [pendingUsers, setPendingUsers] = useState<PendingUser[]>([]);
   const [pendingExpenseRequests, setPendingExpenseRequests] = useState<
@@ -217,9 +217,9 @@ export default function HomeDashboardPage({
     setLoading(true);
 
     const attendanceStatuses = isFinalAttendanceApprover
-      ? ["관리부 확인대기", "관리자 승인대기"]
-      : isAdminDeptApprover
-        ? ["관리부 확인대기"]
+      ? ["관리자 승인대기"]
+      : isChiefApprover
+        ? ["부서장 승인대기", "총괄관리 승인대기", "관리부 확인대기"]
         : ["부서장 승인대기"];
 
     let attendanceQuery = supabase
@@ -228,10 +228,14 @@ export default function HomeDashboardPage({
       .in("status", attendanceStatuses)
       .order("id", { ascending: false });
 
-    if (approvalRole === "부서장") {
+    if (isDepartmentHead) {
       attendanceQuery = attendanceQuery.eq(
         "requested_department",
         user?.department ?? ""
+      );
+    } else if (isChiefApprover) {
+      attendanceQuery = attendanceQuery.or(
+        "status.in.(총괄관리 승인대기,관리부 확인대기),and(status.eq.부서장 승인대기,requested_department.eq.관리부)"
       );
     }
 
@@ -256,17 +260,24 @@ export default function HomeDashboardPage({
             .order("id", { ascending: false })
         : Promise.resolve({ data: [], error: null }),
       canApproveExpenses
-        ? isAdmin
+        ? isFinalAttendanceApprover
           ? supabase
               .from("expense_requests")
               .select("id, request_date, vendor, content, amount, requested_name, requested_by")
-              .in("status", ["승인대기", "관리자 승인대기"])
+              .eq("status", "관리자 승인대기")
               .order("id", { ascending: false })
-          : supabase
-              .from("expense_requests")
-              .select("id, request_date, vendor, content, amount, requested_name, requested_by")
-              .in("status", ["승인대기", "총괄관리 승인대기"])
-              .order("id", { ascending: false })
+          : isChiefApprover
+            ? supabase
+                .from("expense_requests")
+                .select("id, request_date, vendor, content, amount, requested_name, requested_by")
+                .or("status.eq.총괄관리 승인대기,and(status.eq.부서장 승인대기,requested_department.eq.관리부)")
+                .order("id", { ascending: false })
+            : supabase
+                .from("expense_requests")
+                .select("id, request_date, vendor, content, amount, requested_name, requested_by")
+                .eq("status", "부서장 승인대기")
+                .eq("requested_department", user?.department ?? "")
+                .order("id", { ascending: false })
         : Promise.resolve({ data: [], error: null }),
       canApproveAttendance
         ? attendanceQuery
@@ -337,12 +348,12 @@ export default function HomeDashboardPage({
       setHomeNotice(null);
     }
   }, [
-    approvalRole,
     canApproveAttendance,
     canApproveExpenses,
     canCheckIncident,
     isAdmin,
-    isAdminDeptApprover,
+    isChiefApprover,
+    isDepartmentHead,
     isFinalAttendanceApprover,
     user,
   ]);

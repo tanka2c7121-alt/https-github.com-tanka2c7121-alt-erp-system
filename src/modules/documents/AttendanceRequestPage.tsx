@@ -2,6 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { MenuItem } from "../../data/menuData";
+import {
+  getApprovalRole,
+  isAdminUser,
+  isChiefUser,
+  isDepartmentHeadUser,
+  isSameDepartment,
+} from "../../lib/approval";
 import { addLocalDaysText, localDateText } from "../../lib/date";
 import { supabase } from "../../lib/supabase";
 import type { UserRole } from "../../types/roles";
@@ -23,6 +30,7 @@ type AttendanceRequestPageProps = {
 
 type AttendanceStatus =
   | "부서장 승인대기"
+  | "총괄관리 승인대기"
   | "관리부 확인대기"
   | "관리자 승인대기"
   | "승인완료"
@@ -78,6 +86,7 @@ const defaultTimeByRequestType: Record<string, { startTime: string; endTime: str
 };
 const pendingStatuses: AttendanceStatus[] = [
   "부서장 승인대기",
+  "총괄관리 승인대기",
   "관리부 확인대기",
   "관리자 승인대기",
 ];
@@ -87,16 +96,17 @@ const formatRequesterName = (user: LoginUser) => {
   return department ? `${department} / ${user.user_name}` : user.user_name;
 };
 
-const getApprovalRole = (user: LoginUser) =>
-  user.approval_role ?? (user.role === "ADMIN" ? "관리자" : "직원");
-
 const getInitialAttendanceStatus = (
   user: LoginUser
 ): AttendanceStatus => {
   const approvalRole = getApprovalRole(user);
 
-  if (user.role === "CHIEF" || approvalRole === "총괄관리") {
+  if (approvalRole === "관리자" || approvalRole === "총괄관리") {
     return "관리자 승인대기";
+  }
+
+  if (approvalRole === "부서장") {
+    return "총괄관리 승인대기";
   }
 
   return "부서장 승인대기";
@@ -121,10 +131,7 @@ export default function AttendanceRequestPage({
     memo: "",
   });
 
-  const approvalRole = getApprovalRole(user);
-  const isDepartmentHead = approvalRole === "부서장";
-  const isAdminDept = approvalRole === "관리부" || user.department === "관리부";
-  const isFinalAdmin = approvalRole === "관리자" || isAdmin;
+  const isFinalAdmin = isAdminUser(user) || isAdmin;
 
   const loadRows = useCallback(async () => {
     const { data, error } = await supabase
@@ -149,11 +156,21 @@ export default function AttendanceRequestPage({
 
     return rows
       .filter((row) => {
-        if (isFinalAdmin || isAdminDept) return true;
-        if (isDepartmentHead) {
+        if (isFinalAdmin) return true;
+        if (isChiefUser(user)) {
           return (
             row.requested_by === user.user_id ||
-            row.requested_department === user.department
+            row.status === "총괄관리 승인대기" ||
+            row.status === "관리부 확인대기" ||
+            (row.status === "부서장 승인대기" &&
+              row.requested_department === "관리부")
+          );
+        }
+        if (isDepartmentHeadUser(user)) {
+          return (
+            row.requested_by === user.user_id ||
+            (row.status === "부서장 승인대기" &&
+              row.requested_department === user.department)
           );
         }
 
@@ -176,14 +193,11 @@ export default function AttendanceRequestPage({
           .includes(keyword);
       });
   }, [
-    isAdminDept,
-    isDepartmentHead,
     isFinalAdmin,
     rows,
     searchText,
     statusFilter,
-    user.department,
-    user.user_id,
+    user,
   ]);
 
   const pendingCount = visibleRows.filter((row) =>
@@ -251,12 +265,15 @@ export default function AttendanceRequestPage({
     if (row.status === "부서장 승인대기") {
       return (
         isFinalAdmin ||
-        (isDepartmentHead && row.requested_department === user.department)
+        (isChiefUser(user) && row.requested_department === "관리부") ||
+        (isDepartmentHeadUser(user) &&
+          row.requested_by !== user.user_id &&
+          isSameDepartment(user, row.requested_department))
       );
     }
 
-    if (row.status === "관리부 확인대기") {
-      return isFinalAdmin || isAdminDept;
+    if (row.status === "총괄관리 승인대기" || row.status === "관리부 확인대기") {
+      return isFinalAdmin || (isChiefUser(user) && row.requested_by !== user.user_id);
     }
 
     if (row.status === "관리자 승인대기") {
@@ -267,8 +284,10 @@ export default function AttendanceRequestPage({
   };
 
   const nextApprovalStatus = (status: AttendanceStatus): AttendanceStatus => {
-    if (status === "부서장 승인대기") return "관리부 확인대기";
-    if (status === "관리부 확인대기") return "관리자 승인대기";
+    if (status === "부서장 승인대기") return "총괄관리 승인대기";
+    if (status === "총괄관리 승인대기" || status === "관리부 확인대기") {
+      return "관리자 승인대기";
+    }
     return "승인완료";
   };
 
@@ -288,7 +307,7 @@ export default function AttendanceRequestPage({
             department_approved_name: user.user_name,
             department_approved_at: new Date().toISOString(),
           }
-        : row.status === "관리부 확인대기"
+        : row.status === "총괄관리 승인대기" || row.status === "관리부 확인대기"
           ? {
               admin_dept_approved_by: user.user_id,
               admin_dept_approved_name: user.user_name,
@@ -526,7 +545,7 @@ export default function AttendanceRequestPage({
             >
               <option value="">전체 상태</option>
               <option>부서장 승인대기</option>
-              <option>관리부 확인대기</option>
+              <option>총괄관리 승인대기</option>
               <option>관리자 승인대기</option>
               <option>승인완료</option>
               <option>반려</option>
@@ -806,7 +825,7 @@ function ApprovalTrail({ row }: { row: AttendanceRequest }) {
       at: row.department_approved_at,
     },
     {
-      label: "관리부",
+      label: "총괄관리",
       name: row.admin_dept_approved_name,
       at: row.admin_dept_approved_at,
     },

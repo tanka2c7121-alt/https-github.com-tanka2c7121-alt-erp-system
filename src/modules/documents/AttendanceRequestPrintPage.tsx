@@ -1,6 +1,12 @@
 "use client";
 
 import type { MenuItem } from "../../data/menuData";
+import {
+  isAdminUser,
+  isChiefUser,
+  isDepartmentHeadUser,
+  isSameDepartment,
+} from "../../lib/approval";
 import { supabase } from "../../lib/supabase";
 import type { UserRole } from "../../types/roles";
 
@@ -25,6 +31,7 @@ type AttendanceRequest = {
   memo: string | null;
   status:
     | "부서장 승인대기"
+    | "총괄관리 승인대기"
     | "관리부 확인대기"
     | "관리자 승인대기"
     | "승인완료"
@@ -88,16 +95,18 @@ export default function AttendanceRequestPrintPage({
     );
   }
 
-  const isDepartmentHead = user.approval_role === "부서장";
-  const isAdminDept =
-    user.approval_role === "관리부" || user.department === "관리부";
-  const isFinalAdmin = isAdmin || user.approval_role === "관리자";
+  const isFinalAdmin = isAdmin || isAdminUser(user);
   const canApprove =
     attendanceRequest.status === "부서장 승인대기"
       ? isFinalAdmin ||
-        (isDepartmentHead && attendanceRequest.requested_department === user.department)
-      : attendanceRequest.status === "관리부 확인대기"
-        ? isFinalAdmin || isAdminDept
+        (isChiefUser(user) && attendanceRequest.requested_department === "관리부") ||
+        (isDepartmentHeadUser(user) &&
+          attendanceRequest.requested_by !== user.user_id &&
+          isSameDepartment(user, attendanceRequest.requested_department))
+      : attendanceRequest.status === "총괄관리 승인대기" ||
+          attendanceRequest.status === "관리부 확인대기"
+        ? isFinalAdmin ||
+          (isChiefUser(user) && attendanceRequest.requested_by !== user.user_id)
         : attendanceRequest.status === "관리자 승인대기"
           ? isFinalAdmin
           : false;
@@ -109,8 +118,13 @@ export default function AttendanceRequestPrintPage({
     });
 
   const nextApprovalStatus = (): AttendanceRequest["status"] => {
-    if (attendanceRequest.status === "부서장 승인대기") return "관리부 확인대기";
-    if (attendanceRequest.status === "관리부 확인대기") return "관리자 승인대기";
+    if (attendanceRequest.status === "부서장 승인대기") return "총괄관리 승인대기";
+    if (
+      attendanceRequest.status === "총괄관리 승인대기" ||
+      attendanceRequest.status === "관리부 확인대기"
+    ) {
+      return "관리자 승인대기";
+    }
     return "승인완료";
   };
 
@@ -133,7 +147,8 @@ export default function AttendanceRequestPrintPage({
             department_approved_name: user.user_name,
             department_approved_at: approvedAt,
           }
-        : attendanceRequest.status === "관리부 확인대기"
+        : attendanceRequest.status === "총괄관리 승인대기" ||
+            attendanceRequest.status === "관리부 확인대기"
           ? {
               admin_dept_approved_by: user.user_id,
               admin_dept_approved_name: user.user_name,
@@ -307,7 +322,7 @@ export default function AttendanceRequestPrintPage({
                 at={attendanceRequest.department_approved_at}
               />
               <ApprovalHistoryRow
-                label="관리부 확인"
+                label="총괄관리 승인"
                 name={attendanceRequest.admin_dept_approved_name}
                 at={attendanceRequest.admin_dept_approved_at}
               />
@@ -338,7 +353,7 @@ function ApprovalTable({ row }: { row: AttendanceRequest }) {
           </td>
           <td className="border border-slate-900 font-bold">신청자</td>
           <td className="border border-slate-900 font-bold">부서장</td>
-          <td className="border border-slate-900 font-bold">관리부</td>
+          <td className="border border-slate-900 font-bold">총괄관리</td>
           <td className="border border-slate-900 font-bold">관리자</td>
         </tr>
         <tr>
@@ -361,7 +376,7 @@ function ApprovalTable({ row }: { row: AttendanceRequest }) {
             {row.department_approved_at ? "승인" : ""}
           </td>
           <td className="border border-slate-900 text-xs">
-            {row.admin_dept_approved_at ? "확인" : ""}
+            {row.admin_dept_approved_at ? "승인" : ""}
           </td>
           <td className="border border-slate-900 text-xs">
             {row.final_approved_at ? "승인" : ""}

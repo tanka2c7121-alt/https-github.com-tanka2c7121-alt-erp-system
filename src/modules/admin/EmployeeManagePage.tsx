@@ -24,8 +24,19 @@ type AppUser = {
 };
 
 const departments = ["관리부", "도장부", "판금부", "정비부"];
-const approvalRoles = ["직원", "부서장", "관리부", "총괄관리", "관리자"];
+const approvalRoles = ["직원", "부서장", "총괄관리", "관리자"];
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const approvalRoleByRole: Record<string, string> = {
+  ADMIN: "관리자",
+  CHIEF: "총괄관리",
+  LEADER: "부서장",
+  STAFF: "직원",
+};
+
+const normalizeApprovalRole = (role: string | null | undefined, approvalRole?: string | null) =>
+  approvalRoles.includes(approvalRole ?? "")
+    ? approvalRole ?? "직원"
+    : approvalRoleByRole[role ?? ""] ?? "직원";
 
 export default function EmployeeManagePage() {
   const [users, setUsers] = useState<AppUser[]>([]);
@@ -104,7 +115,7 @@ export default function EmployeeManagePage() {
       department,
       phone_number: phoneNumber,
       role,
-      approval_role: approvalRole,
+      approval_role: normalizeApprovalRole(role, approvalRole),
     };
 
     const result = editingUserId
@@ -185,7 +196,7 @@ export default function EmployeeManagePage() {
     setDepartment(user.department ?? "관리부");
     setPhoneNumber(user.phone_number ?? "");
     setRole(user.role ?? "STAFF");
-    setApprovalRole(user.approval_role ?? "직원");
+    setApprovalRole(normalizeApprovalRole(user.role, user.approval_role));
   }
 
   function fillInitialPassword() {
@@ -281,7 +292,11 @@ export default function EmployeeManagePage() {
           <select
             className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
             value={role}
-            onChange={(event) => setRole(event.target.value)}
+            onChange={(event) => {
+              const nextRole = event.target.value;
+              setRole(nextRole);
+              setApprovalRole(approvalRoleByRole[nextRole] ?? "직원");
+            }}
           >
             {roleOptions.map((item) => (
               <option key={item.value} value={item.value}>
@@ -294,6 +309,7 @@ export default function EmployeeManagePage() {
             className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
             value={approvalRole}
             onChange={(event) => setApprovalRole(event.target.value)}
+            disabled
           >
             {approvalRoles.map((item) => (
               <option key={item} value={item}>

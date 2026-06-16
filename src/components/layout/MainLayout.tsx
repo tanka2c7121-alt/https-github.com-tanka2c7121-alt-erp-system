@@ -5,6 +5,7 @@ import Sidebar from "../sidebar/Sidebar";
 import Topbar, { type NotificationItem } from "../topbar/Topbar";
 import Statusbar from "../statusbar/Statusbar";
 import { menuData, type MenuItem } from "../../data/menuData";
+import { getApprovalRole } from "../../lib/approval";
 import { supabase } from "../../lib/supabase";
 import type { UserRole } from "../../types/roles";
 
@@ -130,8 +131,8 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
   const isAdmin = user.role === "ADMIN";
   const userRole = user.role ?? "STAFF";
   const canViewSales = ["ADMIN", "CHIEF"].includes(userRole);
-  const approvalRole = user.approval_role ?? (isAdmin ? "관리자" : "직원");
-  const canCheckIncident = isAdmin || approvalRole === "관리부" || user.department === "관리부";
+  const approvalRole = getApprovalRole(user);
+  const canCheckIncident = approvalRole === "관리자";
 
   const [selectedMenu, setSelectedMenu] = useState<MenuItem>(initialMenu);
   const [menuHistory, setMenuHistory] = useState<MenuItem[]>([]);
@@ -287,13 +288,14 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
 
   const loadNotificationCounts = useCallback(async () => {
     const canSeeExpenseApprovalNotice =
-      isAdmin || userRole === "CHIEF" || approvalRole === "총괄관리";
-    const isFinalAttendanceApprover = isAdmin || approvalRole === "관리자";
-    const isAdminDeptApprover =
-      approvalRole === "관리부" || user.department === "관리부";
+      approvalRole === "관리자" ||
+      approvalRole === "총괄관리" ||
+      approvalRole === "부서장";
+    const isFinalAttendanceApprover = approvalRole === "관리자";
+    const isChiefApprover = approvalRole === "총괄관리";
     const canSeeAttendanceApprovalNotice =
-      isFinalAttendanceApprover || isAdminDeptApprover || approvalRole === "부서장";
-    const canCheckIncident = isAdmin || isAdminDeptApprover;
+      isFinalAttendanceApprover || isChiefApprover || approvalRole === "부서장";
+    const canCheckIncident = approvalRole === "관리자";
     const myExpenseReadAt = getMyDocumentReadAt(user.user_id, "expenses");
     const myAttendanceReadAt = getMyDocumentReadAt(user.user_id, "attendances");
     const myIncidentReadAt = getMyDocumentReadAt(user.user_id, "incidents");
@@ -314,27 +316,33 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
             .eq("is_active", false)
         : Promise.resolve({ count: 0, error: null }),
       canSeeExpenseApprovalNotice
-        ? isAdmin
+        ? approvalRole === "관리자"
           ? supabase
               .from("expense_requests")
               .select("id", { count: "exact", head: true })
-              .in("status", ["승인대기", "관리자 승인대기"])
+              .in("status", ["관리자 승인대기"])
+          : approvalRole === "총괄관리"
+            ? supabase
+                .from("expense_requests")
+                .select("id", { count: "exact", head: true })
+                .or("status.eq.총괄관리 승인대기,and(status.eq.부서장 승인대기,requested_department.eq.관리부)")
           : supabase
               .from("expense_requests")
               .select("id", { count: "exact", head: true })
-              .in("status", ["승인대기", "총괄관리 승인대기"])
+              .eq("status", "부서장 승인대기")
+              .eq("requested_department", user.department ?? "")
         : Promise.resolve({ count: 0, error: null }),
       canSeeAttendanceApprovalNotice
         ? isFinalAttendanceApprover
           ? supabase
               .from("attendance_requests")
               .select("id", { count: "exact", head: true })
-              .in("status", ["관리부 확인대기", "관리자 승인대기"])
-          : isAdminDeptApprover
+              .eq("status", "관리자 승인대기")
+          : isChiefApprover
             ? supabase
                 .from("attendance_requests")
                 .select("id", { count: "exact", head: true })
-                .eq("status", "관리부 확인대기")
+                .or("status.in.(총괄관리 승인대기,관리부 확인대기),and(status.eq.부서장 승인대기,requested_department.eq.관리부)")
           : supabase
               .from("attendance_requests")
               .select("id", { count: "exact", head: true })
@@ -376,7 +384,7 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
       myAttendances: myAttendancesResult.error ? 0 : myAttendancesResult.count ?? 0,
       myIncidents: myIncidentsResult.error ? 0 : myIncidentsResult.count ?? 0,
     });
-  }, [approvalRole, isAdmin, user.department, user.user_id, userRole]);
+  }, [approvalRole, isAdmin, user.department, user.user_id]);
 
   useEffect(() => {
     void loadNotificationCounts();
@@ -419,7 +427,7 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
           },
         ]
       : []),
-    ...(!isAdmin && (userRole === "CHIEF" || approvalRole === "총괄관리")
+    ...(!isAdmin && ["총괄관리", "부서장"].includes(approvalRole)
       ? [
           {
             id: "expenses",

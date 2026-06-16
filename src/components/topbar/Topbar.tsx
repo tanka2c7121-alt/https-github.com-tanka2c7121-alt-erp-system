@@ -30,7 +30,7 @@ export default function Topbar({
   );
 
   return (
-    <header className="flex min-h-16 items-center justify-between gap-3 border-b border-white/70 bg-white/75 px-3 py-3 shadow-sm shadow-slate-200/70 backdrop-blur-xl md:h-16 md:px-6 md:py-0">
+    <header className="relative z-50 flex min-h-16 items-center justify-between gap-3 border-b border-white/70 bg-white/75 px-3 py-3 shadow-sm shadow-slate-200/70 backdrop-blur-xl md:h-16 md:px-6 md:py-0">
       <div className="min-w-0">
         <h1 className="truncate text-base font-bold text-slate-900 md:text-xl">
           신흥현대서비스 ERP
@@ -61,7 +61,7 @@ export default function Topbar({
             </button>
 
             {isOpen && (
-              <div className="absolute right-0 top-11 z-[1000] w-80 rounded-2xl border border-slate-200 bg-white p-3 text-sm shadow-2xl shadow-slate-300/60">
+              <div className="fixed right-3 top-[64px] z-[1000] w-[min(20rem,calc(100vw-1.5rem))] rounded-2xl border border-slate-200 bg-white p-3 text-sm shadow-2xl shadow-slate-300/60 md:right-6">
                 <div className="mb-2 flex items-center justify-between gap-2">
                   <div className="font-bold text-slate-900">알림</div>
                   <button
