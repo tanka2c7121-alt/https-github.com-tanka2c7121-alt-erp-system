@@ -614,6 +614,9 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
     if (menu.id === "sales-insurance") {
       return <SalesRevenuePage kind="insurance" title="보험매출" />;
     }
+    if (menu.id === "sales-insurance-payment") {
+      return <SalesRevenuePage kind="insurance-payment" title="보험입금내역" />;
+    }
     if (menu.id === "sales-capital") {
       return <SalesRevenuePage kind="capital" title="캐피탈매출" />;
     }

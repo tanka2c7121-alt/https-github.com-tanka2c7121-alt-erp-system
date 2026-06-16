@@ -6,9 +6,18 @@ import { localDateText } from "../../lib/date";
 import { supabase } from "../../lib/supabase";
 
 type SalesRevenuePageProps = {
-  kind: "insurance" | "capital" | "card" | "general" | "partner" | "blue";
+  kind: RevenueKind;
   title: string;
 };
+
+type RevenueKind =
+  | "insurance"
+  | "insurance-payment"
+  | "capital"
+  | "card"
+  | "general"
+  | "partner"
+  | "blue";
 
 type SettlementPaymentRow = {
   id: number;
@@ -81,6 +90,8 @@ const calculateSupplyAmount = (paymentAmount: number) =>
   Math.round(paymentAmount / 1.1);
 const calculateVatAmount = (paymentAmount: number) =>
   paymentAmount - calculateSupplyAmount(paymentAmount);
+const normalizeText = (value?: string | null) =>
+  (value ?? "").replace(/\s/g, "").toUpperCase();
 
 function buildSalesRevenuePrintPages(rows: RevenueRow[]) {
   const pages: RevenueRow[][] = [];
@@ -223,6 +234,57 @@ export default function SalesRevenuePage({
     });
 
     return Array.from(groupedRows.values());
+  }, [loadPaymentRows, loadWorkMap]);
+
+  const loadInsurancePaymentRows = useCallback(async () => {
+    const paymentRows = (await loadPaymentRows()).filter((row) => {
+      const amount = Number(row.payment_amount ?? 0);
+      const paymentType = normalizeText(row.payment_type);
+      const paymentDetail = normalizeText(row.payment_detail);
+      const paymentMethod = normalizeText(row.payment_method);
+
+      return (
+        amount > 0 &&
+        paymentType.includes("수리비") &&
+        paymentDetail.includes("보험") &&
+        (paymentMethod.includes("국민은행") || paymentMethod.includes("법인1층"))
+      );
+    });
+
+    const workNames = Array.from(
+      new Set(
+        paymentRows
+          .map((row) => row.work_name)
+          .filter((workName): workName is string => Boolean(workName))
+      )
+    );
+    const workMap = await loadWorkMap(workNames);
+
+    return paymentRows.map((paymentRow) => {
+      const workName = paymentRow.work_name ?? "";
+      const work = workMap.get(workName);
+      const paymentAmount = Number(paymentRow.payment_amount ?? 0);
+
+      return {
+        id: String(paymentRow.id),
+        date: paymentRow.payment_date ?? "",
+        workName,
+        insuranceCompany:
+          work?.insurance_company ?? work?.other_insurance_company ?? "",
+        saleType: paymentRow.payment_type ?? work?.category ?? "",
+        coverageType: work?.coverage_type ?? "",
+        carNumber: work?.car_number ?? "",
+        carModel: work?.car_model ?? "",
+        partnerCompany: work?.partner_company ?? "",
+        paymentInfo: paymentRow.payment_method ?? "",
+        paymentAmount,
+        supplyAmount: calculateSupplyAmount(paymentAmount),
+        vatAmount: calculateVatAmount(paymentAmount),
+        approvalNumber: paymentRow.approval_number ?? "",
+        merchantNumber: paymentRow.merchant_number ?? "",
+        cardNumber: paymentRow.card_number ?? "",
+      } satisfies RevenueRow;
+    });
   }, [loadPaymentRows, loadWorkMap]);
 
   const loadGeneralRows = useCallback(async () => {
@@ -463,6 +525,8 @@ export default function SalesRevenuePage({
       const nextRows =
         kind === "insurance"
           ? await loadInsuranceRows()
+          : kind === "insurance-payment"
+            ? await loadInsurancePaymentRows()
           : kind === "capital"
             ? await loadCapitalRows()
           : kind === "general"
@@ -484,6 +548,7 @@ export default function SalesRevenuePage({
     loadBlueRows,
     loadCapitalRows,
     loadGeneralRows,
+    loadInsurancePaymentRows,
     loadInsuranceRows,
     loadPartnerRows,
     title,
@@ -898,7 +963,7 @@ function SalesRevenuePrintSheet({
   totalSupply,
   totalVat,
 }: {
-  kind: "insurance" | "capital" | "card" | "general" | "partner" | "blue";
+  kind: RevenueKind;
   pageIndex: number;
   pageCount: number;
   rows: RevenueRow[];
@@ -996,7 +1061,7 @@ function SalesRevenuePrintTable({
   totalSupply,
   totalVat,
 }: {
-  kind: "insurance" | "capital" | "card" | "general" | "partner" | "blue";
+  kind: RevenueKind;
   rows: RevenueRow[];
   showTotal: boolean;
   title: string;
@@ -1223,7 +1288,7 @@ function RevenueTable({
   onSort,
   printMode = false,
 }: {
-  kind: "insurance" | "capital" | "card" | "general" | "partner" | "blue";
+  kind: RevenueKind;
   rows: RevenueRow[];
   isLoading: boolean;
   totalPayment: number;

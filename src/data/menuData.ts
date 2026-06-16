@@ -77,7 +77,11 @@ export const menuData: MenuItem[] = [
     title: "매출현황",
     roles: ["ADMIN", "CHIEF"],
     children: [
-      { id: "sales-insurance", title: "보험매출" },
+      {
+        id: "sales-insurance",
+        title: "보험매출",
+        children: [{ id: "sales-insurance-payment", title: "보험입금내역" }],
+      },
       { id: "sales-capital", title: "캐피탈매출" },
       { id: "sales-general", title: "일반매출" },
       { id: "sales-partner", title: "거래처매출" },
