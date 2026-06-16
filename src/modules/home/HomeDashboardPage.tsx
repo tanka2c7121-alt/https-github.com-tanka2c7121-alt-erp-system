@@ -928,7 +928,7 @@ export default function HomeDashboardPage({
           업무 홈을 불러오는 중입니다.
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_220px]">
           <QuickActions actions={quickActionMenus} onSelectMenu={onSelectMenu} />
 
           {(isAdmin || canApproveAttendance || canViewExpenses || canCheckIncident) && (
@@ -1277,8 +1277,8 @@ function QuickActions({
 }) {
   const visibleActions = actions.slice(0, 8);
 
-  return (
-    <section className="rounded-xl border border-slate-200 bg-white/90 px-3 py-2 shadow-sm [&>h4]:hidden [&_button>div]:hidden">
+  return (<>
+    <section className="rounded-xl border border-slate-200 bg-white/90 px-3 py-2 shadow-sm xl:hidden [&>h4]:hidden [&_button>div]:hidden">
       <h4 className="mb-3 font-bold text-slate-900">빠른 작업</h4>
       <div className="flex items-center gap-2 overflow-x-auto">
         <span className="shrink-0 pr-1 text-xs font-bold text-slate-500">
@@ -1315,6 +1315,36 @@ function QuickActions({
         )}
       </div>
     </section>
+
+    <section className="order-2 hidden rounded-xl border border-slate-200 bg-white p-2 xl:block">
+      <h4 className="mb-3 font-bold text-slate-900">빠른 작업</h4>
+      <div className="grid grid-cols-1 gap-1.5">
+        {actions.map((action, index) => (
+          <button
+            key={`${action.id}-${index}`}
+            type="button"
+            onClick={() =>
+              onSelectMenu({
+                id: action.id,
+                title: action.title,
+                data: action.data,
+              })
+            }
+            className="rounded-lg border border-slate-200 px-2.5 py-2 text-left transition hover:border-blue-300 hover:bg-blue-50"
+          >
+            <div className="text-xs font-bold text-slate-900">
+              {action.data?.openCamera ? "카메라열기" : action.title}
+            </div>
+            <div className="mt-0.5 text-[11px] text-slate-500">
+              {action.data?.openCamera
+                ? "작업등록으로 이동 후 카메라 실행"
+                : "즐겨찾기 페이지로 이동"}
+            </div>
+          </button>
+        ))}
+      </div>
+    </section>
+  </>
   );
 }
 
