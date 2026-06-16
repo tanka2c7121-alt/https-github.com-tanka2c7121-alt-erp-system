@@ -677,7 +677,7 @@ export default function SalesRevenuePage({
               left: 0 !important;
               top: 0 !important;
               display: block !important;
-              width: 198mm !important;
+              width: 190mm !important;
               min-height: auto !important;
               margin: 0 auto !important;
               padding: 0 !important;
@@ -690,11 +690,11 @@ export default function SalesRevenuePage({
             }
 
             body.sales-revenue-v2-mode .sales-revenue-v2-sheet {
-              width: 198mm !important;
+              width: 190mm !important;
               height: 282mm !important;
               min-height: 282mm !important;
               margin: 7.5mm auto !important;
-              padding: 12mm 7mm 2mm !important;
+              padding: 12mm 5mm 2mm !important;
               box-sizing: border-box !important;
               overflow: hidden !important;
               box-shadow: none !important;
@@ -721,6 +721,7 @@ export default function SalesRevenuePage({
             body.sales-revenue-v2-mode .sales-revenue-v2-table td,
             body.sales-revenue-v2-mode .sales-revenue-v2-total-row th,
             body.sales-revenue-v2-mode .sales-revenue-v2-total-row td {
+              box-sizing: border-box !important;
               -webkit-print-color-adjust: exact !important;
               print-color-adjust: exact !important;
             }
@@ -915,7 +916,7 @@ function SalesRevenuePrintSheet({
   const isFirstPage = pageIndex === 0;
 
   return (
-    <section className="sales-revenue-v2-sheet mx-auto mb-6 h-[282mm] w-[198mm] bg-white px-[7mm] pb-[2mm] pt-[12mm] text-slate-900 shadow-lg">
+    <section className="sales-revenue-v2-sheet mx-auto mb-6 h-[282mm] w-[190mm] bg-white px-[5mm] pb-[2mm] pt-[12mm] text-slate-900 shadow-lg">
       {isFirstPage ? (
         <>
           <div className="relative mb-3 text-center">
@@ -1012,41 +1013,41 @@ function SalesRevenuePrintTable({
     <table className="sales-revenue-v2-table w-full table-fixed border-collapse text-[8.5px] leading-tight">
       {isCard ? (
         <colgroup>
-          <col className="w-[18mm]" />
-          <col className="w-[24mm]" />
-          <col className="w-[22mm]" />
-          <col className="w-[24mm]" />
-          <col className="w-[22mm]" />
-          <col className="w-[26mm]" />
-          <col className="w-[24mm]" />
-          <col className="w-[24mm]" />
+          <col className="w-[17mm]" />
+          <col className="w-[23mm]" />
+          <col className="w-[20mm]" />
+          <col className="w-[23mm]" />
+          <col className="w-[21mm]" />
+          <col className="w-[25mm]" />
+          <col className="w-[23mm]" />
+          <col className="w-[23mm]" />
         </colgroup>
       ) : isPartner ? (
         <colgroup>
-          <col className="w-[16mm]" />
-          <col className="w-[26mm]" />
-          <col className="w-[20mm]" />
-          <col className="w-[13mm]" />
-          <col className="w-[19mm]" />
-          <col className="w-[25mm]" />
-          <col className="w-[16mm]" />
-          <col className="w-[17mm]" />
-          <col className="w-[17mm]" />
           <col className="w-[15mm]" />
+          <col className="w-[24mm]" />
+          <col className="w-[19mm]" />
+          <col className="w-[13mm]" />
+          <col className="w-[18mm]" />
+          <col className="w-[23mm]" />
+          <col className="w-[15mm]" />
+          <col className="w-[16mm]" />
+          <col className="w-[16mm]" />
+          <col className="w-[14mm]" />
         </colgroup>
       ) : (
         <colgroup>
-          <col className="w-[15mm]" />
-          <col className="w-[19mm]" />
-          <col className="w-[23mm]" />
-          <col className="w-[13mm]" />
-          <col className="w-[13mm]" />
-          <col className="w-[18mm]" />
-          <col className="w-[22mm]" />
           <col className="w-[14mm]" />
-          <col className="w-[16mm]" />
-          <col className="w-[16mm]" />
+          <col className="w-[18mm]" />
+          <col className="w-[21mm]" />
+          <col className="w-[12mm]" />
+          <col className="w-[12mm]" />
+          <col className="w-[17mm]" />
+          <col className="w-[20mm]" />
+          <col className="w-[14mm]" />
           <col className="w-[15mm]" />
+          <col className="w-[15mm]" />
+          <col className="w-[14mm]" />
         </colgroup>
       )}
       <thead className="text-center">

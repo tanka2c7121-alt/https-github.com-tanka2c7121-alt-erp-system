@@ -37,8 +37,8 @@ type SortField =
 
 const dayMs = 24 * 60 * 60 * 1000;
 const realtimeTables = [{ table: "work_orders" }];
-const firstPrintPageRows = 23;
-const nextPrintPageRows = 27;
+const firstPrintPageRows = 25;
+const nextPrintPageRows = 25;
 
 const daysBetween = (from: string, to: string) => {
   if (!from || !to) return 0;
@@ -283,6 +283,7 @@ export default function ReleaseListPage({ onSelectMenu }: ReleaseListPageProps) 
           items={pageItems}
           pageIndex={pageIndex}
           pageCount={printPages.length}
+          showHeader={pageIndex === 0}
           summary={summary}
           today={today}
           totalRows={filteredItems.length}
@@ -357,7 +358,7 @@ export default function ReleaseListPage({ onSelectMenu }: ReleaseListPageProps) 
               left: 0 !important;
               top: 0 !important;
               display: block !important;
-              width: 285mm !important;
+              width: 280mm !important;
               min-height: auto !important;
               margin: 0 auto !important;
               padding: 0 !important;
@@ -370,11 +371,11 @@ export default function ReleaseListPage({ onSelectMenu }: ReleaseListPageProps) 
             }
 
             body.release-list-v2-mode .release-list-v2-sheet {
-              width: 285mm !important;
+              width: 280mm !important;
               height: 198mm !important;
               min-height: 198mm !important;
-              margin: 0 auto !important;
-              padding: 8mm 7mm 5mm !important;
+              margin: 6mm auto !important;
+              padding: 10mm 6mm 4mm !important;
               box-sizing: border-box !important;
               overflow: hidden !important;
               box-shadow: none !important;
@@ -396,6 +397,11 @@ export default function ReleaseListPage({ onSelectMenu }: ReleaseListPageProps) 
             body.release-list-v2-mode .release-list-v2-table tr {
               break-inside: avoid !important;
               page-break-inside: avoid !important;
+            }
+
+            body.release-list-v2-mode .release-list-v2-table th,
+            body.release-list-v2-mode .release-list-v2-table td {
+              box-sizing: border-box !important;
             }
 
             body.release-list-v2-mode .release-list-v2-table th,
@@ -546,6 +552,7 @@ function PrintReleaseSheet({
   items,
   pageIndex,
   pageCount,
+  showHeader,
   summary,
   today,
   totalRows,
@@ -553,6 +560,7 @@ function PrintReleaseSheet({
   items: ReleaseItem[];
   pageIndex: number;
   pageCount: number;
+  showHeader: boolean;
   summary: {
     total: number;
     delayed: number;
@@ -564,8 +572,9 @@ function PrintReleaseSheet({
   totalRows: number;
 }) {
   return (
-    <section className="release-list-v2-sheet mx-auto mb-6 h-[198mm] w-[285mm] bg-white px-[7mm] pb-[5mm] pt-[8mm] text-slate-900 shadow-lg">
-      <div className="mb-3 flex items-end justify-between border-b border-slate-900 pb-2">
+    <section className={`release-list-v2-sheet mx-auto mb-6 h-[198mm] w-[280mm] bg-white px-[6mm] pb-[4mm] text-slate-900 shadow-lg ${showHeader ? "pt-[10mm]" : "pt-[6mm]"}`}>
+      {showHeader ? (
+        <div className="mb-3 flex items-end justify-between border-b border-slate-900 pb-2">
         <div>
           <h1 className="text-2xl font-bold tracking-wide">출고리스트</h1>
           <p className="mt-1 text-[11px] font-semibold text-slate-600">
@@ -580,7 +589,8 @@ function PrintReleaseSheet({
             예정 {summary.upcoming}대 / 미정 {summary.undecided}대 / {pageIndex + 1} / {pageCount}
           </div>
         </div>
-      </div>
+        </div>
+      ) : null}
 
       <PrintReleaseTable items={items} today={today} />
     </section>
@@ -636,16 +646,16 @@ function PrintReleaseTable({
               <PrintCell strong>{displayValue(item.work_name)}</PrintCell>
               <PrintCell>{displayValue(item.car_number)}</PrintCell>
               <PrintCell>{displayValue(item.car_model)}</PrintCell>
-              <PrintCell center>{displayValue(item.inbound_date)}</PrintCell>
-              <PrintCell center>{displayValue(item.outbound_date)}</PrintCell>
-              <PrintCell center>
+              <PrintCell>{displayValue(item.inbound_date)}</PrintCell>
+              <PrintCell>{displayValue(item.outbound_date)}</PrintCell>
+              <PrintCell>
                 {delay > 0 ? `${delay}일` : item.outbound_date === today ? "오늘" : "-"}
               </PrintCell>
               <PrintCell>{displayValue(insuranceName(item))}</PrintCell>
               <PrintCell>{displayValue(managerName(item))}</PrintCell>
-              <PrintCell center>{displayValue(item.coverage_type)}</PrintCell>
-              <PrintCell center>{displayValue(item.car_year)}</PrintCell>
-              <PrintCell center>{displayValue(item.color_code)}</PrintCell>
+              <PrintCell>{displayValue(item.coverage_type)}</PrintCell>
+              <PrintCell>{displayValue(item.car_year)}</PrintCell>
+              <PrintCell>{displayValue(item.color_code)}</PrintCell>
             </tr>
           );
         })}
@@ -723,7 +733,7 @@ function ReleaseTable({
               <BodyCell>{displayValue(item.color_code)}</BodyCell>
               {showActions && (
                 <BodyCell>
-                  <div className="flex gap-2">
+                  <div className="flex justify-center gap-2">
                     <button
                       type="button"
                       onClick={() => void onRelease(item)}
@@ -776,11 +786,11 @@ function SortableHeader({
   const active = sortField === field;
 
   return (
-    <th className="border border-slate-200 px-2 py-2 text-left">
+    <th className="border border-slate-200 px-2 py-2 text-center">
       <button
         type="button"
         onClick={() => onSort(field)}
-        className="flex w-full items-center justify-between gap-1 font-semibold"
+        className="flex w-full items-center justify-center gap-1 font-semibold"
       >
         <span>{children}</span>
         <span className={active ? "text-blue-600" : "text-slate-400"}>
@@ -809,7 +819,7 @@ function SummaryCard({
 }
 
 function HeaderCell({ children }: { children: ReactNode }) {
-  return <th className="border border-slate-200 px-2 py-2 text-left">{children}</th>;
+  return <th className="border border-slate-200 px-2 py-2 text-center">{children}</th>;
 }
 
 function BodyCell({
@@ -819,23 +829,25 @@ function BodyCell({
   children: ReactNode;
   className?: string;
 }) {
-  return <td className={`border border-slate-200 px-2 py-2 ${className}`}>{children}</td>;
+  return (
+    <td className={`border border-slate-200 px-2 py-2 text-center ${className}`}>
+      {children}
+    </td>
+  );
 }
 
 function PrintCell({
   children,
-  center = false,
   strong = false,
 }: {
   children: ReactNode;
-  center?: boolean;
   strong?: boolean;
 }) {
   return (
     <td
-      className={`overflow-hidden whitespace-nowrap border border-slate-900 px-1 py-1 ${
-        center ? "text-center" : ""
-      } ${strong ? "font-semibold" : ""}`}
+      className={`overflow-hidden whitespace-nowrap border border-slate-900 px-1 py-1 text-center ${
+        strong ? "font-semibold" : ""
+      }`}
     >
       {children}
     </td>
