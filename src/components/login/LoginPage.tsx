@@ -408,6 +408,39 @@ export default function LoginPage({ onLogin }: Props) {
             width: min(430px, calc(100vw - 40px));
           }
 
+          .login-brand-lockup {
+            width: min(680px, calc(100vw - 40px));
+            margin-bottom: clamp(18px, 3vh, 30px);
+            text-align: center;
+            color: #0f2d4d;
+            text-shadow: 0 2px 14px rgba(255, 255, 255, 0.78);
+          }
+
+          .login-brand-mark {
+            display: block;
+            width: min(540px, 82vw);
+            height: auto;
+            margin: 0 auto clamp(16px, 2.4vh, 24px);
+            filter:
+              drop-shadow(0 0 18px rgba(255, 255, 255, 0.94))
+              drop-shadow(0 20px 28px rgba(15, 45, 77, 0.16));
+          }
+
+          .login-brand-title {
+            font-size: clamp(30px, 4vw, 44px);
+            line-height: 1.08;
+            font-weight: 900;
+            letter-spacing: 0;
+          }
+
+          .login-brand-subtitle {
+            margin-top: 8px;
+            font-size: clamp(13px, 1.6vw, 18px);
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            color: rgba(15, 45, 77, 0.66);
+          }
+
           @keyframes logoFlash {
             0% { opacity: 0; transform: scale(0.58); filter: blur(12px); }
             24% { opacity: 1; transform: scale(1.06); filter: blur(0); }
@@ -447,7 +480,11 @@ export default function LoginPage({ onLogin }: Props) {
             }
 
             .login-card-panel {
-              margin-top: 50vh;
+              margin-top: 0;
+            }
+
+            .login-brand-mark {
+              width: min(440px, 88vw);
             }
           }
         `}
@@ -468,7 +505,13 @@ export default function LoginPage({ onLogin }: Props) {
         </div>
       )}
 
-      <section className="relative z-10 mx-auto flex min-h-screen w-full max-w-6xl flex-col items-center px-5 pb-10 pt-[53.5vh] md:px-8">
+      <section className="relative z-10 mx-auto flex min-h-screen w-full max-w-6xl flex-col items-center px-5 pb-10 pt-[24vh] md:px-8 md:pt-[28vh]">
+        <div className="login-brand-lockup" aria-label="신흥현대서비스 ERP">
+          <img className="login-brand-mark" src="/genesis-mark.png" alt="" />
+          <h1 className="login-brand-title">신흥현대서비스 ERP</h1>
+          <p className="login-brand-subtitle">SHINHEUNG HYUNDAI SERVICE ERP</p>
+        </div>
+
         <div className="login-card-panel relative z-10 rounded-[14px] border border-white/80 bg-white/82 p-8 shadow-2xl shadow-slate-900/10 backdrop-blur-md">
             {isLoginMode ? (
               <form
