@@ -126,6 +126,10 @@ export const menuData: MenuItem[] = [
         id: "vehicle-catalog",
         title: "기초자료관리",
       },
+      {
+        id: "part-supplier-management",
+        title: "업체등록",
+      },
     ],
   },
 ];

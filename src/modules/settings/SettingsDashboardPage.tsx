@@ -20,6 +20,11 @@ const settingItems = [
     title: "기초자료관리",
     description: "차량, 렌터카업체, 거래처, 보험사 목록을 관리합니다.",
   },
+  {
+    id: "part-supplier-management",
+    title: "업체등록",
+    description: "부품대관리에서 사용할 업체명, 사업자번호, 연락처, 이메일을 관리합니다.",
+  },
 ];
 
 export default function SettingsDashboardPage({

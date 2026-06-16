@@ -80,20 +80,6 @@ const initialForm: FormState = {
   amount: "",
   memo: "",
 };
-const knownPartSuppliers = [
-  "태양상사",
-  "유진사",
-  "태오",
-  "KGM",
-  "거성",
-  "일광",
-  "혜성",
-  "동륭",
-  "인비전스",
-  "광명유리",
-  "종합상사",
-  "금강종합부품",
-];
 const paymentMethods = ["국민은행", "부산은행", "카드", "현금", "법인1층"];
 
 const formatWon = (amount: number) => amount.toLocaleString();
@@ -131,7 +117,7 @@ export default function PartsCostManagementPage({
   const [selectedMonth, setSelectedMonth] = useState(currentMonth);
   const [entries, setEntries] = useState<PartCostEntry[]>([]);
   const [settlements, setSettlements] = useState<MonthlySettlement[]>([]);
-  const [supplierOptions, setSupplierOptions] = useState<string[]>(knownPartSuppliers);
+  const [supplierOptions, setSupplierOptions] = useState<string[]>([]);
   const [workOptions, setWorkOptions] = useState<string[]>([]);
   const [form, setForm] = useState<FormState>(initialForm);
   const [searchText, setSearchText] = useState("");
@@ -181,13 +167,12 @@ export default function PartsCostManagementPage({
   }, [selectedUsageMonth]);
 
   const loadOptions = useCallback(async () => {
-    const [{ data: catalog }, { data: workOrders }] = await Promise.all([
+    const [{ data: suppliers }, { data: workOrders }] = await Promise.all([
       supabase
-        .from("business_catalog")
-        .select("name")
-        .eq("item_type", "partner")
+        .from("part_suppliers")
+        .select("supplier_name")
         .eq("is_active", true)
-        .order("name", { ascending: true }),
+        .order("supplier_name", { ascending: true }),
       supabase
         .from("work_orders")
         .select("work_name")
@@ -195,18 +180,14 @@ export default function PartsCostManagementPage({
         .limit(300),
     ]);
 
-    const catalogNames = ((catalog ?? []) as Array<{ name: string | null }>)
-      .map((row) => row.name?.trim())
+    const supplierNames = ((suppliers ?? []) as Array<{ supplier_name: string | null }>)
+      .map((row) => row.supplier_name?.trim())
       .filter((name): name is string => Boolean(name));
     const workNames = ((workOrders ?? []) as Array<{ work_name: string | null }>)
       .map((row) => row.work_name?.trim())
       .filter((name): name is string => Boolean(name));
 
-    setSupplierOptions(
-      Array.from(new Set([...knownPartSuppliers, ...catalogNames])).sort((a, b) =>
-        a.localeCompare(b, "ko")
-      )
-    );
+    setSupplierOptions(Array.from(new Set(supplierNames)));
     setWorkOptions(Array.from(new Set(workNames)));
   }, []);
 
@@ -324,6 +305,11 @@ export default function PartsCostManagementPage({
 
     if (!form.useDate || !form.supplierName.trim() || !form.partName.trim() || amount <= 0) {
       alert("사용일자, 거래처, 부품내용, 금액을 입력하세요.");
+      return;
+    }
+
+    if (!supplierOptions.includes(form.supplierName.trim())) {
+      alert("거래처는 설정관리 > 업체등록에 등록된 사용 업체만 선택할 수 있습니다.");
       return;
     }
 

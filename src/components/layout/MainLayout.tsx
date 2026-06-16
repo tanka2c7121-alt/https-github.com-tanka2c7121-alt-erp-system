@@ -31,6 +31,7 @@ import EmployeeManagePage from "../../modules/admin/EmployeeManagePage";
 import VehicleCatalogPage from "../../modules/admin/VehicleCatalogPage";
 import EmployeeStatusPage from "../../modules/employee/EmployeeStatusPage";
 import SettingsDashboardPage from "../../modules/settings/SettingsDashboardPage";
+import PartSupplierManagementPage from "../../modules/settings/PartSupplierManagementPage";
 import HomeDashboardPage from "../../modules/home/HomeDashboardPage";
 import DocumentsDashboardPage from "../../modules/documents/DocumentsDashboardPage";
 import ExpenseRequestPage from "../../modules/documents/ExpenseRequestPage";
@@ -531,6 +532,9 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
     }
     if (menu.id === "employee-manage") return <EmployeeManagePage />;
     if (menu.id === "vehicle-catalog") return <VehicleCatalogPage user={user} />;
+    if (menu.id === "part-supplier-management") {
+      return <PartSupplierManagementPage user={user} />;
+    }
     if (menu.id === "factory") return <FactoryDashboardPage onSelectMenu={handleSelectMenu} />;
     if (menu.id === "factory-settlement") {
       return <SettlementMainPage onSelectMenu={handleSelectMenu} />;
