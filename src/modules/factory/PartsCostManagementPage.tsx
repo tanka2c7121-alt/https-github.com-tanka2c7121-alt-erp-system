@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { localDateText } from "../../lib/date";
 import { supabase } from "../../lib/supabase";
 import type { UserRole } from "../../types/roles";
@@ -87,6 +88,8 @@ type UnpaidFormState = {
 const today = localDateText();
 const currentYear = today.slice(0, 4);
 const currentMonth = today.slice(5, 7);
+const partsCostPrintFirstPageRows = 31;
+const partsCostPrintNextPageRows = 40;
 const initialForm: FormState = {
   useDate: today,
   supplierName: "",
@@ -125,6 +128,20 @@ const getNextMonthEndDate = (monthText: string) => {
 
   return `${nextYear}-${nextMonth}-${nextDay}`;
 };
+function buildPartsCostPrintPages(rows: SupplierSummary[]) {
+  const pages: SupplierSummary[][] = [];
+  let cursor = 0;
+
+  pages.push(rows.slice(cursor, cursor + partsCostPrintFirstPageRows));
+  cursor += partsCostPrintFirstPageRows;
+
+  while (cursor < rows.length) {
+    pages.push(rows.slice(cursor, cursor + partsCostPrintNextPageRows));
+    cursor += partsCostPrintNextPageRows;
+  }
+
+  return pages;
+}
 
 export default function PartsCostManagementPage({
   user,
@@ -146,6 +163,7 @@ export default function PartsCostManagementPage({
   const [confirmInputs, setConfirmInputs] = useState<Record<string, string>>({});
   const [memoInputs, setMemoInputs] = useState<Record<string, string>>({});
   const [methodInputs, setMethodInputs] = useState<Record<string, string>>({});
+  const [printPortalRoot, setPrintPortalRoot] = useState<HTMLElement | null>(null);
 
   const selectedUsageMonth = `${selectedYear}-${selectedMonth}`;
   const paymentDueDate = getNextMonthEndDate(selectedUsageMonth);
@@ -227,6 +245,17 @@ export default function PartsCostManagementPage({
     void loadOptions();
   }, [loadOptions]);
 
+  useEffect(() => {
+    const root = document.createElement("div");
+    root.className = "parts-cost-v2-portal";
+    document.body.appendChild(root);
+    setPrintPortalRoot(root);
+
+    return () => {
+      root.remove();
+    };
+  }, []);
+
   const supplierSummaries = useMemo(() => {
     const map = new Map<string, SupplierSummary>();
 
@@ -302,6 +331,28 @@ export default function PartsCostManagementPage({
         .reduce((sum, row) => sum + Number(row.amount ?? 0), 0),
     [unpaidCarryovers]
   );
+  const printPages = useMemo(
+    () => buildPartsCostPrintPages(supplierSummaries),
+    [supplierSummaries]
+  );
+  const printableSheets = (
+    <div className="parts-cost-v2-root">
+      {printPages.map((pageRows, pageIndex) => (
+        <PartsCostPrintSheet
+          key={pageIndex}
+          pageIndex={pageIndex}
+          pageCount={printPages.length}
+          paymentDueDate={paymentDueDate}
+          rows={pageRows}
+          selectedUsageMonth={selectedUsageMonth}
+          totalCalculated={totals.calculated}
+          totalConfirmed={totals.confirmed}
+          totalRows={supplierSummaries.length}
+          totalUnpaidAmount={totalUnpaidAmount}
+        />
+      ))}
+    </div>
+  );
 
   const filteredEntries = useMemo(() => {
     const keyword = searchText.trim().toLowerCase();
@@ -328,6 +379,27 @@ export default function PartsCostManagementPage({
 
   const updateForm = (key: keyof FormState, value: string) => {
     setForm((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handlePrint = () => {
+    document
+      .querySelectorAll(".parts-cost-v2-portal-active")
+      .forEach((portal) =>
+        portal.classList.remove("parts-cost-v2-portal-active")
+      );
+
+    printPortalRoot?.classList.add("parts-cost-v2-portal-active");
+    document.body.classList.add("parts-cost-v2-mode");
+
+    const cleanupPrintMode = () => {
+      printPortalRoot?.classList.remove("parts-cost-v2-portal-active");
+      document.body.classList.remove("parts-cost-v2-mode");
+      window.removeEventListener("afterprint", cleanupPrintMode);
+    };
+
+    window.addEventListener("afterprint", cleanupPrintMode);
+    window.print();
+    window.setTimeout(cleanupPrintMode, 1000);
   };
 
   const updateUnpaidForm = (key: keyof UnpaidFormState, value: string) => {
@@ -596,6 +668,95 @@ export default function PartsCostManagementPage({
 
   return (
     <div className="space-y-5 text-slate-900">
+      <style>
+        {`
+          .parts-cost-v2-portal {
+            display: none;
+          }
+
+          @media print {
+            @page {
+              size: A4 portrait;
+              margin: 0;
+            }
+
+            html,
+            body.parts-cost-v2-mode {
+              margin: 0 !important;
+              padding: 0 !important;
+              background: #ffffff !important;
+              overflow: visible !important;
+            }
+
+            body.parts-cost-v2-mode * {
+              visibility: hidden !important;
+            }
+
+            body.parts-cost-v2-mode > :not(.parts-cost-v2-portal-active) {
+              display: none !important;
+            }
+
+            body.parts-cost-v2-mode .parts-cost-v2-portal-active,
+            body.parts-cost-v2-mode .parts-cost-v2-portal-active * {
+              visibility: visible !important;
+            }
+
+            body.parts-cost-v2-mode .parts-cost-v2-portal-active {
+              position: static !important;
+              left: 0 !important;
+              top: 0 !important;
+              display: block !important;
+              width: 190mm !important;
+              min-height: auto !important;
+              margin: 0 auto !important;
+              padding: 0 !important;
+              background: #ffffff !important;
+            }
+
+            body.parts-cost-v2-mode .parts-cost-v2-sheet {
+              width: 190mm !important;
+              height: 282mm !important;
+              min-height: 282mm !important;
+              margin: 7.5mm auto !important;
+              padding: 12mm 5mm 2mm !important;
+              box-sizing: border-box !important;
+              overflow: hidden !important;
+              box-shadow: none !important;
+              page-break-after: always !important;
+              break-after: page !important;
+              page-break-inside: avoid !important;
+              break-inside: avoid !important;
+            }
+
+            body.parts-cost-v2-mode .parts-cost-v2-sheet:last-child {
+              page-break-after: auto !important;
+              break-after: auto !important;
+            }
+
+            body.parts-cost-v2-mode .parts-cost-v2-table thead {
+              display: table-header-group !important;
+            }
+
+            body.parts-cost-v2-mode .parts-cost-v2-table tfoot {
+              display: table-footer-group !important;
+            }
+
+            body.parts-cost-v2-mode .parts-cost-v2-table th,
+            body.parts-cost-v2-mode .parts-cost-v2-table td,
+            body.parts-cost-v2-mode .parts-cost-v2-total-row th,
+            body.parts-cost-v2-mode .parts-cost-v2-total-row td {
+              box-sizing: border-box !important;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+
+            body.parts-cost-v2-mode .parts-cost-v2-table tr {
+              break-inside: avoid !important;
+              page-break-inside: avoid !important;
+            }
+          }
+        `}
+      </style>
       <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div>
           <h3 className="text-2xl font-bold">부품대관리</h3>
@@ -603,13 +764,22 @@ export default function PartsCostManagementPage({
             매일 사용한 부품대를 입력하고, 월초 거래처 확인 후 다음달 말일 결제까지 관리합니다.
           </p>
         </div>
-        <MonthSelector
-          selectedYear={selectedYear}
-          selectedMonth={selectedMonth}
-          yearOptions={yearOptions}
-          onYearChange={setSelectedYear}
-          onMonthChange={setSelectedMonth}
-        />
+        <div className="flex flex-wrap items-center gap-2">
+          <MonthSelector
+            selectedYear={selectedYear}
+            selectedMonth={selectedMonth}
+            yearOptions={yearOptions}
+            onYearChange={setSelectedYear}
+            onMonthChange={setSelectedMonth}
+          />
+          <button
+            type="button"
+            onClick={handlePrint}
+            className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+          >
+            출력
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
@@ -790,6 +960,10 @@ export default function PartsCostManagementPage({
           onDelete={deleteUnpaidCarryover}
         />
       )}
+
+      {printPortalRoot
+        ? createPortal(printableSheets, printPortalRoot)
+        : null}
     </div>
   );
 }
@@ -1044,6 +1218,219 @@ function PaymentManagementTable({
         </table>
       </div>
     </section>
+  );
+}
+
+function PartsCostPrintSheet({
+  pageIndex,
+  pageCount,
+  paymentDueDate,
+  rows,
+  selectedUsageMonth,
+  totalCalculated,
+  totalConfirmed,
+  totalRows,
+  totalUnpaidAmount,
+}: {
+  pageIndex: number;
+  pageCount: number;
+  paymentDueDate: string;
+  rows: SupplierSummary[];
+  selectedUsageMonth: string;
+  totalCalculated: number;
+  totalConfirmed: number;
+  totalRows: number;
+  totalUnpaidAmount: number;
+}) {
+  const isFirstPage = pageIndex === 0;
+
+  return (
+    <section className="parts-cost-v2-sheet mx-auto mb-6 h-[282mm] w-[190mm] bg-white px-[5mm] pb-[2mm] pt-[12mm] text-slate-900 shadow-lg">
+      {isFirstPage ? (
+        <>
+          <div className="relative mb-3 text-center">
+            <h1 className="text-3xl font-bold tracking-widest">부품대관리 정산내역</h1>
+            <p className="mt-1 text-sm font-semibold">신흥현대서비스 ERP</p>
+            <p className="absolute right-0 top-1 text-xs font-semibold text-slate-600">
+              1 / {pageCount}
+            </p>
+          </div>
+
+          <table className="mb-4 w-full border-collapse text-[12px] font-semibold">
+            <tbody>
+              <tr>
+                <PrintInfoHeader>사용월</PrintInfoHeader>
+                <PrintInfoCell>{selectedUsageMonth}</PrintInfoCell>
+                <PrintInfoHeader>거래처</PrintInfoHeader>
+                <PrintInfoCell right>{totalRows.toLocaleString()}곳</PrintInfoCell>
+                <PrintInfoHeader>입력합계</PrintInfoHeader>
+                <PrintInfoCell right strong>{formatWon(totalCalculated)}</PrintInfoCell>
+              </tr>
+              <tr>
+                <PrintInfoHeader>확정합계</PrintInfoHeader>
+                <PrintInfoCell right strong>{formatWon(totalConfirmed)}</PrintInfoCell>
+                <PrintInfoHeader>전체 미결</PrintInfoHeader>
+                <PrintInfoCell right>{formatWon(totalUnpaidAmount)}</PrintInfoCell>
+                <PrintInfoHeader>결제예정일</PrintInfoHeader>
+                <PrintInfoCell>{paymentDueDate}</PrintInfoCell>
+              </tr>
+            </tbody>
+          </table>
+        </>
+      ) : (
+        <div className="mb-2 text-right text-xs font-semibold text-slate-600">
+          {pageIndex + 1} / {pageCount}
+        </div>
+      )}
+
+      <PartsCostPrintTable
+        rows={rows}
+        showTotal={pageIndex === pageCount - 1}
+        totalCalculated={totalCalculated}
+        totalConfirmed={totalConfirmed}
+      />
+    </section>
+  );
+}
+
+function PartsCostPrintTable({
+  rows,
+  showTotal,
+  totalCalculated,
+  totalConfirmed,
+}: {
+  rows: SupplierSummary[];
+  showTotal: boolean;
+  totalCalculated: number;
+  totalConfirmed: number;
+}) {
+  return (
+    <table className="parts-cost-v2-table w-full table-fixed border-collapse text-[8.5px] leading-tight">
+      <colgroup>
+        <col className="w-[28mm]" />
+        <col className="w-[14mm]" />
+        <col className="w-[22mm]" />
+        <col className="w-[22mm]" />
+        <col className="w-[20mm]" />
+        <col className="w-[22mm]" />
+        <col className="w-[20mm]" />
+        <col className="w-[19mm]" />
+        <col className="w-[13mm]" />
+      </colgroup>
+      <thead className="text-center">
+        <tr className="bg-slate-50">
+          <PrintHeaderCell>거래처</PrintHeaderCell>
+          <PrintHeaderCell>건수</PrintHeaderCell>
+          <PrintHeaderCell>입력합계</PrintHeaderCell>
+          <PrintHeaderCell>확정금액</PrintHeaderCell>
+          <PrintHeaderCell>상태</PrintHeaderCell>
+          <PrintHeaderCell>결제예정일</PrintHeaderCell>
+          <PrintHeaderCell>결제방법</PrintHeaderCell>
+          <PrintHeaderCell>완료일</PrintHeaderCell>
+          <PrintHeaderCell>비고</PrintHeaderCell>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.length === 0 ? (
+          <tr>
+            <td
+              className="border border-slate-900 px-3 py-12 text-center text-slate-500"
+              colSpan={9}
+            >
+              출력할 부품대 정산 내역이 없습니다.
+            </td>
+          </tr>
+        ) : (
+          rows.map((row) => (
+            <tr key={row.supplierName} className="h-[5.8mm]">
+              <PartsPrintCell strong>{row.supplierName || "\u00A0"}</PartsPrintCell>
+              <PartsPrintCell center>{row.entryCount.toLocaleString()}</PartsPrintCell>
+              <PartsPrintCell amount>{formatWon(row.calculatedAmount)}</PartsPrintCell>
+              <PartsPrintCell amount>{formatWon(row.confirmedAmount)}</PartsPrintCell>
+              <PartsPrintCell center>{row.status || "\u00A0"}</PartsPrintCell>
+              <PartsPrintCell center>{row.paymentDueDate || "\u00A0"}</PartsPrintCell>
+              <PartsPrintCell center>{row.paymentMethod || "\u00A0"}</PartsPrintCell>
+              <PartsPrintCell center>{row.paidAt || "\u00A0"}</PartsPrintCell>
+              <PartsPrintCell>{row.confirmMemo || "\u00A0"}</PartsPrintCell>
+            </tr>
+          ))
+        )}
+      </tbody>
+      {showTotal && rows.length > 0 && (
+        <tfoot>
+          <tr className="parts-cost-v2-total-row bg-blue-50 font-bold text-blue-900">
+            <th className="border border-slate-900 px-1 py-2 text-right" colSpan={2}>
+              합계
+            </th>
+            <td className="border border-slate-900 px-1 py-2 text-right">
+              {formatWon(totalCalculated)}
+            </td>
+            <td className="border border-slate-900 px-1 py-2 text-right">
+              {formatWon(totalConfirmed)}
+            </td>
+            <td className="border border-slate-900 px-1 py-2" colSpan={5} />
+          </tr>
+        </tfoot>
+      )}
+    </table>
+  );
+}
+
+function PrintInfoHeader({ children }: { children: ReactNode }) {
+  return (
+    <th className="w-20 border border-slate-900 bg-slate-50 px-2 py-2">
+      {children}
+    </th>
+  );
+}
+
+function PrintInfoCell({
+  children,
+  right = false,
+  strong = false,
+}: {
+  children: ReactNode;
+  right?: boolean;
+  strong?: boolean;
+}) {
+  return (
+    <td
+      className={[
+        "border border-slate-900 px-2 py-2",
+        right ? "text-right" : "",
+        strong ? "font-bold text-blue-700" : "",
+      ].join(" ")}
+    >
+      {children}
+    </td>
+  );
+}
+
+function PrintHeaderCell({ children }: { children: ReactNode }) {
+  return <th className="border border-slate-900 px-1 py-2">{children}</th>;
+}
+
+function PartsPrintCell({
+  amount = false,
+  center = false,
+  children,
+  strong = false,
+}: {
+  amount?: boolean;
+  center?: boolean;
+  children: ReactNode;
+  strong?: boolean;
+}) {
+  return (
+    <td
+      className={[
+        "overflow-hidden whitespace-nowrap border border-slate-900 px-1 py-1",
+        amount ? "text-right" : center ? "text-center" : "",
+        strong ? "font-semibold" : "",
+      ].join(" ")}
+    >
+      {children}
+    </td>
   );
 }
 
