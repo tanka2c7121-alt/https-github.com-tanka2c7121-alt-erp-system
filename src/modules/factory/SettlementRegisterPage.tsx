@@ -127,6 +127,10 @@ const formatAmount = (value: string) => {
 };
 
 const toNumber = (value: string) => Number(value.replaceAll(",", "") || 0);
+const isPartnerSupportPaymentRow = (row: Pick<PaymentRow, "paymentType" | "paymentDetail">) =>
+  [row.paymentType, row.paymentDetail]
+    .map((value) => String(value ?? "").replace(/\s+/g, ""))
+    .some((value) => value.includes("입고지원"));
 
 const hasPaymentInputValue = (row: Partial<PaymentRow>) =>
   toNumber(row.amount ?? "") > 0 ||
@@ -574,7 +578,13 @@ export default function SettlementRegisterPage({
       .eq("source_work_name", targetForm.workName);
 
     const rows = paymentRows
-      .filter((row) => row.amount && row.date && row.method)
+      .filter(
+        (row) =>
+          row.amount &&
+          row.date &&
+          row.method &&
+          !isPartnerSupportPaymentRow(row)
+      )
       .map((row) => ({
         date: row.date,
         created_on: localDateText(),

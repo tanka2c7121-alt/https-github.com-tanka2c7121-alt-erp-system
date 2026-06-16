@@ -95,6 +95,13 @@ const normalizeAccountName = (value: string) =>
     ? "BLUE POINT"
     : value;
 
+const isPartnerSupportExpense = (
+  row: Pick<ExpenseRequest, "category" | "content">
+) =>
+  [row.category, row.content]
+    .map((value) => String(value ?? "").replace(/\s+/g, ""))
+    .some((value) => value.includes("입고지원"));
+
 const isFullUrl = (value: string) => /^https?:\/\//.test(value);
 
 const formatRequesterName = (user: LoginUser) => {
@@ -626,23 +633,36 @@ export default function ExpenseRequestPage({
 
     const sourceName = `expense-request-${row.id}`;
 
-    const { error: cashError } = await supabase.from("daily_cash").insert({
-      date: row.request_date,
-      created_on: localDateText(),
-      account: normalizeAccountName(row.account),
-      type: row.expense_type,
-      category: row.category,
-      content: row.vendor ? `${row.vendor} - ${row.content}` : row.content,
-      income: 0,
-      expense: Number(row.amount || 0),
-      memo: row.memo,
-      source_type: "expense_request",
-      source_work_name: sourceName,
-    });
+    const { error: cleanupCashError } = await supabase
+      .from("daily_cash")
+      .delete()
+      .eq("source_type", "expense_request")
+      .eq("source_work_name", sourceName);
 
-    if (cashError) {
-      alert("일일입출금 반영 실패: " + cashError.message);
+    if (cleanupCashError) {
+      alert("기존 일일입출금 정리 실패: " + cleanupCashError.message);
       return;
+    }
+
+    if (!isPartnerSupportExpense(row)) {
+      const { error: cashError } = await supabase.from("daily_cash").insert({
+        date: row.request_date,
+        created_on: localDateText(),
+        account: normalizeAccountName(row.account),
+        type: row.expense_type,
+        category: row.category,
+        content: row.vendor ? `${row.vendor} - ${row.content}` : row.content,
+        income: 0,
+        expense: Number(row.amount || 0),
+        memo: row.memo,
+        source_type: "expense_request",
+        source_work_name: sourceName,
+      });
+
+      if (cashError) {
+        alert("일일입출금 반영 실패: " + cashError.message);
+        return;
+      }
     }
 
     const { error } = await supabase

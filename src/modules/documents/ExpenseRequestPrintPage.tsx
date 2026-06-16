@@ -75,6 +75,13 @@ const formatDateTime = (value?: string | null) => {
   return value.slice(0, 16).replace("T", " ");
 };
 
+const isPartnerSupportExpense = (
+  row: Pick<ExpenseRequest, "category" | "content">
+) =>
+  [row.category, row.content]
+    .map((value) => String(value ?? "").replace(/\s+/g, ""))
+    .some((value) => value.includes("입고지원"));
+
 export default function ExpenseRequestPrintPage({
   expenseRequest,
   user,
@@ -161,7 +168,9 @@ export default function ExpenseRequestPrintPage({
 
     const sourceName = `expense-request-${expenseRequest.id}`;
 
-    const { error: cashError } = await supabase.from("daily_cash").insert({
+    const { error: cashError } = isPartnerSupportExpense(expenseRequest)
+      ? { error: null }
+      : await supabase.from("daily_cash").insert({
       date: expenseRequest.request_date,
       created_on: localDateText(),
       account: expenseRequest.account,
