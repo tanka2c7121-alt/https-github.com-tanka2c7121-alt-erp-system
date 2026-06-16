@@ -47,6 +47,16 @@ type MonthlySettlement = {
   confirm_memo: string | null;
 };
 
+type UnpaidCarryover = {
+  id: number;
+  unpaid_year: number;
+  supplier_name: string;
+  amount: number;
+  memo: string | null;
+  is_paid: boolean;
+  paid_at: string | null;
+};
+
 type SupplierSummary = {
   supplierName: string;
   entryCount: number;
@@ -63,8 +73,13 @@ type SupplierSummary = {
 type FormState = {
   useDate: string;
   supplierName: string;
-  workName: string;
-  partName: string;
+  amount: string;
+  memo: string;
+};
+
+type UnpaidFormState = {
+  unpaidYear: string;
+  supplierName: string;
   amount: string;
   memo: string;
 };
@@ -75,8 +90,12 @@ const currentMonth = today.slice(5, 7);
 const initialForm: FormState = {
   useDate: today,
   supplierName: "",
-  workName: "",
-  partName: "",
+  amount: "",
+  memo: "",
+};
+const initialUnpaidForm: UnpaidFormState = {
+  unpaidYear: currentYear,
+  supplierName: "",
   amount: "",
   memo: "",
 };
@@ -110,16 +129,18 @@ const getNextMonthEndDate = (monthText: string) => {
 export default function PartsCostManagementPage({
   user,
 }: PartsCostManagementPageProps) {
-  const [activeTab, setActiveTab] = useState<"daily" | "monthly" | "payment">(
+  const [activeTab, setActiveTab] = useState<"daily" | "monthly" | "payment" | "unpaid">(
     "daily"
   );
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [selectedMonth, setSelectedMonth] = useState(currentMonth);
   const [entries, setEntries] = useState<PartCostEntry[]>([]);
   const [settlements, setSettlements] = useState<MonthlySettlement[]>([]);
+  const [unpaidCarryovers, setUnpaidCarryovers] = useState<UnpaidCarryover[]>([]);
   const [supplierOptions, setSupplierOptions] = useState<string[]>([]);
-  const [workOptions, setWorkOptions] = useState<string[]>([]);
   const [form, setForm] = useState<FormState>(initialForm);
+  const [unpaidForm, setUnpaidForm] =
+    useState<UnpaidFormState>(initialUnpaidForm);
   const [searchText, setSearchText] = useState("");
   const [saving, setSaving] = useState(false);
   const [confirmInputs, setConfirmInputs] = useState<Record<string, string>>({});
@@ -166,35 +187,41 @@ export default function PartsCostManagementPage({
     setSettlements((data ?? []) as MonthlySettlement[]);
   }, [selectedUsageMonth]);
 
+  const loadUnpaidCarryovers = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("part_cost_unpaid_carryovers")
+      .select("*")
+      .order("is_paid", { ascending: true })
+      .order("unpaid_year", { ascending: true })
+      .order("supplier_name", { ascending: true });
+
+    if (error) {
+      setUnpaidCarryovers([]);
+      return;
+    }
+
+    setUnpaidCarryovers((data ?? []) as UnpaidCarryover[]);
+  }, []);
+
   const loadOptions = useCallback(async () => {
-    const [{ data: suppliers }, { data: workOrders }] = await Promise.all([
-      supabase
-        .from("part_suppliers")
-        .select("supplier_name")
-        .eq("is_active", true)
-        .order("supplier_name", { ascending: true }),
-      supabase
-        .from("work_orders")
-        .select("work_name")
-        .order("id", { ascending: false })
-        .limit(300),
-    ]);
+    const { data: suppliers } = await supabase
+      .from("part_suppliers")
+      .select("supplier_name")
+      .eq("is_active", true)
+      .order("supplier_name", { ascending: true });
 
     const supplierNames = ((suppliers ?? []) as Array<{ supplier_name: string | null }>)
       .map((row) => row.supplier_name?.trim())
       .filter((name): name is string => Boolean(name));
-    const workNames = ((workOrders ?? []) as Array<{ work_name: string | null }>)
-      .map((row) => row.work_name?.trim())
-      .filter((name): name is string => Boolean(name));
 
     setSupplierOptions(Array.from(new Set(supplierNames)));
-    setWorkOptions(Array.from(new Set(workNames)));
   }, []);
 
   useEffect(() => {
     void loadEntries();
     void loadSettlements();
-  }, [loadEntries, loadSettlements]);
+    void loadUnpaidCarryovers();
+  }, [loadEntries, loadSettlements, loadUnpaidCarryovers]);
 
   useEffect(() => {
     void loadOptions();
@@ -264,12 +291,17 @@ export default function PartsCostManagementPage({
       (result, row) => ({
         calculated: result.calculated + row.calculatedAmount,
         confirmed: result.confirmed + row.confirmedAmount,
-        unpaid:
-          result.unpaid + (row.status === "결제완료" ? 0 : row.confirmedAmount),
       }),
-      { calculated: 0, confirmed: 0, unpaid: 0 }
+      { calculated: 0, confirmed: 0 }
     );
   }, [supplierSummaries]);
+  const totalUnpaidAmount = useMemo(
+    () =>
+      unpaidCarryovers
+        .filter((row) => !row.is_paid)
+        .reduce((sum, row) => sum + Number(row.amount ?? 0), 0),
+    [unpaidCarryovers]
+  );
 
   const filteredEntries = useMemo(() => {
     const keyword = searchText.trim().toLowerCase();
@@ -279,8 +311,6 @@ export default function PartsCostManagementPage({
       [
         entry.use_date,
         entry.supplier_name,
-        entry.work_name ?? "",
-        entry.part_name,
         entry.memo ?? "",
         entry.created_name ?? "",
       ]
@@ -300,11 +330,82 @@ export default function PartsCostManagementPage({
     setForm((prev) => ({ ...prev, [key]: value }));
   };
 
+  const updateUnpaidForm = (key: keyof UnpaidFormState, value: string) => {
+    setUnpaidForm((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const saveUnpaidCarryover = async () => {
+    const amount = parseAmount(unpaidForm.amount);
+    const year = Number(unpaidForm.unpaidYear);
+
+    if (!year || !unpaidForm.supplierName || amount <= 0) {
+      alert("년도, 업체, 미결금액을 입력하세요.");
+      return;
+    }
+
+    const { error } = await supabase.from("part_cost_unpaid_carryovers").insert({
+      unpaid_year: year,
+      supplier_name: unpaidForm.supplierName,
+      amount,
+      memo: unpaidForm.memo.trim() || null,
+      created_by: user.user_id,
+      created_name: user.user_name,
+    });
+
+    if (error) {
+      alert("이월미결 저장 실패: " + error.message);
+      return;
+    }
+
+    setUnpaidForm((prev) => ({
+      ...initialUnpaidForm,
+      unpaidYear: prev.unpaidYear,
+      supplierName: prev.supplierName,
+    }));
+    await loadUnpaidCarryovers();
+  };
+
+  const toggleUnpaidPaid = async (row: UnpaidCarryover) => {
+    const nextPaid = !row.is_paid;
+    const { error } = await supabase
+      .from("part_cost_unpaid_carryovers")
+      .update({
+        is_paid: nextPaid,
+        paid_at: nextPaid ? localDateText() : null,
+      })
+      .eq("id", row.id);
+
+    if (error) {
+      alert("이월미결 상태 변경 실패: " + error.message);
+      return;
+    }
+
+    await loadUnpaidCarryovers();
+  };
+
+  const deleteUnpaidCarryover = async (row: UnpaidCarryover) => {
+    if (!confirm(`${row.unpaid_year}년 ${row.supplier_name} 미결건을 삭제할까요?`)) {
+      return;
+    }
+
+    const { error } = await supabase
+      .from("part_cost_unpaid_carryovers")
+      .delete()
+      .eq("id", row.id);
+
+    if (error) {
+      alert("이월미결 삭제 실패: " + error.message);
+      return;
+    }
+
+    await loadUnpaidCarryovers();
+  };
+
   const saveEntry = async () => {
     const amount = parseAmount(form.amount);
 
-    if (!form.useDate || !form.supplierName.trim() || !form.partName.trim() || amount <= 0) {
-      alert("사용일자, 거래처, 부품내용, 금액을 입력하세요.");
+    if (!form.useDate || !form.supplierName.trim() || amount <= 0) {
+      alert("사용일자, 거래처, 금액을 입력하세요.");
       return;
     }
 
@@ -317,8 +418,8 @@ export default function PartsCostManagementPage({
     const { error } = await supabase.from("part_cost_entries").insert({
       use_date: form.useDate,
       supplier_name: form.supplierName.trim(),
-      work_name: form.workName.trim() || null,
-      part_name: form.partName.trim(),
+      work_name: null,
+      part_name: "부품대",
       amount,
       memo: form.memo.trim() || null,
       created_by: user.user_id,
@@ -430,8 +531,60 @@ export default function PartsCostManagementPage({
         methodInputs[summary.supplierName] || summary.paymentMethod || "국민은행",
     });
 
-  const completePayment = (summary: SupplierSummary) =>
+  const cancelScheduledPayment = (summary: SupplierSummary) =>
     upsertSettlement(summary, {
+      status: "금액확정",
+      confirmed_amount: summary.confirmedAmount,
+      payment_due_date: summary.paymentDueDate,
+      payment_method:
+        methodInputs[summary.supplierName] || summary.paymentMethod || "국민은행",
+      paid_at: null,
+    });
+
+  const syncPaymentToDailyCash = async (summary: SupplierSummary) => {
+    const paymentMethod =
+      methodInputs[summary.supplierName] || summary.paymentMethod || "국민은행";
+    const sourceWorkName = `${selectedUsageMonth}:${summary.supplierName}`;
+
+    const { error: deleteError } = await supabase
+      .from("daily_cash")
+      .delete()
+      .eq("source_type", "part_cost_payment")
+      .eq("source_work_name", sourceWorkName);
+
+    if (deleteError) {
+      alert("기존 일일입출금 연동 내역 정리 실패: " + deleteError.message);
+      return false;
+    }
+
+    const { error: insertError } = await supabase.from("daily_cash").insert({
+      date: localDateText(),
+      created_on: localDateText(),
+      account: paymentMethod,
+      type: "변동비",
+      category: "부품대",
+      content: `부품대 / ${summary.supplierName} / ${selectedUsageMonth}`,
+      income: 0,
+      expense: summary.confirmedAmount,
+      memo: summary.confirmMemo || null,
+      source_type: "part_cost_payment",
+      source_work_name: sourceWorkName,
+    });
+
+    if (insertError) {
+      alert("일일입출금 자동 등록 실패: " + insertError.message);
+      return false;
+    }
+
+    return true;
+  };
+
+  const completePayment = async (summary: SupplierSummary) => {
+    const synced = await syncPaymentToDailyCash(summary);
+
+    if (!synced) return;
+
+    await upsertSettlement(summary, {
       status: "결제완료",
       confirmed_amount: summary.confirmedAmount,
       payment_due_date: summary.paymentDueDate,
@@ -439,6 +592,7 @@ export default function PartsCostManagementPage({
         methodInputs[summary.supplierName] || summary.paymentMethod || "국민은행",
       paid_at: localDateText(),
     });
+  };
 
   return (
     <div className="space-y-5 text-slate-900">
@@ -461,7 +615,7 @@ export default function PartsCostManagementPage({
       <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
         <SummaryCard title="입력합계" value={`${formatWon(totals.calculated)}원`} />
         <SummaryCard title="확정합계" value={`${formatWon(totals.confirmed)}원`} />
-        <SummaryCard title="미결제" value={`${formatWon(totals.unpaid)}원`} />
+        <SummaryCard title="전체 미결제" value={`${formatWon(totalUnpaidAmount)}원`} />
         <SummaryCard title="결제예정일" value={paymentDueDate} />
       </div>
 
@@ -475,11 +629,14 @@ export default function PartsCostManagementPage({
         <TabButton active={activeTab === "payment"} onClick={() => setActiveTab("payment")}>
           결제관리
         </TabButton>
+        <TabButton active={activeTab === "unpaid"} onClick={() => setActiveTab("unpaid")}>
+          이월미결
+        </TabButton>
       </div>
 
       {activeTab === "daily" && (
         <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-4">
-          <div className="grid grid-cols-1 gap-3 lg:grid-cols-6">
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-4">
             <Field label="사용일자">
               <input
                 type="date"
@@ -489,30 +646,18 @@ export default function PartsCostManagementPage({
               />
             </Field>
             <Field label="거래처">
-              <input
+              <select
                 className={inputClass}
-                list="part-supplier-options"
                 value={form.supplierName}
                 onChange={(event) => updateForm("supplierName", event.target.value)}
-                placeholder="예: 태양상사"
-              />
-            </Field>
-            <Field label="작명/차량">
-              <input
-                className={inputClass}
-                list="part-work-options"
-                value={form.workName}
-                onChange={(event) => updateForm("workName", event.target.value)}
-                placeholder="선택"
-              />
-            </Field>
-            <Field label="부품내용">
-              <input
-                className={inputClass}
-                value={form.partName}
-                onChange={(event) => updateForm("partName", event.target.value)}
-                placeholder="예: 범퍼, 몰딩"
-              />
+              >
+                <option value="">업체 선택</option>
+                {supplierOptions.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
             </Field>
             <Field label="금액">
               <input
@@ -545,16 +690,6 @@ export default function PartsCostManagementPage({
             </button>
           </div>
 
-          <datalist id="part-supplier-options">
-            {supplierOptions.map((name) => (
-              <option key={name} value={name} />
-            ))}
-          </datalist>
-          <datalist id="part-work-options">
-            {workOptions.map((name) => (
-              <option key={name} value={name} />
-            ))}
-          </datalist>
         </section>
       )}
 
@@ -566,7 +701,7 @@ export default function PartsCostManagementPage({
               className="rounded-lg border border-slate-300 px-3 py-2 text-sm md:w-80"
               value={searchText}
               onChange={(event) => setSearchText(event.target.value)}
-              placeholder="거래처, 작명, 부품내용 검색"
+              placeholder="거래처, 비고 검색"
             />
           </div>
           <div className="overflow-x-auto">
@@ -575,8 +710,6 @@ export default function PartsCostManagementPage({
                 <tr>
                   <HeaderCell>사용일자</HeaderCell>
                   <HeaderCell>거래처</HeaderCell>
-                  <HeaderCell>작명/차량</HeaderCell>
-                  <HeaderCell>부품내용</HeaderCell>
                   <HeaderCell>금액</HeaderCell>
                   <HeaderCell>입력자</HeaderCell>
                   <HeaderCell>비고</HeaderCell>
@@ -586,7 +719,7 @@ export default function PartsCostManagementPage({
               <tbody>
                 {filteredEntries.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="border border-slate-200 px-3 py-10 text-center text-slate-500">
+                    <td colSpan={6} className="border border-slate-200 px-3 py-10 text-center text-slate-500">
                       입력된 부품대 내역이 없습니다.
                     </td>
                   </tr>
@@ -595,8 +728,6 @@ export default function PartsCostManagementPage({
                     <tr key={entry.id} className="hover:bg-slate-50">
                       <BodyCell>{entry.use_date}</BodyCell>
                       <BodyCell strong>{entry.supplier_name}</BodyCell>
-                      <BodyCell>{entry.work_name ?? "-"}</BodyCell>
-                      <BodyCell>{entry.part_name}</BodyCell>
                       <BodyCell align="right">{formatWon(Number(entry.amount))}</BodyCell>
                       <BodyCell>{entry.created_name ?? "-"}</BodyCell>
                       <BodyCell>{entry.memo ?? "-"}</BodyCell>
@@ -643,7 +774,20 @@ export default function PartsCostManagementPage({
             setMethodInputs((prev) => ({ ...prev, [supplier]: value }))
           }
           onSchedulePayment={schedulePayment}
+          onCancelScheduledPayment={cancelScheduledPayment}
           onCompletePayment={completePayment}
+        />
+      )}
+
+      {activeTab === "unpaid" && (
+        <UnpaidCarryoverTable
+          rows={unpaidCarryovers}
+          supplierOptions={supplierOptions}
+          form={unpaidForm}
+          onFormChange={updateUnpaidForm}
+          onSave={saveUnpaidCarryover}
+          onTogglePaid={toggleUnpaidPaid}
+          onDelete={deleteUnpaidCarryover}
         />
       )}
     </div>
@@ -805,6 +949,7 @@ function PaymentManagementTable({
   paymentMethods,
   onMethodChange,
   onSchedulePayment,
+  onCancelScheduledPayment,
   onCompletePayment,
 }: {
   rows: SupplierSummary[];
@@ -812,6 +957,7 @@ function PaymentManagementTable({
   paymentMethods: string[];
   onMethodChange: (supplier: string, value: string) => void;
   onSchedulePayment: (summary: SupplierSummary) => void;
+  onCancelScheduledPayment: (summary: SupplierSummary) => void;
   onCompletePayment: (summary: SupplierSummary) => void;
 }) {
   const paymentRows = rows.filter((row) => row.confirmedAmount > 0);
@@ -873,12 +1019,170 @@ function PaymentManagementTable({
                       >
                         결제예약
                       </button>
+                      {row.status === "결제예약" && (
+                        <button
+                          type="button"
+                          onClick={() => void onCancelScheduledPayment(row)}
+                          className="rounded border border-amber-300 px-3 py-1 text-xs font-semibold text-amber-700 hover:bg-amber-50"
+                        >
+                          예약취소
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => void onCompletePayment(row)}
                         className="rounded bg-slate-900 px-3 py-1 text-xs font-semibold text-white hover:bg-slate-800"
                       >
                         결제완료
+                      </button>
+                    </div>
+                  </BodyCell>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function UnpaidCarryoverTable({
+  rows,
+  supplierOptions,
+  form,
+  onFormChange,
+  onSave,
+  onTogglePaid,
+  onDelete,
+}: {
+  rows: UnpaidCarryover[];
+  supplierOptions: string[];
+  form: UnpaidFormState;
+  onFormChange: (key: keyof UnpaidFormState, value: string) => void;
+  onSave: () => void;
+  onTogglePaid: (row: UnpaidCarryover) => void;
+  onDelete: (row: UnpaidCarryover) => void;
+}) {
+  return (
+    <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-4">
+      <div>
+        <h4 className="font-bold text-slate-900">이월미결 등록</h4>
+        <p className="text-sm text-slate-500">
+          2018년, 2019년, 2021년처럼 예전부터 남아있는 업체별 미결 금액을 따로 관리합니다.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-5">
+        <Field label="년도">
+          <input
+            className={inputClass}
+            inputMode="numeric"
+            value={form.unpaidYear}
+            onChange={(event) =>
+              onFormChange("unpaidYear", event.target.value.replace(/\D/g, "").slice(0, 4))
+            }
+            placeholder="2018"
+          />
+        </Field>
+        <Field label="업체">
+          <select
+            className={inputClass}
+            value={form.supplierName}
+            onChange={(event) => onFormChange("supplierName", event.target.value)}
+          >
+            <option value="">업체 선택</option>
+            {supplierOptions.map((name) => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="미결금액">
+          <input
+            className={`${inputClass} text-right`}
+            value={form.amount}
+            onChange={(event) =>
+              onFormChange("amount", formatAmountInput(event.target.value))
+            }
+            placeholder="0"
+          />
+        </Field>
+        <Field label="비고">
+          <input
+            className={inputClass}
+            value={form.memo}
+            onChange={(event) => onFormChange("memo", event.target.value)}
+            placeholder="예: 기존 장부 이월"
+          />
+        </Field>
+        <div className="flex items-end">
+          <button
+            type="button"
+            onClick={() => void onSave()}
+            className="w-full rounded-lg bg-blue-600 px-5 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+          >
+            미결등록
+          </button>
+        </div>
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[900px] border-collapse text-sm">
+          <thead className="bg-slate-100 text-slate-700">
+            <tr>
+              <HeaderCell>년도</HeaderCell>
+              <HeaderCell>업체</HeaderCell>
+              <HeaderCell>미결금액</HeaderCell>
+              <HeaderCell>비고</HeaderCell>
+              <HeaderCell>상태</HeaderCell>
+              <HeaderCell>완료일</HeaderCell>
+              <HeaderCell>관리</HeaderCell>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 ? (
+              <tr>
+                <td colSpan={7} className="border border-slate-200 px-3 py-10 text-center text-slate-500">
+                  등록된 이월미결이 없습니다.
+                </td>
+              </tr>
+            ) : (
+              rows.map((row) => (
+                <tr key={row.id} className={row.is_paid ? "bg-slate-50 text-slate-500" : "hover:bg-slate-50"}>
+                  <BodyCell>{row.unpaid_year}</BodyCell>
+                  <BodyCell strong>{row.supplier_name}</BodyCell>
+                  <BodyCell align="right">{formatWon(Number(row.amount))}</BodyCell>
+                  <BodyCell>{row.memo ?? "-"}</BodyCell>
+                  <BodyCell>
+                    <span
+                      className={[
+                        "rounded-full px-2 py-1 text-xs font-bold",
+                        row.is_paid
+                          ? "bg-green-100 text-green-700"
+                          : "bg-red-100 text-red-700",
+                      ].join(" ")}
+                    >
+                      {row.is_paid ? "결제완료" : "미결"}
+                    </span>
+                  </BodyCell>
+                  <BodyCell>{row.paid_at ?? "-"}</BodyCell>
+                  <BodyCell>
+                    <div className="flex justify-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => void onTogglePaid(row)}
+                        className="rounded border border-blue-300 px-3 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+                      >
+                        {row.is_paid ? "미결복구" : "완료처리"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void onDelete(row)}
+                        className="rounded border border-red-200 px-3 py-1 text-xs font-semibold text-red-600 hover:bg-red-50"
+                      >
+                        삭제
                       </button>
                     </div>
                   </BodyCell>

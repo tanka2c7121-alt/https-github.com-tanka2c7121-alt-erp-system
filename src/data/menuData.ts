@@ -44,7 +44,6 @@ export const menuData: MenuItem[] = [
         title: "출고현황",
         children: [
           { id: "factory-deductible-management", title: "면책금관리" },
-          { id: "factory-parts-cost-management", title: "부품대관리" },
         ],
       },
       {
@@ -68,6 +67,10 @@ export const menuData: MenuItem[] = [
                 title: "입출금등록",
               },
             ],
+          },
+          {
+            id: "factory-parts-cost-management",
+            title: "부품대관리",
           },
         ],
       },
