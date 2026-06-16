@@ -458,6 +458,7 @@ export default function WorkRegisterPage({
   const [photoOcrMessage, setPhotoOcrMessage] = useState("");
   const [cameraOpen, setCameraOpen] = useState(false);
   const [cameraStarting, setCameraStarting] = useState(false);
+  const [cameraReady, setCameraReady] = useState(false);
   const [cameraFlash, setCameraFlash] = useState(false);
   const [cameraShotCount, setCameraShotCount] = useState(0);
   const [photoViewerIndex, setPhotoViewerIndex] = useState<number | null>(null);
@@ -703,8 +704,29 @@ useEffect(() => {
     return;
   }
 
-  videoRef.current.srcObject = cameraStreamRef.current;
-  void videoRef.current.play();
+  const video = videoRef.current;
+  let isMounted = true;
+  const markReady = () => {
+    if (isMounted && video.videoWidth > 0 && video.videoHeight > 0) {
+      setCameraReady(true);
+    }
+  };
+
+  video.srcObject = cameraStreamRef.current;
+  video.addEventListener("loadedmetadata", markReady);
+  video.addEventListener("canplay", markReady);
+
+  void video.play().then(markReady).catch(() => {
+    if (isMounted) {
+      setCameraReady(false);
+    }
+  });
+
+  return () => {
+    isMounted = false;
+    video.removeEventListener("loadedmetadata", markReady);
+    video.removeEventListener("canplay", markReady);
+  };
 }, [cameraOpen]);
 
 useEffect(() => {
@@ -850,16 +872,35 @@ async function openCamera() {
   }
 
   setCameraStarting(true);
+  setCameraReady(false);
 
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: {
-        facingMode: { ideal: "environment" },
-        width: { ideal: 1920 },
-        height: { ideal: 1080 },
-      },
-      audio: false,
-    });
+    cameraStreamRef.current?.getTracks().forEach((track) => track.stop());
+
+    let stream: MediaStream;
+
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: { ideal: "environment" },
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+        },
+        audio: false,
+      });
+    } catch (firstError) {
+      const errorName =
+        firstError instanceof DOMException ? firstError.name : "";
+
+      if (errorName === "NotAllowedError" || errorName === "SecurityError") {
+        throw firstError;
+      }
+
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: false,
+      });
+    }
 
     cameraStreamRef.current = stream;
     setCameraOpen(true);
@@ -879,6 +920,7 @@ function closeCamera() {
   }
 
   setCameraOpen(false);
+  setCameraReady(false);
   setCameraFlash(false);
   setCameraShotCount(0);
 }
@@ -886,7 +928,13 @@ function closeCamera() {
 async function captureCameraPhoto() {
   const video = videoRef.current;
 
-  if (!video || video.videoWidth === 0 || video.videoHeight === 0) {
+  if (
+    !video ||
+    !cameraReady ||
+    video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA ||
+    video.videoWidth === 0 ||
+    video.videoHeight === 0
+  ) {
     alert("카메라 화면을 불러오는 중입니다. 잠시 후 다시 촬영하세요.");
     return;
   }
@@ -1777,13 +1825,18 @@ function handleClearWorkRow(index: number) {
         </div>
 
         {cameraOpen && (
-          <div className="fixed inset-0 z-50 flex flex-col bg-slate-950 landscape:flex-row">
+          <div className="fixed inset-0 z-50 flex h-dvh flex-col bg-slate-950 landscape:flex-row">
             <video
               ref={videoRef}
               playsInline
               muted
-              className="min-h-0 flex-1 bg-black object-contain"
+              className="min-h-0 min-w-0 flex-1 bg-black object-contain"
             />
+            {!cameraReady && (
+              <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-slate-950/70 text-sm font-semibold text-white">
+                카메라 준비 중...
+              </div>
+            )}
             {cameraFlash && (
               <div className="pointer-events-none absolute inset-0 z-10 animate-pulse bg-white/85" />
             )}
@@ -1799,15 +1852,15 @@ function handleClearWorkRow(index: number) {
                 onClick={() => {
                   void captureCameraPhoto();
                 }}
-                disabled={photoOcrReading}
+                disabled={!cameraReady || photoOcrReading}
                 className="min-h-12 flex-1 rounded-lg bg-blue-600 px-5 py-3 text-sm font-semibold text-white hover:bg-blue-700 disabled:bg-slate-400 landscape:h-20 landscape:w-20 landscape:rounded-full landscape:px-3 landscape:py-3"
               >
-                촬영
+                {cameraReady ? "촬영" : "준비 중"}
               </button>
               <button
                 type="button"
                 onClick={closeCamera}
-                className="min-h-12 flex-1 rounded-lg border border-slate-300 px-5 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 landscape:hidden"
+                className="min-h-12 flex-1 rounded-lg border border-slate-300 px-5 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 landscape:h-20 landscape:w-20 landscape:rounded-full landscape:border-slate-600 landscape:bg-slate-900 landscape:px-3 landscape:py-3 landscape:text-white landscape:hover:bg-slate-800"
               >
                 닫기
               </button>
