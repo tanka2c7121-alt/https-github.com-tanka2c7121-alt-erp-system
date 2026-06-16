@@ -466,6 +466,16 @@ export default function LoginPage({ onLogin }: Props) {
           }
 
           @media (max-width: 760px) {
+            .login-showcase {
+              min-height: 100svh;
+            }
+
+            .login-auth-shell {
+              min-height: 100svh;
+              padding-top: clamp(28px, 7svh, 58px);
+              padding-bottom: 24px;
+            }
+
             .logo-animation-stage {
               top: 18vh;
               width: 82vw;
@@ -481,10 +491,28 @@ export default function LoginPage({ onLogin }: Props) {
 
             .login-card-panel {
               margin-top: 0;
+              width: min(430px, calc(100vw - 28px));
+            }
+
+            .login-brand-lockup {
+              width: min(420px, calc(100vw - 28px));
+              margin-bottom: 14px;
             }
 
             .login-brand-mark {
-              width: min(440px, 88vw);
+              width: min(310px, 84vw);
+              margin-bottom: 10px;
+            }
+
+            .login-brand-title {
+              font-size: clamp(24px, 7.2vw, 30px);
+              line-height: 1.05;
+            }
+
+            .login-brand-subtitle {
+              margin-top: 5px;
+              font-size: clamp(10px, 3vw, 12px);
+              letter-spacing: 0.04em;
             }
           }
         `}
@@ -505,14 +533,14 @@ export default function LoginPage({ onLogin }: Props) {
         </div>
       )}
 
-      <section className="relative z-10 mx-auto flex min-h-screen w-full max-w-6xl flex-col items-center px-5 pb-10 pt-[24vh] md:px-8 md:pt-[28vh]">
+      <section className="login-auth-shell relative z-10 mx-auto flex min-h-screen w-full max-w-6xl flex-col items-center px-5 pb-10 pt-[24vh] md:px-8 md:pt-[28vh]">
         <div className="login-brand-lockup" aria-label="신흥현대서비스 ERP">
           <img className="login-brand-mark" src="/genesis-mark.png" alt="" />
           <h1 className="login-brand-title">신흥현대서비스 ERP</h1>
           <p className="login-brand-subtitle">SHINHEUNG HYUNDAI SERVICE ERP</p>
         </div>
 
-        <div className="login-card-panel relative z-10 rounded-[14px] border border-white/80 bg-white/82 p-8 shadow-2xl shadow-slate-900/10 backdrop-blur-md">
+        <div className="login-card-panel relative z-10 rounded-[14px] border border-white/80 bg-white/82 p-5 shadow-2xl shadow-slate-900/10 backdrop-blur-md sm:p-8">
             {isLoginMode ? (
               <form
                 className="space-y-4"
