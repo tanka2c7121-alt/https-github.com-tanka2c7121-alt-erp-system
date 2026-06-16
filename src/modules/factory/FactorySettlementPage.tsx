@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { MenuItem } from "../../data/menuData";
 import { localDateText } from "../../lib/date";
 import { supabase } from "../../lib/supabase";
+import { useRealtimeRefresh } from "../../lib/useRealtimeRefresh";
 
 
 
@@ -32,6 +33,12 @@ type SettlementItem = {
   paymentRate: number | null;
 };
 
+const realtimeTables = [
+  { table: "work_orders" },
+  { table: "repair_settlements" },
+  { table: "settlement_payments" },
+  { table: "settlement_expenses" },
+];
 const formatWon = (amount: number) => amount.toLocaleString();
 const formatPercent = (rate: number | null) =>
   rate === null ? "-" : `${rate.toFixed(1)}%`;
@@ -317,6 +324,12 @@ const handleSort = (field: keyof SettlementItem) => {
   useEffect(() => {
     void loadSettlementList();
   }, [loadSettlementList]);
+
+  useRealtimeRefresh({
+    channelName: "factory-settlement-page",
+    tables: realtimeTables,
+    onRefresh: loadSettlementList,
+  });
 
   const filteredList = useMemo(() => {
   const keyword = searchText.trim().toLowerCase();

@@ -123,9 +123,6 @@ const realtimeRefreshMenuIds = new Set([
   "factory-release-list",
   "factory-outbound",
   "factory-outbound-list",
-  "factory-settlement",
-  "factory-settlement-repair-register",
-  "factory-settlement-pending-insurance",
   "sales-partner-support",
 ]);
 
