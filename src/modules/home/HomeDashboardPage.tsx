@@ -59,6 +59,10 @@ type PendingAttendanceRequest = {
   reason: string;
 };
 
+type ApprovedAttendanceRequest = PendingAttendanceRequest & {
+  status: string;
+};
+
 type PendingIncidentReport = {
   id: number;
   report_date: string;
@@ -85,8 +89,8 @@ type ScheduleEvent = {
   date: string;
   label: string;
   detail: string;
-  tone: "blue" | "green" | "indigo" | "red";
-  kind: "inbound" | "outboundPlan" | "released" | "manual" | "holiday";
+  tone: "amber" | "blue" | "green" | "indigo" | "red";
+  kind: "attendance" | "inbound" | "outboundPlan" | "released" | "manual" | "holiday";
   manual?: boolean;
 };
 
@@ -131,6 +135,23 @@ const addDays = (dateText: string, days: number) => {
   const date = parseLocalDate(dateText);
   date.setDate(date.getDate() + days);
   return toLocalDateText(date);
+};
+const buildDateRangeTexts = (startDate: string, endDate?: string | null) => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate)) return [];
+
+  const rangeEnd =
+    endDate && /^\d{4}-\d{2}-\d{2}$/.test(endDate) && endDate >= startDate
+      ? endDate
+      : startDate;
+  const dates: string[] = [];
+  let cursor = startDate;
+
+  while (cursor <= rangeEnd && dates.length < 62) {
+    dates.push(cursor);
+    cursor = addDays(cursor, 1);
+  }
+
+  return dates;
 };
 const addMonths = (monthText: string, months: number) => {
   const [year, month] = monthText.split("-").map(Number);
@@ -191,6 +212,9 @@ export default function HomeDashboardPage({
   const [pendingAttendanceRequests, setPendingAttendanceRequests] = useState<
     PendingAttendanceRequest[]
   >([]);
+  const [approvedAttendanceRequests, setApprovedAttendanceRequests] = useState<
+    ApprovedAttendanceRequest[]
+  >([]);
   const [pendingIncidentReports, setPendingIncidentReports] = useState<
     PendingIncidentReport[]
   >([]);
@@ -244,6 +268,7 @@ export default function HomeDashboardPage({
       userResult,
       expenseResult,
       attendanceResult,
+      approvedAttendanceResult,
       incidentResult,
       noticeResult,
     ] =
@@ -282,6 +307,11 @@ export default function HomeDashboardPage({
       canApproveAttendance
         ? attendanceQuery
         : Promise.resolve({ data: [], error: null }),
+      supabase
+        .from("attendance_requests")
+        .select("id, request_type, start_date, end_date, requested_name, requested_by, reason, status")
+        .eq("status", "승인완료")
+        .order("start_date", { ascending: true }),
       canCheckIncident
         ? supabase
             .from("incident_reports")
@@ -327,6 +357,11 @@ export default function HomeDashboardPage({
       attendanceResult.error
         ? []
         : ((attendanceResult.data ?? []) as PendingAttendanceRequest[])
+    );
+    setApprovedAttendanceRequests(
+      approvedAttendanceResult.error
+        ? []
+        : ((approvedAttendanceResult.data ?? []) as ApprovedAttendanceRequest[])
     );
     setPendingIncidentReports(
       incidentResult.error
@@ -511,6 +546,24 @@ export default function HomeDashboardPage({
         kind: "manual",
         manual: true,
       }));
+    const attendanceScheduleEvents = approvedAttendanceRequests
+      .flatMap<ScheduleEvent>((request) =>
+        buildDateRangeTexts(request.start_date, request.end_date).map((date) => ({
+          id: `attendance-${request.id}-${date}`,
+          date,
+          label: "근태",
+          detail: [
+            request.requested_name ?? request.requested_by,
+            request.request_type,
+            request.reason,
+          ]
+            .filter(Boolean)
+            .join(" · "),
+          tone: "amber",
+          kind: "attendance",
+        }))
+      )
+      .filter((event) => isDateInMonth(event.date, visibleScheduleMonth));
     const holidayEvents = koreanHolidays
       .filter((event) => isDateInMonth(event.date, visibleScheduleMonth))
       .map<ScheduleEvent>((event) => ({
@@ -524,6 +577,7 @@ export default function HomeDashboardPage({
     const calendarEvents = [
       ...holidayEvents,
       ...manualScheduleEvents,
+      ...attendanceScheduleEvents,
       ...workScheduleEvents,
     ].sort((a, b) => a.date.localeCompare(b.date));
     const selectedDayEvents = calendarEvents.filter(
@@ -547,6 +601,7 @@ export default function HomeDashboardPage({
     };
   }, [
     koreanHolidays,
+    approvedAttendanceRequests,
     manualSchedules,
     selectedScheduleDate,
     visibleScheduleMonth,
@@ -1301,6 +1356,9 @@ function ScheduleBoard({
     const outboundPlan = dayEvents.filter(
       (event) => event.kind === "outboundPlan"
     ).length;
+    const attendance = dayEvents.filter(
+      (event) => event.kind === "attendance"
+    ).length;
     const manual = dayEvents.filter((event) => event.kind === "manual").length;
     const holiday = dayEvents.filter((event) => event.kind === "holiday");
 
@@ -1320,6 +1378,9 @@ function ScheduleBoard({
         : null,
       outboundPlan > 0
         ? { key: "outboundPlan", label: `출고예정 ${outboundPlan}대`, tone: "blue" }
+        : null,
+      attendance > 0
+        ? { key: "attendance", label: `근태 ${attendance}건`, tone: "amber" }
         : null,
       manual > 0
         ? { key: "manual", label: `주요일정 ${manual}건`, tone: "red" }
@@ -1411,6 +1472,10 @@ function ScheduleBoard({
                 <span className="h-2 w-2 rounded-full bg-indigo-500" />
                 완료
               </span>
+              <span className="flex items-center gap-1">
+                <span className="h-2 w-2 rounded-full bg-amber-500" />
+                근태
+              </span>
             </div>
           </div>
 
@@ -1499,6 +1564,8 @@ function ScheduleBoard({
                               ? "bg-blue-100 text-blue-700"
                               : event.tone === "red"
                                 ? "bg-red-100 text-red-700"
+                                : event.tone === "amber"
+                                  ? "bg-amber-100 text-amber-700"
                                 : "bg-indigo-100 text-indigo-700",
                         ].join(" ")}
                       >
@@ -1752,6 +1819,8 @@ function ScheduleList({
                         ? "bg-blue-100 text-blue-700"
                         : event.tone === "red"
                           ? "bg-red-100 text-red-700"
+                          : event.tone === "amber"
+                            ? "bg-amber-100 text-amber-700"
                           : "bg-indigo-100 text-indigo-700",
                   ].join(" ")}
                 >
