@@ -189,7 +189,7 @@ export default function FactoryDashboardPage({
 
       </div>
 
-      <section className="grid grid-cols-1 gap-3 md:grid-cols-3 xl:grid-cols-6">
+      <section className="grid grid-cols-6 gap-1.5 md:grid-cols-3 md:gap-3 xl:grid-cols-6">
         <SummaryCard title="현재 입고" value={dashboard.activeOrders.length} tone="blue" />
         <SummaryCard title="오늘 입고" value={dashboard.todayInbound.length} tone="slate" />
         <SummaryCard title="오늘 출고" value={dashboard.todayOutbound.length} tone="green" />
@@ -334,9 +334,13 @@ function SummaryCard({
   }[tone];
 
   return (
-    <div className={`rounded-xl border p-4 ${toneClass}`}>
-      <p className="text-sm font-semibold">{title}</p>
-      <p className="mt-3 text-3xl font-bold">{value.toLocaleString()}</p>
+    <div className={`rounded-xl border p-2 text-center md:p-4 md:text-left ${toneClass}`}>
+      <p className="break-keep text-[10px] font-semibold leading-tight md:text-sm">
+        {title}
+      </p>
+      <p className="mt-1 text-lg font-bold md:mt-3 md:text-3xl">
+        {value.toLocaleString()}
+      </p>
     </div>
   );
 }
