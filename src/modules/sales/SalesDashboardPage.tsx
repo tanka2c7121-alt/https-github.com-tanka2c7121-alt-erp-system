@@ -275,15 +275,15 @@ export default function SalesDashboardPage({
         </div>
       </div>
 
-      <section className="no-print grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <section className="no-print grid grid-cols-4 gap-1.5 md:grid-cols-2 md:gap-3 xl:grid-cols-4">
         <button
           type="button"
-          className="rounded-xl border border-slate-200 bg-slate-900 p-4 text-left text-white shadow-sm hover:bg-slate-800"
+          className="flex min-h-16 min-w-0 flex-col justify-between rounded-lg border border-slate-200 bg-slate-900 px-1.5 py-2 text-center text-white shadow-sm hover:bg-slate-800 md:min-h-28 md:rounded-xl md:p-4 md:text-left"
           onClick={() => openMenu("sales", "매출현황")}
         >
-          <p className="text-sm font-semibold text-slate-300">총매출</p>
-          <p className="mt-2 text-2xl font-bold">{formatWon(totals.total)}원</p>
-          <p className="mt-2 text-xs text-slate-300">{rows.length}건</p>
+          <p className="min-w-0 truncate text-[10px] font-semibold leading-tight text-slate-300 md:text-sm">총매출</p>
+          <p className="min-w-0 truncate text-[11px] font-bold leading-none md:mt-2 md:text-2xl">{formatWon(totals.total)}원</p>
+          <p className="hidden text-xs text-slate-300 md:mt-2 md:block">{rows.length}건</p>
         </button>
 
         <MetricCard
@@ -413,11 +413,11 @@ function MetricCard({
   return (
     <button
       type="button"
-      className={`rounded-xl border p-4 text-left shadow-sm hover:brightness-95 ${toneClass}`}
+      className={`flex min-h-16 min-w-0 flex-col justify-between rounded-lg border px-1.5 py-2 text-center shadow-sm hover:brightness-95 md:min-h-28 md:rounded-xl md:p-4 md:text-left ${toneClass}`}
       onClick={onClick}
     >
-      <p className="text-sm font-semibold">{title}</p>
-      <p className="mt-2 text-xl font-bold">{formatWon(amount)}원</p>
+      <p className="min-w-0 truncate text-[10px] font-semibold leading-tight md:text-sm">{title}</p>
+      <p className="min-w-0 truncate text-[11px] font-bold leading-none md:mt-2 md:text-xl">{formatWon(amount)}원</p>
     </button>
   );
 }

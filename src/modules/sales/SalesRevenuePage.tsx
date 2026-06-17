@@ -816,7 +816,7 @@ export default function SalesRevenuePage({
         </button>
       </div>
 
-      <div className="no-print grid grid-cols-1 gap-3 md:grid-cols-3">
+      <div className="no-print grid grid-cols-3 gap-1.5 md:gap-3">
         <SummaryCard label="총 건수" value={`${filteredRows.length.toLocaleString()}건`} />
         <SummaryCard label="결제금액 합계" value={`${formatWon(totalPayment)}원`} />
         {kind === "insurance" ||
@@ -1269,9 +1269,13 @@ function SalesRevenuePrintCell({
 
 function SummaryCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4">
-      <p className="text-sm font-semibold text-slate-600">{label}</p>
-      <p className="mt-2 text-xl font-bold text-blue-700">{value}</p>
+    <div className="flex min-h-16 min-w-0 flex-col justify-between rounded-lg border border-slate-200 bg-white px-1.5 py-2 text-center shadow-sm md:min-h-28 md:rounded-xl md:p-4 md:text-left">
+      <p className="min-w-0 truncate text-[10px] font-semibold leading-tight text-slate-600 md:text-sm">
+        {label}
+      </p>
+      <p className="min-w-0 truncate text-[11px] font-bold leading-none text-blue-700 md:mt-2 md:text-xl">
+        {value}
+      </p>
     </div>
   );
 }
