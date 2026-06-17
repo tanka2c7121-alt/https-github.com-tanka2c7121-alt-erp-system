@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { MenuItem } from "../../data/menuData";
 import { localDateText } from "../../lib/date";
 import { supabase } from "../../lib/supabase";
@@ -37,9 +37,19 @@ const normalizeAccountName = (value: unknown) => {
     .replaceAll("_", "")
     .toUpperCase();
 
-  return accountKey.includes("BLUE") || accountKey.includes("블루")
-    ? "BLUE POINT"
-    : rawText;
+  if (accountKey.includes("국민") || accountKey.includes("KB")) {
+    return "국민은행";
+  }
+
+  if (accountKey.includes("부산") || accountKey.includes("BNK")) {
+    return "부산은행";
+  }
+
+  if (accountKey.includes("BLUE") || accountKey.includes("블루")) {
+    return "BLUE POINT";
+  }
+
+  return rawText;
 };
 
 async function fetchAllRows<T>(
@@ -82,7 +92,7 @@ export default function DailyCashPage({ onSelectMenu }: DailyCashPageProps) {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
 
-  async function fetchBalanceRows() {
+  const fetchBalanceRows = useCallback(async () => {
     const today = localDateText();
 
     const { data, error } = await fetchAllRows<DailyCashRow>(
@@ -97,9 +107,9 @@ export default function DailyCashPage({ onSelectMenu }: DailyCashPageProps) {
     }
 
     setBalanceRows(data ?? []);
-  }
+  }, []);
 
-  async function fetchRows(selectedPeriod: PeriodValue = period) {
+  const fetchRows = useCallback(async (selectedPeriod: PeriodValue) => {
     const { data, error } = await fetchAllRows<DailyCashRow>(
       "daily_cash",
       "*",
@@ -107,6 +117,10 @@ export default function DailyCashPage({ onSelectMenu }: DailyCashPageProps) {
         let nextQuery = query
           .order("date", { ascending: false })
           .order("id", { ascending: false });
+
+        if (selectedPeriod === "today") {
+          nextQuery = nextQuery.eq("created_on", localDateText());
+        }
 
         if (selectedPeriod !== "all" && selectedPeriod !== "today") {
           const startDate = new Date();
@@ -124,11 +138,11 @@ export default function DailyCashPage({ onSelectMenu }: DailyCashPageProps) {
     }
 
     setRows(data ?? []);
-  }
+  }, []);
 
   function handlePeriodChange(value: PeriodValue) {
     setPeriod(value);
-    fetchRows(value);
+    void fetchRows(value);
   }
   async function handleCustomPeriodSearch() {
   if (!startDate || !endDate) {
@@ -168,32 +182,14 @@ export default function DailyCashPage({ onSelectMenu }: DailyCashPageProps) {
     }
 
     alert("삭제되었습니다.");
-    fetchRows();
+    await fetchRows(period);
+    void fetchBalanceRows();
   }
 
   useEffect(() => {
-  async function fetchTodayRows() {
-    const today = localDateText();
-
-    const { data, error } = await fetchAllRows<DailyCashRow>(
-      "daily_cash",
-      "*",
-      (query) => query
-        .eq("created_on", today)
-        .order("id", { ascending: false })
-    );
-
-    if (error) {
-      alert("조회 실패: " + error.message);
-      return;
-    }
-
-    setRows(data ?? []);
-  }
-
-  void fetchTodayRows();
+  void fetchRows("today");
   void fetchBalanceRows();
-}, []);
+}, [fetchBalanceRows, fetchRows]);
 
   const filteredRows = useMemo(() => {
     const keyword = searchText.trim();
@@ -347,22 +343,8 @@ export default function DailyCashPage({ onSelectMenu }: DailyCashPageProps) {
 
         // 금일 조회
         if (item.value === "today") {
-
-          const today = localDateText();
-
-          const { data, error } = await supabase
-            .from("daily_cash")
-            .select("*")
-            .eq("created_on", today)
-            .order("id", { ascending: false });
-
-          if (error) {
-            alert("조회 실패: " + error.message);
-            return;
-          }
-
-          setRows(data ?? []);
           setPeriod("today");
+          await fetchRows("today");
 
           return;
         }

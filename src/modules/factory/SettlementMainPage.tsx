@@ -132,13 +132,13 @@ const accountSummary = accountNames.map((accountName) => {
 
   // 월 기준 입출금
   const monthlyRows = filteredRows.filter(
-    (row) => normalizeBluePointAccount(row.account) === accountName
+    (row) => normalizeAccountName(row.account) === accountName
   );
 
   // 누적 잔고 기준
   const balanceAccountRows = balanceRows.filter(
   (row) =>
-    normalizeBluePointAccount(row.account) === accountName
+    normalizeAccountName(row.account) === accountName
 );
 
   const income = monthlyRows.reduce(
@@ -167,25 +167,16 @@ const accountSummary = accountNames.map((accountName) => {
 
   return {
     name: accountName,
-
-    income:
-      income.toLocaleString(),
-
-    expense:
-      expense.toLocaleString(),
-
-    balance:
-      (balanceIncome - balanceExpense)
-        .toLocaleString(),
+    income,
+    expense,
+    balance: balanceIncome - balanceExpense,
   };
 });  
 
-const totalCompanyBalance = balanceRows
-  .filter((row) => row.type !== "내부이동")
-  .reduce(
-    (sum, row) => sum + Number(row.income || 0) - Number(row.expense || 0),
-    0
-  );
+const totalCompanyBalance = accountSummary.reduce(
+  (sum, account) => sum + account.balance,
+  0
+);
 
 const receivableAccountNames = [
   "국민은행",
@@ -216,7 +207,7 @@ const isEmptyDateValue = (value: unknown) => {
   return !text || text === "null" || text === "undefined" || text === "0000-00-00";
 };
 
-const normalizeAccountName = (value: unknown) => {
+function normalizeAccountName(value: unknown) {
   const rawText = normalizeBluePointAccount(value);
   const accountKey = rawText
     .replace(/\s+/g, "")
@@ -237,7 +228,7 @@ const normalizeAccountName = (value: unknown) => {
   }
 
   return rawText;
-};
+}
 
 const toAmountNumber = (value: unknown) =>
   Number(String(value ?? 0).replaceAll(",", "")) || 0;
@@ -710,7 +701,7 @@ const fetchSettlementMain = useCallback(async (year: string, month: string) => {
           </span>
 
           <span className="font-semibold text-blue-600">
-            ₩ {account.income}
+            ₩ {account.income.toLocaleString()}
           </span>
         </div>
 
@@ -720,7 +711,7 @@ const fetchSettlementMain = useCallback(async (year: string, month: string) => {
           </span>
 
           <span className="font-semibold text-red-600">
-            ₩ {account.expense}
+            ₩ {account.expense.toLocaleString()}
           </span>
         </div>
 
@@ -730,7 +721,7 @@ const fetchSettlementMain = useCallback(async (year: string, month: string) => {
           </span>
 
           <span className="font-bold text-green-600">
-            ₩ {account.balance}
+            ₩ {account.balance.toLocaleString()}
           </span>
         </div>
 
