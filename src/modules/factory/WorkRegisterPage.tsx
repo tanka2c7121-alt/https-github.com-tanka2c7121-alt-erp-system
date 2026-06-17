@@ -186,7 +186,7 @@ const readPhotoText = async (file: File) => {
   }
 };
 
-function playCameraShutterSound() {
+async function playCameraShutterSound() {
   const AudioContextClass =
     window.AudioContext ??
     (window as Window & { webkitAudioContext?: AudioContextConstructor })
@@ -197,6 +197,15 @@ function playCameraShutterSound() {
   }
 
   const audioContext = new AudioContextClass();
+  if (audioContext.state === "suspended") {
+    try {
+      await audioContext.resume();
+    } catch {
+      void audioContext.close();
+      return;
+    }
+  }
+
   const now = audioContext.currentTime;
   const gain = audioContext.createGain();
   const click = audioContext.createOscillator();
@@ -941,7 +950,7 @@ async function captureCameraPhoto() {
 
   setCameraFlash(true);
   window.setTimeout(() => setCameraFlash(false), 180);
-  playCameraShutterSound();
+  void playCameraShutterSound();
 
   const canvas = document.createElement("canvas");
   canvas.width = video.videoWidth;
