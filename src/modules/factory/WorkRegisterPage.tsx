@@ -10,6 +10,7 @@ import {
   type ChangeEvent,
   type PointerEvent as ReactPointerEvent,
 } from "react";
+import { createPortal } from "react-dom";
 
 
 const getInputStateClass = (value: string) =>
@@ -1851,7 +1852,9 @@ function handleClearWorkRow(index: number) {
           </div>
         </div>
 
-        {cameraOpen && (
+        {cameraOpen &&
+          typeof document !== "undefined" &&
+          createPortal(
           <div
             className="work-camera-overlay"
             onTouchMove={(event) => event.preventDefault()}
@@ -1897,6 +1900,8 @@ function handleClearWorkRow(index: number) {
               </div>
             </div>
           </div>
+          ,
+          document.body
         )}
 
         {photoOcrMessage && (
