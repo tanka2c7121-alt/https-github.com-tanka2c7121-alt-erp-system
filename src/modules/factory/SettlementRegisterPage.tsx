@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../../lib/supabase";
 import { localDateText } from "../../lib/date";
 import { useRealtimeRefresh } from "../../lib/useRealtimeRefresh";
@@ -142,6 +142,25 @@ const hasStoredPaymentInputValue = (item: any) =>
   Number(item.claim_amount ?? 0) > 0 ||
   Boolean(item.payment_date);
 
+const getDailyCashPaymentKey = (row: PaymentRow) =>
+  [
+    row.paymentType,
+    row.paymentDetail,
+    toNumber(row.amount || row.claimAmount),
+    row.date,
+    row.method,
+    row.approvalNumber,
+    row.merchantNumber,
+    row.cardNumber,
+  ].join("|");
+
+const getPaymentRowCountMap = (rows: PaymentRow[]) =>
+  rows.reduce<Map<string, number>>((map, row) => {
+    const key = getDailyCashPaymentKey(row);
+    map.set(key, (map.get(key) ?? 0) + 1);
+    return map;
+  }, new Map());
+
 export default function SettlementRegisterPage({
   initialWorkName,
   user,
@@ -165,6 +184,7 @@ export default function SettlementRegisterPage({
     "unlock" | "serviceChargeOverride"
   >("unlock");
   const [adminPassword, setAdminPassword] = useState("");
+  const loadedDailyCashPaymentCountsRef = useRef<Map<string, number>>(new Map());
   const [form, setForm] = useState({
     workName: "",
     carNumber: "",
@@ -421,6 +441,7 @@ export default function SettlementRegisterPage({
           })
         : defaultPaymentRows();
 
+    loadedDailyCashPaymentCountsRef.current = getPaymentRowCountMap(loadedPaymentRows);
     setPaymentRows(normalizePaymentRowsForWorkOrder(loadedPaymentRows));
 
     const loadedClaimRows =
@@ -571,11 +592,19 @@ export default function SettlementRegisterPage({
   };
 
   const saveDailyCashRows = async (targetForm = form) => {
-    await supabase
+    const today = localDateText();
+    const { error: deleteError } = await supabase
       .from("daily_cash")
       .delete()
       .eq("source_type", "settlement_payment")
-      .eq("source_work_name", targetForm.workName);
+      .eq("source_work_name", targetForm.workName)
+      .eq("created_on", today);
+
+    if (deleteError) return deleteError;
+
+    const loadedCounts = isEditMode
+      ? new Map(loadedDailyCashPaymentCountsRef.current)
+      : new Map<string, number>();
 
     const rows = paymentRows
       .filter(
@@ -585,9 +614,20 @@ export default function SettlementRegisterPage({
           row.method &&
           !isPartnerSupportPaymentRow(row)
       )
+      .filter((row) => {
+        const key = getDailyCashPaymentKey(row);
+        const loadedCount = loadedCounts.get(key) ?? 0;
+
+        if (loadedCount > 0) {
+          loadedCounts.set(key, loadedCount - 1);
+          return false;
+        }
+
+        return true;
+      })
       .map((row) => ({
         date: row.date,
-        created_on: localDateText(),
+        created_on: today,
         account: row.method,
         type: "수입",
         category: "차량정산",
