@@ -116,19 +116,7 @@ const isSameQuickAction = (left: MenuItem, right: MenuItem) =>
 const menuCacheKey = (menu: MenuItem) =>
   `${menu.id}:${JSON.stringify(menu.data ?? {})}`;
 
-const isCacheableMenu = (menu: MenuItem) => !menu.id.includes("print");
-const realtimeRefreshMenuIds = new Set([
-  "dashboard",
-  "factory-settlement",
-  "factory-settlement-repair",
-  "factory-settlement-repair-register",
-  "factory-settlement-pending-insurance",
-  "factory-inbound",
-  "factory-release-list",
-  "factory-outbound",
-  "factory-outbound-list",
-  "sales-partner-support",
-]);
+const isCacheableMenu = (menu: MenuItem) => menu.id === "dashboard";
 
 export default function MainLayout({ user, onLogout }: MainLayoutProps) {
   const isAdmin = user.role === "ADMIN";
@@ -165,7 +153,7 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
     user.department
   );
   const mobileMenuTitle = mobileMenuParent?.title ?? "업무목록";
-  const hideRefreshButton = realtimeRefreshMenuIds.has(selectedMenu.id);
+  const hideRefreshButton = selectedMenu.id === "dashboard";
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -230,6 +218,11 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
 
     if (currentKey !== nextKey) {
       setMenuHistory((prev) => [...prev, selectedMenu].slice(-30));
+    } else if (!isCacheableMenu(menu)) {
+      setRefreshKeys((prev) => ({
+        ...prev,
+        [nextKey]: (prev[nextKey] ?? 0) + 1,
+      }));
     }
 
     if (isCacheableMenu(menu)) {
@@ -248,19 +241,16 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
 
     if (!previousMenu) return;
 
-    if (isCacheableMenu(previousMenu)) {
-      const previousKey = menuCacheKey(previousMenu);
-
-      setCachedMenus((prev) =>
-        prev.some((cachedMenu) => menuCacheKey(cachedMenu) === previousKey)
-          ? prev
-          : [...prev, previousMenu]
-      );
-    }
-
     setMenuHistory((prev) => prev.slice(0, -1));
     setSelectedMenu(previousMenu);
     setIsSidebarOpen(false);
+  };
+
+  const handleCloseMenu = () => {
+    setMenuHistory([]);
+    setSelectedMenu(initialMenu);
+    setIsSidebarOpen(false);
+    setMobileMenuPath([]);
   };
 
   const handleRefreshMenu = () => {
@@ -861,13 +851,13 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
                   새로고침
                 </button>
               )}
-              {menuHistory.length > 0 && (
+              {selectedMenu.id !== "dashboard" && (
                 <button
                   type="button"
-                  onClick={handleBackMenu}
+                  onClick={handleCloseMenu}
                   className="shrink-0 rounded-full border border-slate-200 bg-white/80 px-4 py-2 text-sm font-bold text-slate-700 shadow-sm hover:bg-white"
                 >
-                  뒤로
+                  창닫기
                 </button>
               )}
               </div>
