@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { MenuItem } from "../../data/menuData";
-import { isAdminUser, isChiefUser, isDepartmentHeadUser } from "../../lib/approval";
 import { localDateText } from "../../lib/date";
 import { supabase } from "../../lib/supabase";
 import { useRealtimeRefresh } from "../../lib/useRealtimeRefresh";
@@ -59,7 +58,14 @@ type PendingAttendanceRequest = {
   reason: string;
 };
 
-type ApprovedAttendanceRequest = PendingAttendanceRequest & {
+type ApprovedAttendanceRequest = {
+  id: number;
+  request_type: string;
+  start_date: string;
+  end_date: string | null;
+  requested_name: string | null;
+  requested_by: string;
+  reason: string;
   status: string;
 };
 
@@ -196,28 +202,9 @@ export default function HomeDashboardPage({
   quickActionMenus,
   onSelectMenu,
 }: HomeDashboardPageProps) {
-  const isFinalAttendanceApprover = isAdmin || isAdminUser(user);
-  const isChiefApprover = isChiefUser(user);
-  const isDepartmentHead = isDepartmentHeadUser(user);
-  const canApproveAttendance =
-    isFinalAttendanceApprover || isChiefApprover || isDepartmentHead;
-  const canApproveExpenses =
-    isFinalAttendanceApprover || isChiefApprover || isDepartmentHead;
-  const canViewExpenses = Boolean(user) || canApproveExpenses;
-  const canCheckIncident = isFinalAttendanceApprover;
   const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
-  const [pendingUsers, setPendingUsers] = useState<PendingUser[]>([]);
-  const [pendingExpenseRequests, setPendingExpenseRequests] = useState<
-    PendingExpenseRequest[]
-  >([]);
-  const [pendingAttendanceRequests, setPendingAttendanceRequests] = useState<
-    PendingAttendanceRequest[]
-  >([]);
   const [approvedAttendanceRequests, setApprovedAttendanceRequests] = useState<
     ApprovedAttendanceRequest[]
-  >([]);
-  const [pendingIncidentReports, setPendingIncidentReports] = useState<
-    PendingIncidentReport[]
   >([]);
   const [homeNotice, setHomeNotice] = useState<HomeNotice | null>(null);
   const [noticeList, setNoticeList] = useState<HomeNotice[]>([]);
@@ -241,85 +228,17 @@ export default function HomeDashboardPage({
   const loadDashboard = useCallback(async () => {
     setLoading(true);
 
-    const attendanceStatuses = isFinalAttendanceApprover
-      ? ["관리자 승인대기"]
-      : isChiefApprover
-        ? ["부서장 승인대기", "총괄관리 승인대기", "관리부 확인대기"]
-        : ["부서장 승인대기"];
-
-    let attendanceQuery = supabase
-      .from("attendance_requests")
-      .select("id, request_type, start_date, end_date, requested_name, requested_by, reason")
-      .in("status", attendanceStatuses)
-      .order("id", { ascending: false });
-
-    if (isDepartmentHead) {
-      attendanceQuery = attendanceQuery.eq(
-        "requested_department",
-        user?.department ?? ""
-      );
-    } else if (isChiefApprover) {
-      attendanceQuery = attendanceQuery.or(
-        "status.in.(총괄관리 승인대기,관리부 확인대기),and(status.eq.부서장 승인대기,requested_department.eq.관리부)"
-      );
-    }
-
-    const [
-      ordersResult,
-      userResult,
-      expenseResult,
-      attendanceResult,
-      approvedAttendanceResult,
-      incidentResult,
-      noticeResult,
-    ] =
+    const [ordersResult, approvedAttendanceResult, noticeResult] =
       await Promise.all([
       supabase
         .from("work_orders")
         .select("id, work_name, car_number, car_model, inbound_date, outbound_date, release_date")
         .order("id", { ascending: false }),
-      isAdmin
-        ? supabase
-            .from("app_users")
-            .select("id, user_id, user_name, department")
-            .eq("is_active", false)
-            .order("id", { ascending: false })
-        : Promise.resolve({ data: [], error: null }),
-      canApproveExpenses
-        ? isFinalAttendanceApprover
-          ? supabase
-              .from("expense_requests")
-              .select("id, request_date, vendor, content, amount, requested_name, requested_by")
-              .eq("status", "관리자 승인대기")
-              .order("id", { ascending: false })
-          : isChiefApprover
-            ? supabase
-                .from("expense_requests")
-                .select("id, request_date, vendor, content, amount, requested_name, requested_by")
-                .or("status.eq.총괄관리 승인대기,and(status.eq.부서장 승인대기,requested_department.eq.관리부)")
-                .order("id", { ascending: false })
-            : supabase
-                .from("expense_requests")
-                .select("id, request_date, vendor, content, amount, requested_name, requested_by")
-                .eq("status", "부서장 승인대기")
-                .eq("requested_department", user?.department ?? "")
-                .order("id", { ascending: false })
-        : Promise.resolve({ data: [], error: null }),
-      canApproveAttendance
-        ? attendanceQuery
-        : Promise.resolve({ data: [], error: null }),
       supabase
         .from("attendance_requests")
         .select("id, request_type, start_date, end_date, requested_name, requested_by, reason, status")
         .eq("status", "승인완료")
         .order("start_date", { ascending: true }),
-      canCheckIncident
-        ? supabase
-            .from("incident_reports")
-            .select("id, report_date, incident_type, title, requested_name, requested_by, content")
-            .eq("status", "확인대기")
-            .order("id", { ascending: false })
-        : Promise.resolve({ data: [], error: null }),
       supabase
         .from("home_notices")
         .select("*")
@@ -337,37 +256,10 @@ export default function HomeDashboardPage({
     }
 
     setWorkOrders((ordersResult.data ?? []) as WorkOrder[]);
-    setPendingUsers((userResult.data ?? []) as PendingUser[]);
-    let nextPendingExpenses = expenseResult.error
-      ? []
-      : ((expenseResult.data ?? []) as PendingExpenseRequest[]);
-
-    if (!canApproveExpenses && user?.user_id) {
-      const { data: myExpenseData } = await supabase
-        .from("expense_requests")
-        .select("id, request_date, vendor, content, amount, requested_name, requested_by")
-        .in("status", ["승인대기", "총괄관리 승인대기", "관리자 승인대기"])
-        .eq("requested_by", user.user_id)
-        .order("id", { ascending: false });
-
-      nextPendingExpenses = (myExpenseData ?? []) as PendingExpenseRequest[];
-    }
-
-    setPendingExpenseRequests(nextPendingExpenses);
-    setPendingAttendanceRequests(
-      attendanceResult.error
-        ? []
-        : ((attendanceResult.data ?? []) as PendingAttendanceRequest[])
-    );
     setApprovedAttendanceRequests(
       approvedAttendanceResult.error
         ? []
         : ((approvedAttendanceResult.data ?? []) as ApprovedAttendanceRequest[])
-    );
-    setPendingIncidentReports(
-      incidentResult.error
-        ? []
-        : ((incidentResult.data ?? []) as PendingIncidentReport[])
     );
 
     if (!noticeResult.error && noticeResult.data) {
@@ -383,56 +275,11 @@ export default function HomeDashboardPage({
     } else {
       setHomeNotice(null);
     }
-  }, [
-    canApproveAttendance,
-    canApproveExpenses,
-    canCheckIncident,
-    isAdmin,
-    isChiefApprover,
-    isDepartmentHead,
-    isFinalAttendanceApprover,
-    user,
-  ]);
+  }, []);
 
   useEffect(() => {
     void loadDashboard();
   }, [loadDashboard]);
-
-  const openDocumentDetail = async ({
-    id,
-    menuId,
-    title,
-    dataKey,
-    tableName,
-  }: {
-    id: number;
-    menuId: string;
-    title: string;
-    dataKey: string;
-    tableName: string;
-  }) => {
-    const { data, error } = await supabase
-      .from(tableName)
-      .select("*")
-      .eq("id", id)
-      .maybeSingle();
-
-    if (error) {
-      alert("문서 조회 실패: " + error.message);
-      return;
-    }
-
-    if (!data) {
-      alert("문서를 찾을 수 없습니다.");
-      return;
-    }
-
-    onSelectMenu({
-      id: menuId,
-      title,
-      data: { [dataKey]: data },
-    });
-  };
 
   useEffect(() => {
     try {
@@ -852,6 +699,9 @@ export default function HomeDashboardPage({
     void loadDashboard();
   };
 
+  void checkIncidentReport;
+  void rejectIncidentReport;
+
   return (
     <div className="space-y-5 text-slate-900">
       {noticePopupOpen && homeNotice && (
@@ -916,7 +766,7 @@ export default function HomeDashboardPage({
         </div>
       </div>
 
-      <section className="grid grid-cols-5 gap-1.5 md:gap-3">
+      <section className="grid grid-cols-2 gap-2 md:grid-cols-5 md:gap-3">
         <SummaryCard title="현재 입고" value={dashboard.activeOrders.length} tone="blue" />
         <SummaryCard title="오늘 입고" value={dashboard.todayInbound.length} tone="green" />
         <SummaryCard title="오늘 출고" value={dashboard.todayOutbound.length} tone="indigo" />
@@ -931,76 +781,6 @@ export default function HomeDashboardPage({
       ) : (
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_220px]">
           <QuickActions actions={quickActionMenus} onSelectMenu={onSelectMenu} />
-
-          {(isAdmin || canApproveAttendance || canViewExpenses || canCheckIncident) && (
-            <AdminApprovalPanel
-              showEmployeeApprovals={isAdmin}
-              showExpenseApprovals={canViewExpenses}
-              showAttendanceApprovals={canApproveAttendance}
-              showIncidentApprovals={canCheckIncident}
-              pendingUsers={pendingUsers.slice(0, 3)}
-              pendingExpenses={pendingExpenseRequests.slice(0, 3)}
-              pendingAttendances={pendingAttendanceRequests.slice(0, 3)}
-              pendingIncidents={pendingIncidentReports.slice(0, 3)}
-              onOpenManage={() =>
-                onSelectMenu({
-                  id: "employee-manage",
-                  title: "직원관리",
-                })
-              }
-              onOpenExpenseRequests={() =>
-                onSelectMenu({
-                  id: "documents-expense-request",
-                  title: "지출결의서",
-                })
-              }
-              onOpenExpenseRequest={(row) =>
-                void openDocumentDetail({
-                  id: row.id,
-                  menuId: "documents-expense-request-print",
-                  title: "지출결의서 출력",
-                  dataKey: "expenseRequest",
-                  tableName: "expense_requests",
-                })
-              }
-              onOpenAttendanceRequests={() =>
-                onSelectMenu({
-                  id: "documents-attendance-request",
-                  title: "근태신청서",
-                })
-              }
-              onOpenAttendanceRequest={(row) =>
-                void openDocumentDetail({
-                  id: row.id,
-                  menuId: "documents-attendance-request-print",
-                  title: "근태신청서 출력",
-                  dataKey: "attendanceRequest",
-                  tableName: "attendance_requests",
-                })
-              }
-              onOpenIncidentReports={() =>
-                onSelectMenu({
-                  id: "documents-incident-report",
-                  title: "경위서",
-                })
-              }
-              onOpenIncidentReport={(row) =>
-                void openDocumentDetail({
-                  id: row.id,
-                  menuId: "documents-incident-report-print",
-                  title: "경위서 출력",
-                  dataKey: "incidentReport",
-                  tableName: "incident_reports",
-                })
-              }
-              onCheckIncident={(row) => {
-                void checkIncidentReport(row);
-              }}
-              onRejectIncident={(row) => {
-                void rejectIncidentReport(row);
-              }}
-            />
-          )}
 
           <ScheduleBoard
             month={dashboard.calendarMonth}
@@ -1030,6 +810,7 @@ export default function HomeDashboardPage({
 }
 
 void _NoticePanel;
+void AdminApprovalPanel;
 
 function SummaryCard({
   title,
@@ -1050,12 +831,12 @@ function SummaryCard({
 
   return (
     <div
-      className={`flex min-w-0 items-center justify-between gap-1 rounded-lg border px-1.5 py-1.5 md:block md:rounded-xl md:p-4 md:text-left ${toneClass}`}
+      className={`flex min-h-20 min-w-0 flex-col justify-between rounded-lg border p-3 shadow-sm md:min-h-28 md:rounded-xl md:p-4 ${toneClass}`}
     >
-      <p className="min-w-0 truncate text-[10px] font-semibold leading-tight md:break-keep md:text-sm">
+      <p className="min-w-0 truncate text-xs font-semibold leading-tight md:break-keep md:text-sm">
         {title}
       </p>
-      <p className="shrink-0 text-base font-bold leading-none md:mt-3 md:text-3xl">
+      <p className="text-right text-2xl font-bold leading-none md:text-3xl">
         {value}
       </p>
     </div>
