@@ -823,43 +823,62 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
           </div>
 
           <section className="min-h-[500px] min-w-0 overflow-x-hidden rounded-2xl border border-white/70 bg-white/80 p-3 shadow-2xl shadow-slate-300/40 backdrop-blur-xl md:rounded-[22px] md:p-6">
-            <div className="mb-4 flex items-center justify-between gap-2">
-              <div>
-                {canFavoriteCurrentMenu && (
-                  <label className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-slate-200 bg-white/75 px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-white">
-                    <input
-                      type="checkbox"
-                      checked={isCurrentMenuFavorited}
-                      onChange={toggleCurrentQuickAction}
-                      className="sr-only"
-                    />
-                    <span className={isCurrentMenuFavorited ? "text-yellow-500" : "text-slate-400"}>
-                      {isCurrentMenuFavorited ? "★" : "☆"}
-                    </span>
-                    <span>빠른작업</span>
-                  </label>
-                )}
-              </div>
+            <div className="mb-4 overflow-hidden rounded-xl border border-slate-200 bg-slate-100/90 shadow-sm">
+              <div className="flex min-h-12 items-center justify-between gap-3 border-b border-white/80 px-3 py-2">
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="flex shrink-0 items-center gap-1.5" aria-hidden="true">
+                    <span className="h-3 w-3 rounded-full bg-red-400 shadow-inner" />
+                    <span className="h-3 w-3 rounded-full bg-yellow-400 shadow-inner" />
+                    <span className="h-3 w-3 rounded-full bg-green-400 shadow-inner" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-bold text-slate-800">
+                      {selectedMenu.title}
+                    </div>
+                    <div className="text-[11px] font-semibold text-slate-500">
+                      {selectedMenu.id === "dashboard" ? "업무홈" : "열린 페이지"}
+                    </div>
+                  </div>
+                </div>
 
-              <div className="flex shrink-0 items-center gap-2">
-              {!hideRefreshButton && (
-                <button
-                  type="button"
-                  onClick={handleRefreshMenu}
-                  className="shrink-0 rounded-full border border-blue-200 bg-blue-50/90 px-4 py-2 text-sm font-bold text-blue-700 shadow-sm hover:bg-blue-100"
-                >
-                  새로고침
-                </button>
-              )}
-              {selectedMenu.id !== "dashboard" && (
-                <button
-                  type="button"
-                  onClick={handleCloseMenu}
-                  className="shrink-0 rounded-full border border-slate-200 bg-white/80 px-4 py-2 text-sm font-bold text-slate-700 shadow-sm hover:bg-white"
-                >
-                  창닫기
-                </button>
-              )}
+                <div className="flex shrink-0 items-center gap-2">
+                  {canFavoriteCurrentMenu && (
+                    <label className="inline-flex h-9 cursor-pointer items-center justify-center rounded-full border border-slate-200 bg-white/80 px-3 text-sm font-semibold text-slate-700 shadow-sm hover:bg-white">
+                      <input
+                        type="checkbox"
+                        checked={isCurrentMenuFavorited}
+                        onChange={toggleCurrentQuickAction}
+                        className="sr-only"
+                      />
+                      <span
+                        className={
+                          isCurrentMenuFavorited ? "text-yellow-500" : "text-slate-400"
+                        }
+                      >
+                        {isCurrentMenuFavorited ? "★" : "☆"}
+                      </span>
+                      <span className="ml-1 hidden sm:inline">빠른작업</span>
+                    </label>
+                  )}
+                  {!hideRefreshButton && (
+                    <button
+                      type="button"
+                      onClick={handleRefreshMenu}
+                      className="h-9 shrink-0 rounded-full border border-blue-200 bg-blue-50/90 px-3 text-xs font-bold text-blue-700 shadow-sm hover:bg-blue-100 sm:px-4 sm:text-sm"
+                    >
+                      새로고침
+                    </button>
+                  )}
+                  {selectedMenu.id !== "dashboard" && (
+                    <button
+                      type="button"
+                      onClick={handleCloseMenu}
+                      className="h-9 shrink-0 rounded-full border border-slate-200 bg-white/85 px-3 text-xs font-bold text-slate-700 shadow-sm hover:bg-white sm:px-4 sm:text-sm"
+                    >
+                      창닫기
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
 
