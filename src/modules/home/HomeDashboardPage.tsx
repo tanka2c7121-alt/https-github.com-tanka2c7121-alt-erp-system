@@ -766,7 +766,7 @@ export default function HomeDashboardPage({
         </div>
       </div>
 
-      <section className="grid grid-cols-2 gap-2 md:grid-cols-5 md:gap-3">
+      <section className="grid grid-cols-5 gap-1.5 md:gap-3">
         <SummaryCard title="현재 입고" value={dashboard.activeOrders.length} tone="blue" />
         <SummaryCard title="오늘 입고" value={dashboard.todayInbound.length} tone="green" />
         <SummaryCard title="오늘 출고" value={dashboard.todayOutbound.length} tone="indigo" />
@@ -831,12 +831,12 @@ function SummaryCard({
 
   return (
     <div
-      className={`flex min-h-20 min-w-0 flex-col justify-between rounded-lg border p-3 shadow-sm md:min-h-28 md:rounded-xl md:p-4 ${toneClass}`}
+      className={`flex min-h-16 min-w-0 flex-col justify-between rounded-lg border px-1.5 py-2 text-center shadow-sm md:min-h-28 md:rounded-xl md:p-4 md:text-left ${toneClass}`}
     >
-      <p className="min-w-0 truncate text-xs font-semibold leading-tight md:break-keep md:text-sm">
+      <p className="min-w-0 truncate text-[10px] font-semibold leading-tight md:break-keep md:text-sm">
         {title}
       </p>
-      <p className="text-right text-2xl font-bold leading-none md:text-3xl">
+      <p className="text-xl font-bold leading-none md:text-right md:text-3xl">
         {value}
       </p>
     </div>
