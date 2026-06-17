@@ -1853,14 +1853,14 @@ function handleClearWorkRow(index: number) {
 
         {cameraOpen && (
           <div
-            className="fixed inset-0 z-50 flex h-[100svh] max-h-[100dvh] w-screen touch-none flex-col overflow-hidden overscroll-none bg-slate-950 landscape:flex-row"
+            className="work-camera-overlay"
             onTouchMove={(event) => event.preventDefault()}
           >
             <video
               ref={videoRef}
               playsInline
               muted
-              className="min-h-0 min-w-0 flex-1 bg-black object-contain"
+              className="work-camera-video"
             />
             {!cameraReady && (
               <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-slate-950/70 text-sm font-semibold text-white">
@@ -1875,22 +1875,22 @@ function handleClearWorkRow(index: number) {
                 촬영 완료 {cameraShotCount}장
               </div>
             )}
-            <div className="shrink-0 border-t border-slate-800 bg-white px-[calc(0.75rem+env(safe-area-inset-left))] py-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] landscape:flex landscape:w-28 landscape:items-center landscape:justify-center landscape:border-l landscape:border-t-0 landscape:bg-slate-950 landscape:py-3 landscape:pl-3 landscape:pr-[calc(0.75rem+env(safe-area-inset-right))]">
-              <div className="mx-auto flex max-w-md gap-2 landscape:mx-0 landscape:flex-col landscape:items-center">
+            <div className="work-camera-controls">
+              <div className="work-camera-actions">
               <button
                 type="button"
                 onClick={() => {
                   void captureCameraPhoto();
                 }}
                 disabled={!cameraReady || photoOcrReading}
-                className="min-h-11 flex-1 rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:bg-slate-400 landscape:h-16 landscape:w-16 landscape:flex-none landscape:rounded-full landscape:px-2 landscape:py-2 landscape:text-xs"
+                className="work-camera-button work-camera-button-primary"
               >
                 {cameraReady ? "촬영" : "준비 중"}
               </button>
               <button
                 type="button"
                 onClick={closeCamera}
-                className="min-h-11 flex-1 rounded-lg border border-slate-300 px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 landscape:h-16 landscape:w-16 landscape:flex-none landscape:rounded-full landscape:border-slate-600 landscape:bg-slate-900 landscape:px-2 landscape:py-2 landscape:text-xs landscape:text-white landscape:hover:bg-slate-800"
+                className="work-camera-button work-camera-button-secondary"
               >
                 닫기
               </button>
