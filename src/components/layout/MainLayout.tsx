@@ -116,7 +116,7 @@ const isSameQuickAction = (left: MenuItem, right: MenuItem) =>
 const menuCacheKey = (menu: MenuItem) =>
   `${menu.id}:${JSON.stringify(menu.data ?? {})}`;
 
-const isCacheableMenu = (menu: MenuItem) => menu.id === "dashboard";
+const isCacheableMenu = (menu: MenuItem) => !menu.id.includes("print");
 
 export default function MainLayout({ user, onLogout }: MainLayoutProps) {
   const isAdmin = user.role === "ADMIN";
@@ -154,6 +154,7 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
   );
   const mobileMenuTitle = mobileMenuParent?.title ?? "업무목록";
   const hideRefreshButton = selectedMenu.id === "dashboard";
+  const openWindowMenus = cachedMenus.filter((menu) => menu.id !== "dashboard");
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -218,11 +219,6 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
 
     if (currentKey !== nextKey) {
       setMenuHistory((prev) => [...prev, selectedMenu].slice(-30));
-    } else if (!isCacheableMenu(menu)) {
-      setRefreshKeys((prev) => ({
-        ...prev,
-        [nextKey]: (prev[nextKey] ?? 0) + 1,
-      }));
     }
 
     if (isCacheableMenu(menu)) {
@@ -247,10 +243,46 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
   };
 
   const handleCloseMenu = () => {
+    const selectedKey = menuCacheKey(selectedMenu);
+
+    if (selectedMenu.id !== "dashboard") {
+      setCachedMenus((prev) =>
+        prev.filter((menu) => menu.id === "dashboard" || menuCacheKey(menu) !== selectedKey)
+      );
+      setRefreshKeys((prev) => {
+        const next = { ...prev };
+        delete next[selectedKey];
+        return next;
+      });
+    }
+
     setMenuHistory([]);
     setSelectedMenu(initialMenu);
     setIsSidebarOpen(false);
     setMobileMenuPath([]);
+  };
+
+  const handleCloseWindowMenu = (menu: MenuItem) => {
+    if (menu.id === "dashboard") return;
+
+    const targetKey = menuCacheKey(menu);
+
+    setCachedMenus((prev) =>
+      prev.filter((cachedMenu) => menuCacheKey(cachedMenu) !== targetKey)
+    );
+    setRefreshKeys((prev) => {
+      const next = { ...prev };
+      delete next[targetKey];
+      return next;
+    });
+    setMenuHistory((prev) =>
+      prev.filter((historyMenu) => menuCacheKey(historyMenu) !== targetKey)
+    );
+
+    if (menuCacheKey(selectedMenu) === targetKey) {
+      setSelectedMenu(initialMenu);
+      setMobileMenuPath([]);
+    }
   };
 
   const handleRefreshMenu = () => {
@@ -836,7 +868,7 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
                       {selectedMenu.title}
                     </div>
                     <div className="text-[11px] font-semibold text-slate-500">
-                      {selectedMenu.id === "dashboard" ? "업무홈" : "열린 페이지"}
+                      {selectedMenu.id === "dashboard" ? "업무홈" : "현재 페이지"}
                     </div>
                   </div>
                 </div>
@@ -880,6 +912,48 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
                   )}
                 </div>
               </div>
+              {openWindowMenus.length > 0 && (
+                <div className="flex gap-2 overflow-x-auto border-t border-slate-200/80 bg-white/65 px-3 py-2">
+                  {openWindowMenus.map((menu) => {
+                    const menuKey = menuCacheKey(menu);
+                    const isActive = menuKey === menuCacheKey(selectedMenu);
+
+                    return (
+                      <div
+                        key={menuKey}
+                        className={[
+                          "flex h-9 shrink-0 items-center overflow-hidden rounded-full border text-xs font-bold shadow-sm",
+                          isActive
+                            ? "border-blue-300 bg-blue-50 text-blue-700"
+                            : "border-slate-200 bg-white/90 text-slate-600 hover:bg-white",
+                        ].join(" ")}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => handleSelectMenu(menu)}
+                          className="h-full max-w-44 truncate px-3 text-left"
+                          title={menu.title}
+                        >
+                          {menu.title}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleCloseWindowMenu(menu)}
+                          className={[
+                            "h-full border-l px-2 text-sm leading-none",
+                            isActive
+                              ? "border-blue-200 text-blue-500 hover:bg-blue-100"
+                              : "border-slate-200 text-slate-400 hover:bg-slate-100 hover:text-slate-600",
+                          ].join(" ")}
+                          aria-label={`${menu.title} 닫기`}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             {isCacheableMenu(selectedMenu) ? (
