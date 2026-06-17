@@ -265,56 +265,58 @@ export default function DailyCashPage({ onSelectMenu }: DailyCashPageProps) {
   });
 
   return (
-    <div className="space-y-5 text-slate-900">
+    <div className="space-y-4 text-slate-900 md:space-y-5">
       <div>
-        <h3 className="text-xl font-bold">일일입출금내역</h3>
+        <h3 className="text-lg font-bold md:text-xl">일일입출금내역</h3>
         <p className="text-sm text-slate-700">
           매일 입금되고 출금되는 금액과 내용을 정산하는 화면입니다.
         </p>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <div className="rounded-xl border bg-white p-4">
-          <p className="text-sm font-semibold text-slate-700">입금합계</p>
-          <p className="mt-2 text-2xl font-bold text-blue-600">
+      <div className="grid grid-cols-2 gap-2 md:gap-4">
+        <div className="rounded-lg border bg-white p-3 md:rounded-xl md:p-4">
+          <p className="text-xs font-semibold text-slate-700 md:text-sm">입금합계</p>
+          <p className="mt-1 text-lg font-bold text-blue-600 md:mt-2 md:text-2xl">
             {formatWon(totalIncome)}
           </p>
         </div>
 
-        <div className="rounded-xl border bg-white p-4">
-          <p className="text-sm font-semibold text-slate-700">출금합계</p>
-          <p className="mt-2 text-2xl font-bold text-red-600">
+        <div className="rounded-lg border bg-white p-3 md:rounded-xl md:p-4">
+          <p className="text-xs font-semibold text-slate-700 md:text-sm">출금합계</p>
+          <p className="mt-1 text-lg font-bold text-red-600 md:mt-2 md:text-2xl">
             {formatWon(totalExpense)}
           </p>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+      <div className="grid grid-cols-3 gap-2 md:grid-cols-3 md:gap-3 xl:grid-cols-6">
         {accountSummary.map((account) => (
           <div
             key={account.name}
-            className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm"
+            className="rounded-lg border border-slate-200 bg-white p-2 shadow-sm md:rounded-xl md:p-3"
           >
-            <h4 className="text-sm font-bold text-slate-900">{account.name}</h4>
+            <h4 className="truncate text-xs font-bold text-slate-900 md:text-sm">
+              {account.name}
+            </h4>
 
-            <div className="mt-3 space-y-1.5 text-xs">
-              <div className="flex justify-between gap-2">
+            <div className="mt-2 space-y-1 text-[11px] md:mt-3 md:space-y-1.5 md:text-xs">
+              <div className="flex justify-between gap-1">
                 <span className="text-slate-500">입금</span>
-                <span className="font-semibold text-blue-600">
+                <span className="min-w-0 truncate font-semibold text-blue-600">
                   ₩ {formatWon(account.income)}
                 </span>
               </div>
 
-              <div className="flex justify-between gap-2">
+              <div className="flex justify-between gap-1">
                 <span className="text-slate-500">출금</span>
-                <span className="font-semibold text-red-600">
+                <span className="min-w-0 truncate font-semibold text-red-600">
                   ₩ {formatWon(account.expense)}
                 </span>
               </div>
 
-              <div className="flex justify-between gap-2 border-t pt-1.5">
+              <div className="flex justify-between gap-1 border-t pt-1.5">
                 <span className="font-semibold text-slate-700">잔액</span>
-                <span className="font-bold text-green-600">
+                <span className="min-w-0 truncate font-bold text-green-600">
                   ₩ {formatWon(account.balance)}
                 </span>
               </div>
@@ -323,7 +325,7 @@ export default function DailyCashPage({ onSelectMenu }: DailyCashPageProps) {
         ))}
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white p-4">
+      <div className="rounded-xl border border-slate-200 bg-white p-3 md:p-4">
         <div className="mb-4 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
           <div className="flex flex-wrap items-center gap-2">
   {[

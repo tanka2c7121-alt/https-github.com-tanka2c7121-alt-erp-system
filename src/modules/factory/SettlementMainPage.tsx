@@ -451,9 +451,9 @@ const fetchSettlementMain = useCallback(async (year: string, month: string) => {
   });
 
   return (
-    <div className="space-y-6 text-slate-900">
+    <div className="space-y-4 text-slate-900 md:space-y-6">
       <div>
-        <h3 className="text-2xl font-bold">정산관리</h3>
+        <h3 className="text-xl font-bold md:text-2xl">정산관리</h3>
 
         <p className="text-sm text-slate-600">
           차량정산 및 일일입출금 통합 조회 화면입니다.
@@ -461,7 +461,7 @@ const fetchSettlementMain = useCallback(async (year: string, month: string) => {
       </div>
 
       {/* 기간 선택 */}
-<div className="rounded-2xl border border-slate-200 bg-white p-5">
+<div className="rounded-xl border border-slate-200 bg-white p-3 md:rounded-2xl md:p-5">
 
   <div className="flex flex-wrap items-center gap-2">
     <div className="text-sm font-semibold text-slate-700">
@@ -510,7 +510,7 @@ const fetchSettlementMain = useCallback(async (year: string, month: string) => {
 </div>
 
       {/* 요약 카드 */}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2 md:grid-cols-4 md:gap-4">
        <SummaryCard title="전체 잔고" value={totalCompanyBalance} color="text-blue-600" />
        <SummaryCard
          title="미수금"
@@ -683,44 +683,44 @@ const fetchSettlementMain = useCallback(async (year: string, month: string) => {
           </div>
         </section>
       )}
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-6">
+        <div className="grid grid-cols-3 gap-2 md:grid-cols-6 md:gap-4">
   {accountSummary.map((account) => (
     <div
       key={account.name}
-      className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+      className="rounded-lg border border-slate-200 bg-white p-2 shadow-sm md:rounded-2xl md:p-5"
     >
-      <h4 className="text-lg font-bold text-slate-900">
+      <h4 className="truncate text-xs font-bold text-slate-900 md:text-lg">
         {account.name}
       </h4>
 
-      <div className="mt-4 space-y-2 text-sm">
+      <div className="mt-2 space-y-1 text-[11px] md:mt-4 md:space-y-2 md:text-sm">
 
-        <div className="flex justify-between">
+        <div className="flex justify-between gap-1">
           <span className="text-slate-500">
             입금
           </span>
 
-          <span className="font-semibold text-blue-600">
+          <span className="min-w-0 truncate font-semibold text-blue-600">
             ₩ {account.income.toLocaleString()}
           </span>
         </div>
 
-        <div className="flex justify-between">
+        <div className="flex justify-between gap-1">
           <span className="text-slate-500">
             출금
           </span>
 
-          <span className="font-semibold text-red-600">
+          <span className="min-w-0 truncate font-semibold text-red-600">
             ₩ {account.expense.toLocaleString()}
           </span>
         </div>
 
-        <div className="flex justify-between border-t pt-2">
+        <div className="flex justify-between gap-1 border-t pt-1.5 md:pt-2">
           <span className="font-semibold">
             잔액
           </span>
 
-          <span className="font-bold text-green-600">
+          <span className="min-w-0 truncate font-bold text-green-600">
             ₩ {account.balance.toLocaleString()}
           </span>
         </div>
@@ -763,30 +763,30 @@ function SummaryCard({
         }
       }}
       className={[
-        "rounded-2xl border border-slate-200 bg-white p-5 shadow-sm",
+        "rounded-lg border border-slate-200 bg-white p-3 shadow-sm md:rounded-2xl md:p-5",
         onClick ? "cursor-pointer transition hover:border-orange-300 hover:bg-orange-50" : "",
       ].join(" ")}
     >
 
-      <p className="text-sm font-semibold text-slate-600">
+      <p className="text-xs font-semibold text-slate-600 md:text-sm">
         {title}
       </p>
 
-      <p className={`mt-3 text-3xl font-bold ${color}`}>
+      <p className={`mt-2 truncate text-lg font-bold md:mt-3 md:text-3xl ${color}`}>
         ₩ {value.toLocaleString()}
       </p>
 
       {details && (
-        <div className="mt-4 space-y-2 border-t border-slate-100 pt-3">
+        <div className="mt-3 space-y-1.5 border-t border-slate-100 pt-2 md:mt-4 md:space-y-2 md:pt-3">
 
           {details.map((item) => (
             <div
               key={item.name}
-              className="flex items-center justify-between rounded-lg bg-orange-50 px-2 py-1.5 text-xs"
+              className="flex items-center justify-between gap-1 rounded-lg bg-orange-50 px-2 py-1.5 text-[11px] md:text-xs"
             >
-              <span className="font-semibold text-slate-600">{item.name}</span>
+              <span className="truncate font-semibold text-slate-600">{item.name}</span>
 
-              <span className="font-bold text-orange-700">
+              <span className="shrink-0 font-bold text-orange-700">
                 ₩ {item.amount.toLocaleString()}
               </span>
             </div>

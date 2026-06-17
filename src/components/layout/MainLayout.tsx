@@ -801,8 +801,8 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
           </div>
         </div>
 
-        <main className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto p-3 md:p-6">
-          <div className="mb-3 rounded-2xl border border-white/70 bg-white/75 p-3 shadow-lg shadow-slate-300/30 backdrop-blur-xl md:hidden">
+        <main className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto p-2 md:p-6">
+          <div className="mb-2 rounded-xl border border-white/70 bg-white/80 p-2 shadow-lg shadow-slate-300/30 backdrop-blur-xl md:hidden">
             <div className="mb-2 flex items-center justify-between gap-2">
               <div className="min-w-0">
                 <div className="text-xs font-semibold text-slate-500">메뉴</div>
@@ -822,7 +822,7 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
               )}
             </div>
 
-            <div className="flex gap-2 overflow-x-auto">
+            <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-0.5">
               {displayedMobileMenus.map((menu) => {
                 const visibleChildren = getVisibleMenuItems(
                   menu.children ?? [],
@@ -838,7 +838,7 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
                     type="button"
                     onClick={() => handleMobileMenuClick(menu)}
                     className={[
-                      "min-h-9 shrink-0 rounded-full border px-3 py-2 text-left text-xs font-bold leading-snug shadow-sm transition",
+                      "min-h-8 shrink-0 rounded-full border px-3 py-1.5 text-left text-xs font-bold leading-snug shadow-sm transition",
                       isSelected
                         ? "border-blue-600 bg-blue-600 text-white"
                         : "border-white/70 bg-white/70 text-slate-800 shadow-sm hover:border-blue-200 hover:bg-white",
@@ -854,14 +854,14 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
             </div>
           </div>
 
-          <section className="min-h-[500px] min-w-0 overflow-x-hidden rounded-2xl border border-white/70 bg-white/80 p-3 shadow-2xl shadow-slate-300/40 backdrop-blur-xl md:rounded-[22px] md:p-6">
-            <div className="mb-4 overflow-hidden rounded-xl border border-slate-200 bg-slate-100/90 shadow-sm">
-              <div className="flex min-h-12 items-center justify-between gap-3 border-b border-white/80 px-3 py-2">
+          <section className="min-h-[500px] min-w-0 overflow-x-hidden rounded-xl border border-white/70 bg-white/80 p-2 shadow-xl shadow-slate-300/35 backdrop-blur-xl md:rounded-[22px] md:p-6 md:shadow-2xl">
+            <div className="mb-3 overflow-hidden rounded-xl border border-slate-200 bg-slate-100/90 shadow-sm md:mb-4">
+              <div className="flex min-h-11 items-center justify-between gap-2 border-b border-white/80 px-2 py-2 md:min-h-12 md:gap-3 md:px-3">
                 <div className="flex min-w-0 items-center gap-3">
-                  <div className="flex shrink-0 items-center gap-1.5" aria-hidden="true">
-                    <span className="h-3 w-3 rounded-full bg-red-400 shadow-inner" />
-                    <span className="h-3 w-3 rounded-full bg-yellow-400 shadow-inner" />
-                    <span className="h-3 w-3 rounded-full bg-green-400 shadow-inner" />
+                  <div className="flex shrink-0 items-center gap-1 md:gap-1.5" aria-hidden="true">
+                    <span className="h-2.5 w-2.5 rounded-full bg-red-400 shadow-inner md:h-3 md:w-3" />
+                    <span className="h-2.5 w-2.5 rounded-full bg-yellow-400 shadow-inner md:h-3 md:w-3" />
+                    <span className="h-2.5 w-2.5 rounded-full bg-green-400 shadow-inner md:h-3 md:w-3" />
                   </div>
                   <div className="min-w-0">
                     <div className="truncate text-sm font-bold text-slate-800">
@@ -873,9 +873,9 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
                   </div>
                 </div>
 
-                <div className="flex shrink-0 items-center gap-2">
+                <div className="flex shrink-0 items-center gap-1.5 md:gap-2">
                   {canFavoriteCurrentMenu && (
-                    <label className="inline-flex h-9 cursor-pointer items-center justify-center rounded-full border border-slate-200 bg-white/80 px-3 text-sm font-semibold text-slate-700 shadow-sm hover:bg-white">
+                    <label className="inline-flex h-8 cursor-pointer items-center justify-center rounded-full border border-slate-200 bg-white/80 px-2.5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-white md:h-9 md:px-3">
                       <input
                         type="checkbox"
                         checked={isCurrentMenuFavorited}
@@ -896,7 +896,7 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
                     <button
                       type="button"
                       onClick={handleRefreshMenu}
-                      className="h-9 shrink-0 rounded-full border border-blue-200 bg-blue-50/90 px-3 text-xs font-bold text-blue-700 shadow-sm hover:bg-blue-100 sm:px-4 sm:text-sm"
+                      className="h-8 shrink-0 rounded-full border border-blue-200 bg-blue-50/90 px-2.5 text-xs font-bold text-blue-700 shadow-sm hover:bg-blue-100 sm:px-4 sm:text-sm md:h-9"
                     >
                       새로고침
                     </button>
@@ -905,7 +905,7 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
                     <button
                       type="button"
                       onClick={handleCloseMenu}
-                      className="h-9 shrink-0 rounded-full border border-slate-200 bg-white/85 px-3 text-xs font-bold text-slate-700 shadow-sm hover:bg-white sm:px-4 sm:text-sm"
+                      className="h-8 shrink-0 rounded-full border border-slate-200 bg-white/85 px-2.5 text-xs font-bold text-slate-700 shadow-sm hover:bg-white sm:px-4 sm:text-sm md:h-9"
                     >
                       창닫기
                     </button>
@@ -913,7 +913,7 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
                 </div>
               </div>
               {openWindowMenus.length > 0 && (
-                <div className="flex gap-2 overflow-x-auto border-t border-slate-200/80 bg-white/65 px-3 py-2">
+                <div className="flex gap-1.5 overflow-x-auto border-t border-slate-200/80 bg-white/65 px-2 py-1.5 md:gap-2 md:px-3 md:py-2">
                   {openWindowMenus.map((menu) => {
                     const menuKey = menuCacheKey(menu);
                     const isActive = menuKey === menuCacheKey(selectedMenu);
@@ -922,7 +922,7 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
                       <div
                         key={menuKey}
                         className={[
-                          "flex h-9 shrink-0 items-center overflow-hidden rounded-full border text-xs font-bold shadow-sm",
+                          "flex h-8 shrink-0 items-center overflow-hidden rounded-full border text-xs font-bold shadow-sm md:h-9",
                           isActive
                             ? "border-blue-300 bg-blue-50 text-blue-700"
                             : "border-slate-200 bg-white/90 text-slate-600 hover:bg-white",
@@ -931,7 +931,7 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
                         <button
                           type="button"
                           onClick={() => handleSelectMenu(menu)}
-                          className="h-full max-w-44 truncate px-3 text-left"
+                          className="h-full max-w-32 truncate px-2.5 text-left md:max-w-44 md:px-3"
                           title={menu.title}
                         >
                           {menu.title}
