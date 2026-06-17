@@ -730,7 +730,7 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
 
     return (
       <div className="rounded-xl border border-dashed p-10 text-center text-slate-600">
-        ?좏깮??硫붾돱: <span className="font-semibold text-slate-900">{menu.title}</span>
+        선택한 메뉴: <span className="font-semibold text-slate-900">{menu.title}</span>
       </div>
     );
   };
