@@ -41,6 +41,8 @@ const normalizeNoneText = (value?: string | null) =>
   value === "해당없음" ? "-" : value ?? "";
 const workPhotoBucket = "work-photos";
 const photoBatchSize = 10;
+const imageFilePattern = /\.(avif|bmp|gif|heic|heif|jpeg|jpg|png|webp)$/i;
+const windowsReservedFileNames = /^(con|prn|aux|nul|clock\$|com[1-9]|lpt[1-9])(\..*)?$/i;
 
 type WorkPhoto = {
   name: string;
@@ -798,7 +800,13 @@ async function loadWorkPhotos(targetWorkName = workName) {
   }
 
   const photoPaths = (data ?? [])
-    .filter((item) => item.name && !item.name.endsWith("/"))
+    .filter(
+      (item) =>
+        item.name &&
+        !item.name.endsWith("/") &&
+        !item.name.startsWith(".") &&
+        imageFilePattern.test(item.name)
+    )
     .map((item) => `${folder}/${item.name}`);
 
   if (photoPaths.length === 0) {
@@ -1154,15 +1162,40 @@ function startPhotoViewerResize(event: ReactPointerEvent<HTMLButtonElement>) {
   window.addEventListener("pointerup", handlePointerUp);
 }
 
-const safeFileName = (name: string) =>
-  name.replace(/[\\/:*?"<>|]/g, "_").replace(/\s+/g, "_");
+function safeFileName(name: string, fallback = "photo.jpg") {
+  const fallbackExtension = fallback.includes(".")
+    ? fallback.slice(fallback.lastIndexOf("."))
+    : ".jpg";
+  const normalizedName = name
+    .normalize("NFKC")
+    .replace(/[\u0000-\u001f\u007f]/g, "")
+    .replace(/[\\/:*?"<>|]/g, "_")
+    .replace(/\s+/g, "_")
+    .replace(/^\.+/, "")
+    .replace(/[.\s_]+$/g, "")
+    .slice(0, 120);
+  const withFallback = normalizedName || fallback.replace(/[\\/:*?"<>|]/g, "_");
+  const withSafeReservedName = windowsReservedFileNames.test(withFallback)
+    ? `photo_${withFallback}`
+    : withFallback;
+
+  return imageFilePattern.test(withSafeReservedName)
+    ? withSafeReservedName
+    : `${withSafeReservedName}${fallbackExtension}`;
+}
+
+const getDownloadFileName = (photo: WorkPhoto, index: number) =>
+  `${String(index + 1).padStart(2, "0")}_${safeFileName(
+    photo.name,
+    `photo-${index + 1}.jpg`
+  )}`;
 
 function downloadPhotosWithBrowser(photos: WorkPhoto[]) {
   photos.forEach((photo, index) => {
     setTimeout(() => {
       const link = document.createElement("a");
       link.href = photo.url;
-      link.download = photo.name;
+      link.download = getDownloadFileName(photo, index);
       link.target = "_blank";
       document.body.appendChild(link);
       link.click();
@@ -1198,7 +1231,7 @@ async function downloadSelectedPhotosToFolder() {
 
       const blob = await response.blob();
       const fileHandle = await directoryHandle.getFileHandle(
-        `${String(index + 1).padStart(2, "0")}_${safeFileName(photo.name)}`,
+        getDownloadFileName(photo, index),
         { create: true }
       );
       const writable = await fileHandle.createWritable();
