@@ -119,6 +119,10 @@ const menuCacheKey = (menu: MenuItem) =>
 const isCacheableMenu = (menu: MenuItem) => !menu.id.includes("print");
 const realtimeRefreshMenuIds = new Set([
   "dashboard",
+  "factory-settlement",
+  "factory-settlement-repair",
+  "factory-settlement-repair-register",
+  "factory-settlement-pending-insurance",
   "factory-inbound",
   "factory-release-list",
   "factory-outbound",
