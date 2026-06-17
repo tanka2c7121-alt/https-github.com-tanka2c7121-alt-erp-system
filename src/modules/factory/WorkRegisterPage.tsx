@@ -741,15 +741,33 @@ useEffect(() => {
 useEffect(() => {
   if (!cameraOpen) return;
 
+  const scrollX = window.scrollX;
+  const scrollY = window.scrollY;
+  const previousHtmlOverflow = document.documentElement.style.overflow;
+  const previousHtmlTouchAction = document.documentElement.style.touchAction;
   const previousOverflow = document.body.style.overflow;
   const previousTouchAction = document.body.style.touchAction;
+  const previousPosition = document.body.style.position;
+  const previousTop = document.body.style.top;
+  const previousWidth = document.body.style.width;
 
+  document.documentElement.style.overflow = "hidden";
+  document.documentElement.style.touchAction = "none";
   document.body.style.overflow = "hidden";
   document.body.style.touchAction = "none";
+  document.body.style.position = "fixed";
+  document.body.style.top = `-${scrollY}px`;
+  document.body.style.width = "100%";
 
   return () => {
+    document.documentElement.style.overflow = previousHtmlOverflow;
+    document.documentElement.style.touchAction = previousHtmlTouchAction;
     document.body.style.overflow = previousOverflow;
     document.body.style.touchAction = previousTouchAction;
+    document.body.style.position = previousPosition;
+    document.body.style.top = previousTop;
+    document.body.style.width = previousWidth;
+    window.scrollTo(scrollX, scrollY);
   };
 }, [cameraOpen]);
 
@@ -1834,7 +1852,10 @@ function handleClearWorkRow(index: number) {
         </div>
 
         {cameraOpen && (
-          <div className="fixed inset-0 z-50 flex h-dvh flex-col bg-slate-950 landscape:flex-row">
+          <div
+            className="fixed inset-0 z-50 flex h-[100svh] max-h-[100dvh] w-screen touch-none flex-col overflow-hidden overscroll-none bg-slate-950 landscape:flex-row"
+            onTouchMove={(event) => event.preventDefault()}
+          >
             <video
               ref={videoRef}
               playsInline
@@ -1854,7 +1875,7 @@ function handleClearWorkRow(index: number) {
                 촬영 완료 {cameraShotCount}장
               </div>
             )}
-            <div className="shrink-0 border-t border-slate-800 bg-white p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] landscape:flex landscape:w-24 landscape:items-center landscape:justify-center landscape:border-l landscape:border-t-0 landscape:bg-slate-950 landscape:pb-3">
+            <div className="shrink-0 border-t border-slate-800 bg-white px-3 py-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] landscape:flex landscape:w-24 landscape:items-center landscape:justify-center landscape:border-l landscape:border-t-0 landscape:bg-slate-950 landscape:px-2 landscape:py-3 landscape:pb-3">
               <div className="mx-auto flex max-w-md gap-2 landscape:mx-0 landscape:flex-col">
               <button
                 type="button"
@@ -1862,14 +1883,14 @@ function handleClearWorkRow(index: number) {
                   void captureCameraPhoto();
                 }}
                 disabled={!cameraReady || photoOcrReading}
-                className="min-h-12 flex-1 rounded-lg bg-blue-600 px-5 py-3 text-sm font-semibold text-white hover:bg-blue-700 disabled:bg-slate-400 landscape:h-20 landscape:w-20 landscape:rounded-full landscape:px-3 landscape:py-3"
+                className="min-h-11 flex-1 rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:bg-slate-400 landscape:h-20 landscape:w-20 landscape:rounded-full landscape:px-3 landscape:py-3"
               >
                 {cameraReady ? "촬영" : "준비 중"}
               </button>
               <button
                 type="button"
                 onClick={closeCamera}
-                className="min-h-12 flex-1 rounded-lg border border-slate-300 px-5 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 landscape:h-20 landscape:w-20 landscape:rounded-full landscape:border-slate-600 landscape:bg-slate-900 landscape:px-3 landscape:py-3 landscape:text-white landscape:hover:bg-slate-800"
+                className="min-h-11 flex-1 rounded-lg border border-slate-300 px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 landscape:h-20 landscape:w-20 landscape:rounded-full landscape:border-slate-600 landscape:bg-slate-900 landscape:px-3 landscape:py-3 landscape:text-white landscape:hover:bg-slate-800"
               >
                 닫기
               </button>
