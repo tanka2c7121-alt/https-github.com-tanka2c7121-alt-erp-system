@@ -197,10 +197,14 @@ body {
   .settlement-complete-print {
     left: auto !important;
     top: auto !important;
-    width: 196mm !important;
+    width: 190mm !important;
     min-height: auto !important;
-    padding: 3mm !important;
+    padding: 4mm !important;
     overflow: visible !important;
+  }
+
+  .settlement-complete-header {
+    padding-right: 40mm !important;
   }
 
   .settlement-complete-print h1 {
@@ -220,8 +224,10 @@ body {
   }
 
   .settlement-complete-stamp {
+    right: 4mm !important;
+    top: 5mm !important;
     width: 42mm !important;
-    height: 30mm !important;
+    height: 26mm !important;
     border-radius: 0 !important;
   }
 }

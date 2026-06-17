@@ -304,8 +304,8 @@ export default function SettlementCompletePrintPage({
         </div>
       </div>
 
-      <section className="settlement-complete-print relative mx-auto max-w-5xl bg-white p-8 shadow print-area">
-        <div className="settlement-complete-stamp pointer-events-none absolute right-10 top-12 z-10 flex h-24 w-36 rotate-[-12deg] flex-col items-center justify-center border-8 border-red-600 text-red-600 opacity-75">
+      <section className="settlement-complete-print relative mx-auto max-w-5xl bg-white p-6 shadow print-area md:p-8">
+        <div className="settlement-complete-stamp pointer-events-none absolute right-6 top-8 z-10 flex h-20 w-32 rotate-[-12deg] flex-col items-center justify-center border-8 border-red-600 text-red-600 opacity-75 md:right-10 md:top-10 md:h-24 md:w-36">
           <div className="text-3xl font-black leading-none">완결</div>
           {(completedDate || completedByName) && (
             <div className="mt-1 text-center text-[10px] font-black leading-tight text-blue-700">
@@ -315,7 +315,7 @@ export default function SettlementCompletePrintPage({
           )}
         </div>
 
-        <div className="mb-5 text-center">
+        <div className="settlement-complete-header mb-4 pr-32 text-center md:mb-5 md:pr-40">
           <h1 className="text-3xl font-black">차량정산</h1>
           <p className="mt-1 text-xs text-slate-500">{loading ? "불러오는 중" : inputWorkName}</p>
         </div>
