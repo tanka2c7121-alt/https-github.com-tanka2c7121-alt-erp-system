@@ -38,6 +38,8 @@ type PaymentRow = {
   work_name: string | null;
   payment_type: string | null;
   payment_detail: string | null;
+  claim_amount: number | null;
+  claim_date: string | null;
   payment_amount: number | null;
   payment_date: string | null;
 };
@@ -54,8 +56,10 @@ type InsuranceListRow = {
   claimAmount: number;
   paidAmount: number;
   receivableAmount: number;
+  collectionRate: number | null;
 };
 
+type ClaimDetail = "보험" | "캐피탈" | "일반" | "바디케어";
 type StatusFilter = "all" | "pending" | "complete" | "closed";
 type SortKey =
   | "workName"
@@ -67,7 +71,8 @@ type SortKey =
   | "claimDate"
   | "claimAmount"
   | "paidAmount"
-  | "receivableAmount";
+  | "receivableAmount"
+  | "collectionRate";
 type SortDirection = "asc" | "desc";
 const realtimeTables = [
   { table: "work_orders" },
@@ -107,9 +112,12 @@ async function fetchAllRows<T>(
 }
 
 const formatWon = (amount: number) => amount.toLocaleString();
+const formatRate = (rate: number | null) =>
+  rate === null ? "-" : `${rate.toFixed(1)}%`;
 const normalizeText = (value: unknown) => String(value ?? "").trim();
 const toAmountNumber = (value: unknown) =>
   Number(String(value ?? 0).replaceAll(",", "")) || 0;
+const claimDetails: ClaimDetail[] = ["보험", "캐피탈", "일반", "바디케어"];
 
 const normalizeStatus = (value: unknown): InsuranceListRow["status"] => {
   const text = normalizeText(value);
@@ -128,12 +136,34 @@ const matchesPaymentSide = (detail: unknown, side: "자차" | "대물") => {
   return text.includes("대물") || text.includes("상대");
 };
 
-const isInsuranceReceivablePayment = (payment: PaymentRow) => {
-  const paymentType = normalizeText(payment.payment_type);
-  const paymentDetail = normalizeText(payment.payment_detail);
+const normalizeClaimDetail = (value: unknown): ClaimDetail | null => {
+  const text = normalizeText(value);
 
-  return paymentType !== "청구" && paymentType !== "면책금" && paymentDetail !== "일반";
+  return claimDetails.find((detail) => text.includes(detail)) ?? null;
 };
+
+const isClaimRow = (payment: PaymentRow) =>
+  normalizeText(payment.payment_type) === "청구";
+
+const isMatchedCollectionPayment = (
+  payment: PaymentRow,
+  detail: ClaimDetail
+) => {
+  const paymentType = normalizeText(payment.payment_type);
+  const paymentDetail = normalizeClaimDetail(payment.payment_detail);
+
+  if (paymentType === "청구" || paymentType === "면책금") return false;
+  if (paymentDetail !== detail) return false;
+
+  if (detail === "일반") {
+    return paymentType === "견적비" || paymentType === "보관료";
+  }
+
+  return paymentType === "수리비" || paymentType === "부가세";
+};
+
+const calculateCollectionRate = (claimAmount: number, paidAmount: number) =>
+  claimAmount > 0 ? (paidAmount / claimAmount) * 100 : null;
 
 export default function PendingInsuranceListPage({
   onSelectMenu,
@@ -184,7 +214,7 @@ export default function PendingInsuranceListPage({
       ),
       fetchAllRows<PaymentRow>(
         "settlement_payments",
-        "id, work_name, payment_type, payment_detail, payment_amount, payment_date",
+        "id, work_name, payment_type, payment_detail, claim_amount, claim_date, payment_amount, payment_date",
         (query) => query.order("id", { ascending: true })
       ),
     ]);
@@ -293,10 +323,65 @@ export default function PendingInsuranceListPage({
         const workPayments = paymentRowsByWork.get(workName) ?? [];
         const status = normalizeStatus(row.progress_status);
         const totalClaimAmount = toAmountNumber(row.claim_amount);
+        const claimRows = workPayments.filter(isClaimRow);
+        const hasDetailClaimRows = claimRows.some((payment) =>
+          normalizeClaimDetail(payment.payment_detail)
+        );
+        const detailListRows = claimRows
+          .reduce<Map<ClaimDetail, InsuranceListRow>>((map, payment) => {
+            const detail = normalizeClaimDetail(payment.payment_detail);
+
+            if (!detail) return map;
+
+            const current = map.get(detail) ?? {
+              workName,
+              carNumber: normalizeText(row.car_number),
+              carModel: normalizeText(row.car_model),
+              status,
+              id: `${row.id}-${detail}`,
+              insuranceCompany:
+                normalizeText(row.insurance_company) || "미지정",
+              claimSide: detail,
+              claimDate: normalizeText(payment.claim_date),
+              claimAmount: 0,
+              paidAmount: 0,
+              receivableAmount: 0,
+              collectionRate: null,
+            };
+
+            current.claimAmount += toAmountNumber(payment.claim_amount);
+
+            const claimDate = normalizeText(payment.claim_date);
+
+            if (claimDate && (!current.claimDate || claimDate < current.claimDate)) {
+              current.claimDate = claimDate;
+            }
+
+            map.set(detail, current);
+            return map;
+          }, new Map<ClaimDetail, InsuranceListRow>());
+
+        detailListRows.forEach((item, detail) => {
+          item.paidAmount = workPayments
+            .filter((payment) => isMatchedCollectionPayment(payment, detail))
+            .reduce((sum, payment) => sum + toAmountNumber(payment.payment_amount), 0);
+          item.receivableAmount = Math.max(0, item.claimAmount - item.paidAmount);
+          item.collectionRate = calculateCollectionRate(
+            item.claimAmount,
+            item.paidAmount
+          );
+        });
+
+        if (hasDetailClaimRows) {
+          return Array.from(detailListRows.values()).filter(
+            (item) => item.claimAmount > 0 || item.paidAmount > 0
+          );
+        }
 
         const paidAmountForSide = (side?: "자차" | "대물") =>
           workPayments
-            .filter(isInsuranceReceivablePayment)
+            .filter((payment) => !isClaimRow(payment))
+            .filter((payment) => normalizeText(payment.payment_type) !== "면책금")
             .filter((payment) =>
               side ? matchesPaymentSide(payment.payment_detail, side) : true
             )
@@ -331,6 +416,10 @@ export default function PendingInsuranceListPage({
               claimAmount: ownClaimAmount,
               paidAmount: ownPaidAmount,
               receivableAmount: Math.max(0, ownClaimAmount - ownPaidAmount),
+              collectionRate: calculateCollectionRate(
+                ownClaimAmount,
+                ownPaidAmount
+              ),
             },
             {
               ...baseRow,
@@ -341,6 +430,10 @@ export default function PendingInsuranceListPage({
               claimAmount: otherClaimAmount,
               paidAmount: otherPaidAmount,
               receivableAmount: Math.max(0, otherClaimAmount - otherPaidAmount),
+              collectionRate: calculateCollectionRate(
+                otherClaimAmount,
+                otherPaidAmount
+              ),
             },
           ].filter(
             (item) =>
@@ -362,6 +455,7 @@ export default function PendingInsuranceListPage({
             claimAmount: totalClaimAmount,
             paidAmount,
             receivableAmount: Math.max(0, totalClaimAmount - paidAmount),
+            collectionRate: calculateCollectionRate(totalClaimAmount, paidAmount),
           },
         ];
       });
@@ -435,18 +529,20 @@ export default function PendingInsuranceListPage({
   const summary = useMemo(() => {
     const claimAmount = sortedRows.reduce((sum, row) => sum + row.claimAmount, 0);
     const paidAmount = sortedRows.reduce((sum, row) => sum + row.paidAmount, 0);
-    const receivableAmount = filteredRows.reduce(
+    const receivableAmount = sortedRows.reduce(
       (sum, row) => sum + row.receivableAmount,
       0
     );
+    const collectionRate = calculateCollectionRate(claimAmount, paidAmount);
 
     return {
       count: sortedRows.length,
       claimAmount,
       paidAmount,
       receivableAmount,
+      collectionRate,
     };
-  }, [filteredRows, sortedRows]);
+  }, [sortedRows]);
 
   return (
     <div className="space-y-5 text-slate-900">
@@ -465,11 +561,12 @@ export default function PendingInsuranceListPage({
 
       </div>
 
-      <section className="grid grid-cols-1 gap-3 md:grid-cols-4">
+      <section className="grid grid-cols-1 gap-3 md:grid-cols-5">
         <SummaryCard label="건수" value={`${summary.count.toLocaleString()}건`} />
         <SummaryCard label="청구금액" value={`₩ ${formatWon(summary.claimAmount)}`} tone="blue" />
         <SummaryCard label="입금금액" value={`₩ ${formatWon(summary.paidAmount)}`} tone="green" />
         <SummaryCard label="미수금" value={`₩ ${formatWon(summary.receivableAmount)}`} tone="red" />
+        <SummaryCard label="수금율" value={formatRate(summary.collectionRate)} tone="green" />
       </section>
 
       <section className="rounded-xl border border-slate-200 bg-white p-4">
@@ -544,18 +641,19 @@ export default function PendingInsuranceListPage({
               <SortableHeader label="차량번호" sortKey="carNumber" activeKey={sortKey} direction={sortDirection} onSort={handleSort} />
               <SortableHeader label="차량명" sortKey="carModel" activeKey={sortKey} direction={sortDirection} onSort={handleSort} />
               <SortableHeader label="보험사" sortKey="insuranceCompany" activeKey={sortKey} direction={sortDirection} onSort={handleSort} />
-              <SortableHeader label="구분" sortKey="claimSide" activeKey={sortKey} direction={sortDirection} align="center" onSort={handleSort} />
+              <SortableHeader label="청구상세" sortKey="claimSide" activeKey={sortKey} direction={sortDirection} align="center" onSort={handleSort} />
               <SortableHeader label="상태" sortKey="status" activeKey={sortKey} direction={sortDirection} align="center" onSort={handleSort} />
               <SortableHeader label="청구일" sortKey="claimDate" activeKey={sortKey} direction={sortDirection} onSort={handleSort} />
               <SortableHeader label="청구금액" sortKey="claimAmount" activeKey={sortKey} direction={sortDirection} align="right" onSort={handleSort} />
               <SortableHeader label="입금금액" sortKey="paidAmount" activeKey={sortKey} direction={sortDirection} align="right" onSort={handleSort} />
               <SortableHeader label="미수금" sortKey="receivableAmount" activeKey={sortKey} direction={sortDirection} align="right" onSort={handleSort} />
+              <SortableHeader label="수금율" sortKey="collectionRate" activeKey={sortKey} direction={sortDirection} align="right" onSort={handleSort} />
             </tr>
           </thead>
           <tbody>
             {sortedRows.length === 0 ? (
               <tr>
-                <td colSpan={10} className="px-3 py-8 text-center text-slate-500">
+                <td colSpan={11} className="px-3 py-8 text-center text-slate-500">
                   조건에 맞는 내역이 없습니다.
                 </td>
               </tr>
@@ -600,6 +698,9 @@ export default function PendingInsuranceListPage({
                   </td>
                   <td className="border-b border-slate-100 px-3 py-2 text-right font-semibold text-red-600">
                     {formatWon(row.receivableAmount)}
+                  </td>
+                  <td className="border-b border-slate-100 px-3 py-2 text-right font-semibold text-slate-700">
+                    {formatRate(row.collectionRate)}
                   </td>
                 </tr>
               ))
