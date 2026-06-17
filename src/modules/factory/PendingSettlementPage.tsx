@@ -327,7 +327,7 @@ export default function PendingSettlementPage({
         )}
       </div>
 
-      <section className="grid grid-cols-1 gap-3 md:grid-cols-3">
+      <section className="grid grid-cols-3 gap-1.5 md:gap-3">
         <RiskCard
           title="미결건"
           count={pendingRows.length}
@@ -400,12 +400,16 @@ function RiskCard({
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-xl border p-4 text-left transition ${toneClass}`}
+      className={`flex min-h-20 min-w-0 flex-col justify-between rounded-lg border px-1.5 py-2 text-center shadow-sm transition md:min-h-28 md:rounded-xl md:p-4 md:text-left ${toneClass}`}
     >
-      <div className="text-sm font-semibold">{title}</div>
-      <div className="mt-2 text-3xl font-bold">{count.toLocaleString()}건</div>
-      <div className="mt-2 text-sm font-semibold">
-        금액 ₩ {amount.toLocaleString()}
+      <div className="min-w-0 truncate text-[10px] font-semibold leading-tight md:text-sm">
+        {title}
+      </div>
+      <div className="text-lg font-bold leading-none md:mt-2 md:text-3xl">
+        {count.toLocaleString()}건
+      </div>
+      <div className="min-w-0 truncate text-[10px] font-semibold md:mt-2 md:text-sm">
+        ₩ {amount.toLocaleString()}
       </div>
     </button>
   );

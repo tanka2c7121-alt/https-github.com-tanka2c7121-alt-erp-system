@@ -802,11 +802,13 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
         </div>
 
         <main className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto p-2 md:p-6">
-          <div className="mb-2 rounded-xl border border-white/70 bg-white/80 p-2 shadow-lg shadow-slate-300/30 backdrop-blur-xl md:hidden">
-            <div className="mb-2 flex items-center justify-between gap-2">
+          <div className="mb-2 overflow-hidden rounded-xl border border-blue-100 bg-blue-50/75 shadow-lg shadow-slate-300/30 backdrop-blur-xl md:hidden">
+            <div className="flex items-center justify-between gap-2 border-b border-blue-100/80 bg-white/80 px-2 py-2">
               <div className="min-w-0">
-                <div className="text-xs font-semibold text-slate-500">메뉴</div>
-                <div className="truncate text-xs font-bold text-blue-700">
+                <div className="text-[10px] font-black uppercase tracking-wide text-blue-500">
+                  메뉴 서랍
+                </div>
+                <div className="truncate text-xs font-bold text-slate-900">
                   {mobileMenuTitle}
                 </div>
               </div>
@@ -822,7 +824,7 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
               )}
             </div>
 
-            <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-0.5">
+            <div className="flex gap-1.5 overflow-x-auto px-2 py-2">
               {displayedMobileMenus.map((menu) => {
                 const visibleChildren = getVisibleMenuItems(
                   menu.children ?? [],
@@ -841,7 +843,7 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
                       "min-h-8 shrink-0 rounded-full border px-3 py-1.5 text-left text-xs font-bold leading-snug shadow-sm transition",
                       isSelected
                         ? "border-blue-600 bg-blue-600 text-white"
-                        : "border-white/70 bg-white/70 text-slate-800 shadow-sm hover:border-blue-200 hover:bg-white",
+                        : "border-blue-100 bg-white/90 text-slate-800 shadow-sm hover:border-blue-200 hover:bg-white",
                     ].join(" ")}
                   >
                     <span className="flex min-w-0 items-center justify-between gap-2">
@@ -855,8 +857,8 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
           </div>
 
           <section className="min-h-[500px] min-w-0 overflow-x-hidden rounded-xl border border-white/70 bg-white/80 p-2 shadow-xl shadow-slate-300/35 backdrop-blur-xl md:rounded-[22px] md:p-6 md:shadow-2xl">
-            <div className="mb-3 overflow-hidden rounded-xl border border-slate-200 bg-slate-100/90 shadow-sm md:mb-4">
-              <div className="flex min-h-11 items-center justify-between gap-2 border-b border-white/80 px-2 py-2 md:min-h-12 md:gap-3 md:px-3">
+            <div className="mb-3 overflow-hidden rounded-xl border border-slate-300/80 bg-slate-100 shadow-sm ring-1 ring-white/70 md:mb-4">
+              <div className="flex min-h-11 items-center justify-between gap-2 border-b border-slate-300/70 bg-slate-200/85 px-2 py-2 md:min-h-12 md:gap-3 md:px-3">
                 <div className="flex min-w-0 items-center gap-3">
                   <div className="flex shrink-0 items-center gap-1 md:gap-1.5" aria-hidden="true">
                     <span className="h-2.5 w-2.5 rounded-full bg-red-400 shadow-inner md:h-3 md:w-3" />
@@ -864,11 +866,11 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
                     <span className="h-2.5 w-2.5 rounded-full bg-green-400 shadow-inner md:h-3 md:w-3" />
                   </div>
                   <div className="min-w-0">
+                    <div className="text-[10px] font-black uppercase tracking-wide text-slate-500">
+                      현재 창
+                    </div>
                     <div className="truncate text-sm font-bold text-slate-800">
                       {selectedMenu.title}
-                    </div>
-                    <div className="text-[11px] font-semibold text-slate-500">
-                      {selectedMenu.id === "dashboard" ? "업무홈" : "현재 페이지"}
                     </div>
                   </div>
                 </div>
@@ -913,7 +915,14 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
                 </div>
               </div>
               {openWindowMenus.length > 0 && (
-                <div className="flex gap-1.5 overflow-x-auto border-t border-slate-200/80 bg-white/65 px-2 py-1.5 md:gap-2 md:px-3 md:py-2">
+                <div className="border-t border-slate-300/80 bg-slate-50/95">
+                  <div className="flex items-center gap-2 px-2 pt-1.5 md:px-3">
+                    <div className="shrink-0 text-[10px] font-black uppercase tracking-wide text-slate-500">
+                      열린 창
+                    </div>
+                    <div className="h-px flex-1 bg-slate-200" />
+                  </div>
+                <div className="flex gap-1.5 overflow-x-auto px-2 pb-2 pt-1.5 md:gap-2 md:px-3 md:py-2 md:pt-1.5">
                   {openWindowMenus.map((menu) => {
                     const menuKey = menuCacheKey(menu);
                     const isActive = menuKey === menuCacheKey(selectedMenu);
@@ -924,8 +933,8 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
                         className={[
                           "flex h-8 shrink-0 items-center overflow-hidden rounded-full border text-xs font-bold shadow-sm md:h-9",
                           isActive
-                            ? "border-blue-300 bg-blue-50 text-blue-700"
-                            : "border-slate-200 bg-white/90 text-slate-600 hover:bg-white",
+                            ? "border-blue-400 bg-blue-600 text-white"
+                            : "border-slate-300 bg-white text-slate-600 hover:border-blue-200 hover:bg-blue-50",
                         ].join(" ")}
                       >
                         <button
@@ -942,7 +951,7 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
                           className={[
                             "h-full border-l px-2 text-sm leading-none",
                             isActive
-                              ? "border-blue-200 text-blue-500 hover:bg-blue-100"
+                              ? "border-blue-400 text-white/85 hover:bg-blue-700"
                               : "border-slate-200 text-slate-400 hover:bg-slate-100 hover:text-slate-600",
                           ].join(" ")}
                           aria-label={`${menu.title} 닫기`}
@@ -952,6 +961,7 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
                       </div>
                     );
                   })}
+                </div>
                 </div>
               )}
             </div>
