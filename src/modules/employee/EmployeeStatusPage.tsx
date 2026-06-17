@@ -134,7 +134,7 @@ export default function EmployeeStatusPage({
         </div>
       </div>
 
-      <section className="grid grid-cols-1 gap-3 md:grid-cols-4">
+      <section className="grid grid-cols-4 gap-1.5 md:gap-3">
         <SummaryCard title="전체 직원" value={visibleEmployees.length} tone="blue" />
         <SummaryCard title="사용중" value={activeCount} tone="green" />
         <SummaryCard title="승인대기" value={pendingCount} tone="orange" />
@@ -342,9 +342,15 @@ function SummaryCard({
   }[tone];
 
   return (
-    <div className={`rounded-xl border p-4 ${toneClass}`}>
-      <p className="text-sm font-semibold">{title}</p>
-      <p className="mt-3 text-3xl font-bold">{value}</p>
+    <div
+      className={`flex min-h-16 min-w-0 flex-col justify-between rounded-lg border px-1.5 py-2 text-center shadow-sm md:min-h-28 md:rounded-xl md:p-4 md:text-left ${toneClass}`}
+    >
+      <p className="min-w-0 truncate text-[10px] font-semibold leading-tight md:break-keep md:text-sm">
+        {title}
+      </p>
+      <p className="text-lg font-bold leading-none md:text-right md:text-3xl">
+        {value}
+      </p>
     </div>
   );
 }
