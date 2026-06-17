@@ -121,6 +121,7 @@ export default function AttendanceRequestPage({
   const [searchText, setSearchText] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [saving, setSaving] = useState(false);
+  const [editingRequestId, setEditingRequestId] = useState<number | null>(null);
   const [form, setForm] = useState<FormState>({
     requestType: "연차",
     startDate: localDateText(),
@@ -219,6 +220,7 @@ export default function AttendanceRequestPage({
       reason: "",
       memo: "",
     });
+    setEditingRequestId(null);
   };
 
   const handleSubmit = async () => {
@@ -234,6 +236,51 @@ export default function AttendanceRequestPage({
 
     setSaving(true);
     const initialStatus = getInitialAttendanceStatus(user);
+
+    if (editingRequestId !== null) {
+      const { error } = await supabase
+        .from("attendance_requests")
+        .update({
+          request_type: form.requestType,
+          start_date: form.startDate,
+          end_date: form.endDate || form.startDate,
+          start_time: form.startTime || null,
+          end_time: form.endTime || null,
+          reason: form.reason,
+          memo: form.memo,
+          status: initialStatus,
+          requested_name: formatRequesterName(user),
+          requested_department: user.department ?? "",
+          department_approved_by: null,
+          department_approved_name: null,
+          department_approved_at: null,
+          admin_dept_approved_by: null,
+          admin_dept_approved_name: null,
+          admin_dept_approved_at: null,
+          final_approved_by: null,
+          final_approved_name: null,
+          final_approved_at: null,
+          approved_by: null,
+          approved_name: null,
+          approved_at: null,
+          reject_reason: null,
+        })
+        .eq("id", editingRequestId)
+        .eq("requested_by", user.user_id)
+        .eq("status", "반려");
+
+      setSaving(false);
+
+      if (error) {
+        alert("근태신청서 수정 신청 실패: " + error.message);
+        return;
+      }
+
+      alert("근태신청서가 수정되어 다시 신청되었습니다.");
+      resetForm();
+      void loadRows();
+      return;
+    }
 
     const { error } = await supabase.from("attendance_requests").insert({
       request_type: form.requestType,
@@ -376,6 +423,28 @@ export default function AttendanceRequestPage({
   const canDeleteRequest = (row: AttendanceRequest) =>
     isFinalAdmin || row.requested_by === user.user_id;
 
+  const canEditRequest = (row: AttendanceRequest) =>
+    row.requested_by === user.user_id && row.status === "반려";
+
+  const editRequest = (row: AttendanceRequest) => {
+    if (!canEditRequest(row)) {
+      alert("반려된 본인 신청만 수정할 수 있습니다.");
+      return;
+    }
+
+    setEditingRequestId(row.id);
+    setForm({
+      requestType: row.request_type,
+      startDate: row.start_date,
+      endDate: row.end_date ?? row.start_date,
+      startTime: row.start_time ?? "",
+      endTime: row.end_time ?? "",
+      reason: row.reason,
+      memo: row.memo ?? "",
+    });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
   const deleteRequest = async (row: AttendanceRequest) => {
     if (!canDeleteRequest(row)) {
       alert("삭제 권한이 없습니다.");
@@ -425,7 +494,9 @@ export default function AttendanceRequestPage({
 
       <section className="rounded-xl border border-slate-200 bg-white p-4">
         <div className="mb-4 flex flex-col gap-1">
-          <h4 className="font-bold text-slate-900">신청 작성</h4>
+          <h4 className="font-bold text-slate-900">
+            {editingRequestId === null ? "신청 작성" : "반려 건 수정"}
+          </h4>
           <p className="text-sm font-semibold text-orange-600">
             근태신청서는 원칙적으로 최소 7일 전에 작성해야 하며, 7일 이내 신청은 긴급/예외 신청으로 표시됩니다.
           </p>
@@ -526,7 +597,13 @@ export default function AttendanceRequestPage({
             disabled={saving}
             className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
           >
-            {saving ? "신청 중..." : "신청"}
+            {saving
+              ? editingRequestId === null
+                ? "신청 중..."
+                : "수정 신청 중..."
+              : editingRequestId === null
+                ? "신청"
+                : "수정 후 재신청"}
           </button>
         </div>
       </section>
@@ -567,6 +644,8 @@ export default function AttendanceRequestPage({
             onApprove={approveRequest}
             onReject={rejectRequest}
             canApprove={canApproveRequest}
+            canEdit={canEditRequest}
+            onEdit={editRequest}
             canDelete={canDeleteRequest}
             onDelete={deleteRequest}
             onPrint={(row) =>
@@ -584,6 +663,8 @@ export default function AttendanceRequestPage({
           onApprove={approveRequest}
           onReject={rejectRequest}
           canApprove={canApproveRequest}
+          canEdit={canEditRequest}
+          onEdit={editRequest}
           canDelete={canDeleteRequest}
           onDelete={deleteRequest}
           onPrint={(row) =>
@@ -679,6 +760,8 @@ function AttendanceTable({
   onApprove,
   onReject,
   canApprove,
+  canEdit,
+  onEdit,
   canDelete,
   onDelete,
   onPrint,
@@ -688,11 +771,14 @@ function AttendanceTable({
   onApprove: (row: AttendanceRequest) => void;
   onReject: (row: AttendanceRequest) => void;
   canApprove: (row: AttendanceRequest) => boolean;
+  canEdit: (row: AttendanceRequest) => boolean;
+  onEdit: (row: AttendanceRequest) => void;
   canDelete: (row: AttendanceRequest) => boolean;
   onDelete: (row: AttendanceRequest) => void;
   onPrint: (row: AttendanceRequest) => void;
 }) {
-  const showManageColumn = isAdmin || rows.some(canApprove) || rows.some(canDelete);
+  const showManageColumn =
+    isAdmin || rows.some(canApprove) || rows.some(canEdit) || rows.some(canDelete);
 
   return (
     <table className="w-full border-collapse text-sm">
@@ -794,6 +880,15 @@ function AttendanceTable({
                         </button>
                       </>
                     )}
+                    {canEdit(row) && (
+                      <button
+                        type="button"
+                        onClick={() => onEdit(row)}
+                        className="rounded border border-blue-300 px-3 py-1 text-xs font-semibold text-blue-600 hover:bg-blue-50"
+                      >
+                        수정
+                      </button>
+                    )}
                     {canDelete(row) && (
                       <button
                         type="button"
@@ -803,7 +898,7 @@ function AttendanceTable({
                         삭제
                       </button>
                     )}
-                    {!canApprove(row) && !canDelete(row) && (
+                    {!canApprove(row) && !canEdit(row) && !canDelete(row) && (
                       <span className="text-xs text-slate-400">권한없음</span>
                     )}
                   </div>
@@ -853,6 +948,8 @@ function MobileAttendanceCards({
   onApprove,
   onReject,
   canApprove,
+  canEdit,
+  onEdit,
   canDelete,
   onDelete,
   onPrint,
@@ -861,6 +958,8 @@ function MobileAttendanceCards({
   onApprove: (row: AttendanceRequest) => void;
   onReject: (row: AttendanceRequest) => void;
   canApprove: (row: AttendanceRequest) => boolean;
+  canEdit: (row: AttendanceRequest) => boolean;
+  onEdit: (row: AttendanceRequest) => void;
   canDelete: (row: AttendanceRequest) => boolean;
   onDelete: (row: AttendanceRequest) => void;
   onPrint: (row: AttendanceRequest) => void;
@@ -914,6 +1013,16 @@ function MobileAttendanceCards({
             >
               출력
             </button>
+
+            {canEdit(row) && (
+              <button
+                type="button"
+                onClick={() => onEdit(row)}
+                className="mt-2 w-full rounded-lg border border-blue-300 py-2 text-sm font-semibold text-blue-600"
+              >
+                수정
+              </button>
+            )}
 
             {canDelete(row) && (
               <button

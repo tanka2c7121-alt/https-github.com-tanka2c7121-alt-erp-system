@@ -72,6 +72,7 @@ export default function IncidentReportPage({
   const [searchText, setSearchText] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [saving, setSaving] = useState(false);
+  const [editingReportId, setEditingReportId] = useState<number | null>(null);
   const [form, setForm] = useState<FormState>({
     reportDate: localDateText(),
     incidentType: "업무",
@@ -144,6 +145,7 @@ export default function IncidentReportPage({
       actionTaken: "",
       memo: "",
     });
+    setEditingReportId(null);
   };
 
   const handleSubmit = async () => {
@@ -153,6 +155,41 @@ export default function IncidentReportPage({
     }
 
     setSaving(true);
+
+    if (editingReportId !== null) {
+      const { error } = await supabase
+        .from("incident_reports")
+        .update({
+          report_date: form.reportDate,
+          incident_type: form.incidentType,
+          title: form.title.trim(),
+          location: form.location.trim() || null,
+          content: form.content.trim(),
+          action_taken: form.actionTaken.trim() || null,
+          memo: form.memo.trim() || null,
+          status: "확인대기",
+          requested_name: formatRequesterName(user),
+          requested_department: user.department ?? null,
+          checked_by: null,
+          checked_name: null,
+          checked_at: null,
+        })
+        .eq("id", editingReportId)
+        .eq("requested_by", user.user_id)
+        .eq("status", "반려");
+
+      setSaving(false);
+
+      if (error) {
+        alert("경위서 수정 등록 실패: " + error.message);
+        return;
+      }
+
+      alert("경위서가 수정되어 다시 등록되었습니다.");
+      resetForm();
+      void loadRows();
+      return;
+    }
 
     const { error } = await supabase.from("incident_reports").insert({
       report_date: form.reportDate,
@@ -229,6 +266,28 @@ export default function IncidentReportPage({
   const canDeleteReport = (row: IncidentReport) =>
     canCheck || row.requested_by === user.user_id;
 
+  const canEditReport = (row: IncidentReport) =>
+    row.requested_by === user.user_id && row.status === "반려";
+
+  const handleEdit = (row: IncidentReport) => {
+    if (!canEditReport(row)) {
+      alert("반려된 본인 경위서만 수정할 수 있습니다.");
+      return;
+    }
+
+    setEditingReportId(row.id);
+    setForm({
+      reportDate: row.report_date,
+      incidentType: row.incident_type,
+      title: row.title,
+      location: row.location ?? "",
+      content: row.content,
+      actionTaken: row.action_taken ?? "",
+      memo: row.memo ?? "",
+    });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
   const handleDelete = async (row: IncidentReport) => {
     if (!canDeleteReport(row)) {
       alert("삭제 권한이 없습니다.");
@@ -286,7 +345,9 @@ export default function IncidentReportPage({
 
       <section className="rounded-xl border border-slate-200 bg-white p-4">
         <div className="mb-4 flex flex-col gap-1">
-          <h4 className="font-bold text-slate-900">경위서 작성</h4>
+          <h4 className="font-bold text-slate-900">
+            {editingReportId === null ? "경위서 작성" : "반려 건 수정"}
+          </h4>
           <p className="text-sm text-slate-600">
             발생 경위와 조치 내용을 기록하면 관리자가 확인합니다.
           </p>
@@ -325,7 +386,13 @@ export default function IncidentReportPage({
             disabled={saving}
             className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
           >
-            {saving ? "저장 중..." : "등록"}
+            {saving
+              ? editingReportId === null
+                ? "저장 중..."
+                : "수정 등록 중..."
+              : editingReportId === null
+                ? "등록"
+                : "수정 후 재등록"}
           </button>
         </div>
       </section>
@@ -361,8 +428,10 @@ export default function IncidentReportPage({
           <IncidentTable
             rows={visibleRows}
             canCheck={canCheck}
+            canEdit={canEditReport}
             canDelete={canDeleteReport}
             onCheck={handleCheck}
+            onEdit={handleEdit}
             onReject={handleReject}
             onDelete={handleDelete}
             onPrint={openPrintPage}
@@ -372,8 +441,10 @@ export default function IncidentReportPage({
         <MobileIncidentCards
           rows={visibleRows}
           canCheck={canCheck}
+          canEdit={canEditReport}
           canDelete={canDeleteReport}
           onCheck={handleCheck}
+          onEdit={handleEdit}
           onReject={handleReject}
           onDelete={handleDelete}
           onPrint={openPrintPage}
@@ -386,16 +457,20 @@ export default function IncidentReportPage({
 function IncidentTable({
   rows,
   canCheck,
+  canEdit,
   canDelete,
   onCheck,
+  onEdit,
   onReject,
   onDelete,
   onPrint,
 }: {
   rows: IncidentReport[];
   canCheck: boolean;
+  canEdit: (row: IncidentReport) => boolean;
   canDelete: (row: IncidentReport) => boolean;
   onCheck: (row: IncidentReport) => void;
+  onEdit: (row: IncidentReport) => void;
   onReject: (row: IncidentReport) => void;
   onDelete: (row: IncidentReport) => void;
   onPrint: (row: IncidentReport) => void;
@@ -448,8 +523,10 @@ function IncidentTable({
               <ActionButtons
                 row={row}
                 canCheck={canCheck}
+                canEdit={canEdit}
                 canDelete={canDelete}
                 onCheck={onCheck}
+                onEdit={onEdit}
                 onReject={onReject}
                 onDelete={onDelete}
               />
@@ -472,16 +549,20 @@ function IncidentTable({
 function MobileIncidentCards({
   rows,
   canCheck,
+  canEdit,
   canDelete,
   onCheck,
+  onEdit,
   onReject,
   onDelete,
   onPrint,
 }: {
   rows: IncidentReport[];
   canCheck: boolean;
+  canEdit: (row: IncidentReport) => boolean;
   canDelete: (row: IncidentReport) => boolean;
   onCheck: (row: IncidentReport) => void;
+  onEdit: (row: IncidentReport) => void;
   onReject: (row: IncidentReport) => void;
   onDelete: (row: IncidentReport) => void;
   onPrint: (row: IncidentReport) => void;
@@ -541,8 +622,10 @@ function MobileIncidentCards({
             <ActionButtons
               row={row}
               canCheck={canCheck}
+              canEdit={canEdit}
               canDelete={canDelete}
               onCheck={onCheck}
+              onEdit={onEdit}
               onReject={onReject}
               onDelete={onDelete}
             />
@@ -556,22 +639,27 @@ function MobileIncidentCards({
 function ActionButtons({
   row,
   canCheck,
+  canEdit,
   canDelete,
   onCheck,
+  onEdit,
   onReject,
   onDelete,
 }: {
   row: IncidentReport;
   canCheck: boolean;
+  canEdit: (row: IncidentReport) => boolean;
   canDelete: (row: IncidentReport) => boolean;
   onCheck: (row: IncidentReport) => void;
+  onEdit: (row: IncidentReport) => void;
   onReject: (row: IncidentReport) => void;
   onDelete: (row: IncidentReport) => void;
 }) {
   const showCheckButtons = canCheck && row.status === "확인대기";
+  const showEditButton = canEdit(row);
   const showDeleteButton = canDelete(row);
 
-  if (!showCheckButtons && !showDeleteButton) {
+  if (!showCheckButtons && !showEditButton && !showDeleteButton) {
     return <span className="text-xs text-slate-400">-</span>;
   }
 
@@ -594,6 +682,15 @@ function ActionButtons({
             반려
           </button>
         </>
+      )}
+      {showEditButton && (
+        <button
+          type="button"
+          onClick={() => void onEdit(row)}
+          className="rounded-lg border border-blue-300 bg-white px-3 py-1.5 text-xs font-semibold text-blue-600 hover:bg-blue-50"
+        >
+          수정
+        </button>
       )}
       {showDeleteButton && (
         <button

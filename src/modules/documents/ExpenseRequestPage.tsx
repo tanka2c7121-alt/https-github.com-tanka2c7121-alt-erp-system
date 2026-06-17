@@ -161,6 +161,7 @@ export default function ExpenseRequestPage({
   const [listMonth, setListMonth] = useState(currentMonth);
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
+  const [editingRequestId, setEditingRequestId] = useState<number | null>(null);
   const [categoryOptions, setCategoryOptions] = useState(defaultCategoryOptions);
   const [expenseLines, setExpenseLines] = useState<ExpenseLine[]>([]);
   const approvalRole = getApprovalRole(user);
@@ -353,6 +354,7 @@ export default function ExpenseRequestPage({
     });
     setExpenseLines([]);
     setReceiptFile(null);
+    setEditingRequestId(null);
   };
 
   const clearLineFields = () => {
@@ -420,6 +422,88 @@ export default function ExpenseRequestPage({
         : approvalRole === "부서장"
           ? "총괄관리 승인대기"
           : "부서장 승인대기";
+
+    if (editingRequestId !== null) {
+      if (!form.requestDate || !form.account || !form.expenseType || !form.category) {
+        alert("사용일자, 계정, 구분, 분류를 입력해주세요.");
+        return;
+      }
+
+      if (!form.content || amount <= 0) {
+        alert("내용과 금액을 입력해주세요.");
+        return;
+      }
+
+      setSaving(true);
+
+      const updatePayload: Partial<ExpenseRequest> = {
+        request_date: form.requestDate,
+        account: normalizeAccountName(form.account),
+        expense_type: form.expenseType,
+        category: form.category,
+        vendor: form.vendor,
+        amount,
+        content: form.content,
+        payment_method: form.paymentMethod,
+        memo: form.memo,
+        status: nextStatus,
+        requested_name: formatRequesterName(user),
+        requested_department: user.department ?? "",
+        approved_by: null,
+        approved_name: null,
+        approved_at: null,
+        department_approved_by: null,
+        department_approved_name: null,
+        department_approved_at: null,
+        chief_approved_by: null,
+        chief_approved_name: null,
+        chief_approved_at: null,
+        final_approved_by: null,
+        final_approved_name: null,
+        final_approved_at: null,
+        reject_reason: null,
+      };
+
+      const { error } = await supabase
+        .from("expense_requests")
+        .update(updatePayload)
+        .eq("id", editingRequestId)
+        .eq("requested_by", user.user_id)
+        .eq("status", "반려");
+
+      if (error) {
+        setSaving(false);
+        alert("지출결의서 수정 신청 실패: " + error.message);
+        return;
+      }
+
+      if (receiptFile) {
+        try {
+          const receiptUrl = await uploadReceipt(editingRequestId);
+          const { error: updateError } = await supabase
+            .from("expense_requests")
+            .update({ receipt_url: receiptUrl })
+            .eq("id", editingRequestId);
+
+          if (updateError) {
+            throw new Error(updateError.message);
+          }
+        } catch (uploadError) {
+          setSaving(false);
+          alert(
+            "영수증 저장 실패: " +
+              (uploadError instanceof Error ? uploadError.message : "업로드 오류")
+          );
+          return;
+        }
+      }
+
+      setSaving(false);
+      alert("지출결의서가 수정되어 다시 신청되었습니다.");
+      resetForm();
+      void loadRows();
+      return;
+    }
 
     if (expenseLines.length > 0) {
       if (!form.requestDate || !form.account || !form.expenseType) {
@@ -723,6 +807,32 @@ export default function ExpenseRequestPage({
   const canDeleteRequest = (row: ExpenseRequest) =>
     isAdmin || (row.requested_by === user.user_id && row.status !== "승인완료");
 
+  const canEditRequest = (row: ExpenseRequest) =>
+    row.requested_by === user.user_id && row.status === "반려";
+
+  const editRequest = (row: ExpenseRequest) => {
+    if (!canEditRequest(row)) {
+      alert("반려된 본인 신청만 수정할 수 있습니다.");
+      return;
+    }
+
+    setEditingRequestId(row.id);
+    setExpenseLines([]);
+    setReceiptFile(null);
+    setForm({
+      requestDate: row.request_date,
+      account: row.account,
+      expenseType: row.expense_type,
+      category: row.category,
+      vendor: row.vendor ?? "",
+      amount: String(row.amount ?? ""),
+      content: row.content,
+      paymentMethod: row.payment_method ?? "",
+      memo: row.memo ?? "",
+    });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
   const deleteRequest = async (row: ExpenseRequest) => {
     if (!canDeleteRequest(row)) {
       alert("삭제 권한이 없습니다.");
@@ -784,7 +894,9 @@ export default function ExpenseRequestPage({
       </div>
 
       <section className="rounded-xl border border-slate-200 bg-white p-4">
-        <h4 className="mb-4 font-bold text-slate-900">신청 작성</h4>
+        <h4 className="mb-4 font-bold text-slate-900">
+          {editingRequestId === null ? "신청 작성" : "반려 건 수정"}
+        </h4>
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
           <Field label="사용일자">
@@ -915,7 +1027,7 @@ export default function ExpenseRequestPage({
           </Field>
         </div>
 
-        {expenseLines.length > 0 && (
+        {editingRequestId === null && expenseLines.length > 0 && (
           <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200">
             <table className="w-full min-w-[720px] border-collapse text-sm">
               <thead>
@@ -994,6 +1106,7 @@ export default function ExpenseRequestPage({
           <button
             type="button"
             onClick={addExpenseLine}
+            disabled={editingRequestId !== null}
             className="rounded-lg border border-blue-300 px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50"
           >
             목록에 추가
@@ -1013,7 +1126,15 @@ export default function ExpenseRequestPage({
             disabled={saving}
             className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
           >
-            {saving ? "신청 중..." : expenseLines.length > 0 ? `${expenseLines.length}건 신청` : "신청"}
+            {saving
+              ? editingRequestId === null
+                ? "신청 중..."
+                : "수정 신청 중..."
+              : editingRequestId === null
+                ? expenseLines.length > 0
+                  ? `${expenseLines.length}건 신청`
+                  : "신청"
+                : "수정 후 재신청"}
           </button>
         </div>
       </section>
@@ -1085,6 +1206,8 @@ export default function ExpenseRequestPage({
             canApprove={canApproveRequest}
             onApprove={approveRequest}
             onReject={rejectRequest}
+            canEdit={canEditRequest}
+            onEdit={editRequest}
             canDelete={canDeleteRequest}
             onDelete={deleteRequest}
             onPrint={(row) =>
@@ -1102,6 +1225,8 @@ export default function ExpenseRequestPage({
           canApprove={canApproveRequest}
           onApprove={approveRequest}
           onReject={rejectRequest}
+          canEdit={canEditRequest}
+          onEdit={editRequest}
           canDelete={canDeleteRequest}
           onDelete={deleteRequest}
           onPrint={(row) =>
@@ -1174,6 +1299,8 @@ function ExpenseTable({
   canApprove,
   onApprove,
   onReject,
+  canEdit,
+  onEdit,
   canDelete,
   onDelete,
   onPrint,
@@ -1183,11 +1310,14 @@ function ExpenseTable({
   canApprove: (row: ExpenseRequest) => boolean;
   onApprove: (row: ExpenseRequest) => void;
   onReject: (row: ExpenseRequest) => void;
+  canEdit: (row: ExpenseRequest) => boolean;
+  onEdit: (row: ExpenseRequest) => void;
   canDelete: (row: ExpenseRequest) => boolean;
   onDelete: (row: ExpenseRequest) => void;
   onPrint: (row: ExpenseRequest) => void;
 }) {
-  const showManageColumn = showApprovalColumn || rows.some(canDelete);
+  const showManageColumn =
+    showApprovalColumn || rows.some(canEdit) || rows.some(canDelete);
 
   return (
     <table className="w-full border-collapse text-sm">
@@ -1292,6 +1422,15 @@ function ExpenseTable({
                       </button>
                       </>
                     )}
+                    {canEdit(row) && (
+                      <button
+                        type="button"
+                        onClick={() => onEdit(row)}
+                        className="rounded border border-blue-300 px-3 py-1 text-xs font-semibold text-blue-600 hover:bg-blue-50"
+                      >
+                        수정
+                      </button>
+                    )}
                     {canDelete(row) && (
                       <button
                         type="button"
@@ -1301,7 +1440,7 @@ function ExpenseTable({
                         삭제
                       </button>
                     )}
-                    {!canApprove(row) && !canDelete(row) && (
+                    {!canApprove(row) && !canEdit(row) && !canDelete(row) && (
                     <span className="text-xs text-slate-400">
                       {row.approved_name ?? "-"}
                     </span>
@@ -1322,6 +1461,8 @@ function MobileExpenseCards({
   canApprove,
   onApprove,
   onReject,
+  canEdit,
+  onEdit,
   canDelete,
   onDelete,
   onPrint,
@@ -1330,6 +1471,8 @@ function MobileExpenseCards({
   canApprove: (row: ExpenseRequest) => boolean;
   onApprove: (row: ExpenseRequest) => void;
   onReject: (row: ExpenseRequest) => void;
+  canEdit: (row: ExpenseRequest) => boolean;
+  onEdit: (row: ExpenseRequest) => void;
   canDelete: (row: ExpenseRequest) => boolean;
   onDelete: (row: ExpenseRequest) => void;
   onPrint: (row: ExpenseRequest) => void;
@@ -1391,6 +1534,16 @@ function MobileExpenseCards({
             >
               출력
             </button>
+
+            {canEdit(row) && (
+              <button
+                type="button"
+                onClick={() => onEdit(row)}
+                className="mt-2 w-full rounded-lg border border-blue-300 py-2 text-sm font-semibold text-blue-600"
+              >
+                수정
+              </button>
+            )}
 
             {canDelete(row) && (
               <button
