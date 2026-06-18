@@ -6,16 +6,15 @@ import { localDateText } from "../../lib/date";
 import { fetchAllRows } from "../../lib/fetchAllRows";
 
 
-type RiskView = "pending" | "longPending" | "lowClaimRate";
+type RiskView = "unclaimed" | "pending" | "longPending" | "lowClaimRate";
 
-type PaymentSummary = {
-  repairVatPaidAmount: number;
-  hasReceivable: boolean;
-};
+type ClaimDetail = "보험" | "캐피탈" | "일반" | "바디케어";
 
 type RiskRow = {
+  id: string;
   workName: string;
   company: string;
+  claimSide: string;
   status: string;
   claimDate: string;
   elapsedDays: number | null;
@@ -26,6 +25,20 @@ type RiskRow = {
 };
 
 type RiskSortField = keyof RiskRow;
+
+type ClaimTarget = {
+  id: string;
+  workName: string;
+  company: string;
+  claimSide: string;
+  claimDetail: ClaimDetail | null;
+  claimDate: string;
+  claimAmount: number;
+  paidAmount: number;
+};
+
+const pendingCutoffDays = 90;
+const claimDetails: ClaimDetail[] = ["보험", "캐피탈", "일반", "바디케어"];
 
 const normalizeText = (value: unknown) => String(value ?? "").trim();
 
@@ -58,6 +71,74 @@ const isRepairPaymentAmountRow = (row: any) =>
   !isClaimPaymentRow(row) &&
   !isDeductiblePaymentRow(row);
 
+const normalizeClaimDetail = (value: unknown): ClaimDetail | null => {
+  const text = normalizeText(value);
+
+  return claimDetails.find((detail) => text.includes(detail)) ?? null;
+};
+
+const inferClaimDetailFromCompany = (company: unknown): ClaimDetail | null => {
+  const text = normalizeText(company);
+
+  if (!text || text === "미지정") return null;
+  if (text.includes("캐피탈")) return "캐피탈";
+  return "보험";
+};
+
+const isFaultCoverage = (value: unknown) => normalizeText(value) === "과실";
+
+const matchesSide = (detail: unknown, side: "자차" | "상대") => {
+  const text = normalizeText(detail);
+
+  if (side === "자차") return text.includes("자차");
+  return text.includes("대물") || text.includes("상대");
+};
+
+const getClaimStatus = (claimDate: string, claimAmount: number) => {
+  if (!claimAmount || isEmptyDateValue(claimDate)) return "미청구";
+
+  const elapsedDays = dateDiffDays(claimDate);
+  return (elapsedDays ?? 0) > pendingCutoffDays ? "장기미결" : "미결";
+};
+
+const assignPaymentsByDetail = (targets: ClaimTarget[], payments: any[]) => {
+  const nextTargets = targets.map((target) => ({ ...target }));
+
+  payments.filter(isRepairPaymentAmountRow).forEach((payment) => {
+    const paymentAmount = toAmountNumber(payment.payment_amount);
+    const paymentDetail = normalizeClaimDetail(payment.payment_detail);
+    const sideMatchedTargets = nextTargets.filter((target) =>
+      target.claimSide === "자차" || target.claimSide === "상대"
+        ? matchesSide(payment.payment_detail, target.claimSide)
+        : false
+    );
+    const detailMatchedTargets = paymentDetail
+      ? nextTargets.filter((target) => target.claimDetail === paymentDetail)
+      : [];
+    const candidates =
+      sideMatchedTargets.length > 0
+        ? sideMatchedTargets
+        : detailMatchedTargets.length > 0
+          ? detailMatchedTargets
+          : nextTargets.length === 1
+            ? nextTargets
+            : [];
+
+    if (candidates.length === 0) return;
+
+    const selected = candidates.reduce((best, target) => {
+      const bestGap = Math.abs(best.claimAmount - (best.paidAmount + paymentAmount));
+      const targetGap = Math.abs(target.claimAmount - (target.paidAmount + paymentAmount));
+
+      return targetGap < bestGap ? target : best;
+    });
+
+    selected.paidAmount += paymentAmount;
+  });
+
+  return nextTargets;
+};
+
 const dateDiffDays = (fromDate: unknown, toDate = localDateText()) => {
   const fromText = normalizeText(fromDate);
 
@@ -78,7 +159,7 @@ export default function PendingSettlementPage({
 }) {
   const [paymentRows, setPaymentRows] = useState<any[]>([]);
   const [settlementRows, setSettlementRows] = useState<any[]>([]);
-  const [activeRiskView, setActiveRiskView] = useState<RiskView>("pending");
+  const [activeRiskView, setActiveRiskView] = useState<RiskView>("unclaimed");
   const [sourceCounts, setSourceCounts] = useState({
     settlements: 0,
     payments: 0,
@@ -90,7 +171,7 @@ export default function PendingSettlementPage({
 
     const { data, error } = await fetchAllRows<any>(
       "settlement_payments",
-      "id, work_name, payment_type, payment_amount, payment_date",
+      "id, work_name, payment_type, payment_detail, claim_amount, claim_date, payment_amount, payment_date",
       (query) => query.order("id", { ascending: true })
     );
 
@@ -111,13 +192,26 @@ export default function PendingSettlementPage({
 
     const { data: settlementData, error } = await fetchAllRows<any>(
       "repair_settlements",
-      "id, work_name, insurance_company, progress_status, claim_amount, claim_date",
+      [
+        "id",
+        "work_name",
+        "car_number",
+        "car_model",
+        "insurance_company",
+        "progress_status",
+        "claim_amount",
+        "claim_date",
+        "own_claim_amount",
+        "other_claim_amount",
+        "own_claim_date",
+        "other_claim_date",
+      ].join(", "),
       (query) => query.order("id", { ascending: false })
     );
 
     const { data: workData, error: workError } = await fetchAllRows<any>(
       "work_orders",
-      "work_name, insurance_company, release_date"
+      "id, work_name, insurance_company, other_insurance_company, coverage_type, release_date"
     );
 
     if (error) {
@@ -172,6 +266,10 @@ export default function PendingSettlementPage({
           progress_status: settlement?.progress_status ?? "미결",
           claim_amount: settlement?.claim_amount ?? 0,
           claim_date: settlement?.claim_date ?? "",
+          own_claim_amount: settlement?.own_claim_amount ?? 0,
+          other_claim_amount: settlement?.other_claim_amount ?? 0,
+          own_claim_date: settlement?.own_claim_date ?? "",
+          other_claim_date: settlement?.other_claim_date ?? "",
         };
       });
 
@@ -183,60 +281,133 @@ export default function PendingSettlementPage({
     void fetchRiskRows();
   }, [fetchPaymentRows, fetchRiskRows]);
 
-  const paymentSummaryByWork = paymentRows.reduce<Map<string, PaymentSummary>>(
-    (map, row) => {
+  const paymentRowsByWork = useMemo(() => {
+    return paymentRows.reduce<Map<string, any[]>>((map, row) => {
       const workName = normalizeText(row.work_name);
 
       if (!workName) {
         return map;
       }
 
-      const current = map.get(workName) ?? {
-        repairVatPaidAmount: 0,
-        hasReceivable: false,
-      };
-
-      if (isRepairPaymentAmountRow(row)) {
-        current.repairVatPaidAmount += toAmountNumber(row.payment_amount);
-      }
-
-      if (
-        toAmountNumber(row.payment_amount) > 0 &&
-        isEmptyDateValue(row.payment_date)
-      ) {
-        current.hasReceivable = true;
-      }
-
-      map.set(workName, current);
+      const rows = map.get(workName) ?? [];
+      rows.push(row);
+      map.set(workName, rows);
       return map;
-    },
-    new Map<string, PaymentSummary>()
-  );
+    }, new Map<string, any[]>());
+  }, [paymentRows]);
 
   const riskRows = settlementRows
-    .map((row): RiskRow => {
-      const workName = normalizeText(row.work_name);
-      const paymentSummary = paymentSummaryByWork.get(workName);
-      const claimAmount = toAmountNumber(row.claim_amount);
-      const paidAmount = paymentSummary?.repairVatPaidAmount ?? 0;
-      const claimDate = normalizeText(row.claim_date);
-      const elapsedDays = dateDiffDays(claimDate);
-      const claimRate = claimAmount > 0 ? (paidAmount / claimAmount) * 100 : null;
-      const status = normalizeStatus(row.progress_status);
+    .flatMap((row): RiskRow[] => {
+      if (normalizeStatus(row.progress_status) !== "미결") return [];
 
-      return {
-        workName,
-        company: normalizeText(row.insurance_company),
-        status,
-        claimDate,
-        elapsedDays,
-        claimAmount,
-        paidAmount,
-        shortageAmount: Math.max(0, claimAmount - paidAmount),
-        claimRate,
-      };
+      const workName = normalizeText(row.work_name);
+      const workPayments = paymentRowsByWork.get(workName) ?? [];
+      const claimRows = workPayments.filter(isClaimPaymentRow);
+      const detailClaimRows = claimRows.filter((payment) =>
+        normalizeClaimDetail(payment.payment_detail)
+      );
+      const targets: ClaimTarget[] = [];
+
+      if (isFaultCoverage(row.coverage_type)) {
+        const ownClaimRow = detailClaimRows[0];
+        const otherClaimRow = detailClaimRows[1];
+        const ownCompany = normalizeText(row.insurance_company) || "미지정";
+        const otherCompany = normalizeText(row.other_insurance_company) || "미지정";
+        const ownClaimAmount =
+          toAmountNumber(row.own_claim_amount) ||
+          toAmountNumber(ownClaimRow?.claim_amount);
+        const otherClaimAmount =
+          toAmountNumber(row.other_claim_amount) ||
+          toAmountNumber(otherClaimRow?.claim_amount);
+        const ownClaimDate =
+          normalizeText(row.own_claim_date) ||
+          normalizeText(ownClaimRow?.claim_date);
+        const otherClaimDate =
+          normalizeText(row.other_claim_date) ||
+          normalizeText(otherClaimRow?.claim_date);
+
+        targets.push(
+          {
+            id: `${row.id ?? workName}-own`,
+            workName,
+            company: ownCompany,
+            claimSide: "자차",
+            claimDetail:
+              normalizeClaimDetail(ownClaimRow?.payment_detail) ||
+              inferClaimDetailFromCompany(ownCompany),
+            claimDate: ownClaimDate,
+            claimAmount: ownClaimAmount,
+            paidAmount: 0,
+          },
+          {
+            id: `${row.id ?? workName}-other`,
+            workName,
+            company: otherCompany,
+            claimSide: "상대",
+            claimDetail:
+              normalizeClaimDetail(otherClaimRow?.payment_detail) ||
+              inferClaimDetailFromCompany(otherCompany),
+            claimDate: otherClaimDate,
+            claimAmount: otherClaimAmount,
+            paidAmount: 0,
+          }
+        );
+      } else if (detailClaimRows.length > 0) {
+        detailClaimRows.forEach((payment, index) => {
+          const detail = normalizeClaimDetail(payment.payment_detail);
+
+          targets.push({
+            id: `${row.id ?? workName}-${detail ?? index}`,
+            workName,
+            company: normalizeText(row.insurance_company) || "미지정",
+            claimSide: detail ?? "청구",
+            claimDetail: detail,
+            claimDate: normalizeText(payment.claim_date),
+            claimAmount: toAmountNumber(payment.claim_amount),
+            paidAmount: 0,
+          });
+        });
+      } else {
+          targets.push({
+            id: String(row.id ?? workName),
+            workName,
+            company: normalizeText(row.insurance_company) || "미지정",
+            claimSide: "-",
+            claimDetail: inferClaimDetailFromCompany(row.insurance_company),
+            claimDate: normalizeText(row.claim_date),
+            claimAmount: toAmountNumber(row.claim_amount),
+            paidAmount: 0,
+        });
+      }
+
+      return assignPaymentsByDetail(targets, workPayments)
+        .filter((target) => target.workName)
+        .map((target) => {
+          const status = getClaimStatus(target.claimDate, target.claimAmount);
+          const elapsedDays = dateDiffDays(target.claimDate);
+          const claimRate =
+            target.claimAmount > 0
+              ? (target.paidAmount / target.claimAmount) * 100
+              : null;
+
+          return {
+            id: target.id,
+            workName: target.workName,
+            company: target.company,
+            claimSide:
+              target.claimDetail && target.claimSide !== target.claimDetail
+                ? `${target.claimSide} / ${target.claimDetail}`
+                : target.claimSide,
+            status,
+            claimDate: target.claimDate,
+            elapsedDays,
+            claimAmount: target.claimAmount,
+            paidAmount: target.paidAmount,
+            shortageAmount: Math.max(0, target.claimAmount - target.paidAmount),
+            claimRate,
+          };
+        });
     })
-    .filter((row) => row.workName)
     .sort((a, b) => {
       const dayCompare = (b.elapsedDays ?? -1) - (a.elapsedDays ?? -1);
 
@@ -244,34 +415,29 @@ export default function PendingSettlementPage({
       return a.workName.localeCompare(b.workName, "ko");
     });
 
-  const pendingRows = riskRows.filter((row) => {
-    const paymentSummary = paymentSummaryByWork.get(row.workName);
-
-    return row.status === "미결" && !paymentSummary?.hasReceivable;
-  });
-  const longPendingRows = pendingRows.filter(
-    (row) =>
-      row.claimAmount > 0 &&
-      !isEmptyDateValue(row.claimDate) &&
-      (row.elapsedDays ?? 0) > 30
-  );
+  const unclaimedRows = riskRows.filter((row) => row.status === "미청구");
+  const pendingRows = riskRows.filter((row) => row.status === "미결");
+  const longPendingRows = riskRows.filter((row) => row.status === "장기미결");
   const lowClaimRateRows = riskRows.filter(
     (row) =>
-      row.status === "완결" &&
       row.claimAmount > 0 &&
       row.paidAmount > 0 &&
       (row.claimRate ?? 0) < 95
   );
 
   const activeRows =
-    activeRiskView === "pending"
+    activeRiskView === "unclaimed"
+      ? unclaimedRows
+      : activeRiskView === "pending"
       ? pendingRows
       : activeRiskView === "longPending"
         ? longPendingRows
         : lowClaimRateRows;
 
   const activeTitle =
-    activeRiskView === "pending"
+    activeRiskView === "unclaimed"
+      ? "미청구"
+      : activeRiskView === "pending"
       ? "미결건"
       : activeRiskView === "longPending"
         ? "장기미결건"
@@ -282,7 +448,7 @@ export default function PendingSettlementPage({
       <div>
         <h3 className="text-2xl font-bold">미결관리</h3>
         <p className="text-sm text-slate-600">
-          미결, 장기미결, 청구율 95% 미만 차량을 따로 확인합니다.
+          미청구, 미결, 장기미결, 청구율 95% 미만 차량을 따로 확인합니다.
         </p>
         <p className="mt-1 text-xs font-semibold text-slate-500">
           원본: 차량정산 {sourceCounts.settlements.toLocaleString()}건 / 입금{" "}
@@ -295,7 +461,15 @@ export default function PendingSettlementPage({
         )}
       </div>
 
-      <section className="grid grid-cols-3 gap-1.5 md:gap-3">
+      <section className="grid grid-cols-2 gap-1.5 md:grid-cols-4 md:gap-3">
+        <RiskCard
+          title="미청구"
+          count={unclaimedRows.length}
+          amount={unclaimedRows.reduce((sum, row) => sum + row.shortageAmount, 0)}
+          tone="slate"
+          active={activeRiskView === "unclaimed"}
+          onClick={() => setActiveRiskView("unclaimed")}
+        />
         <RiskCard
           title="미결건"
           count={pendingRows.length}
@@ -348,11 +522,14 @@ function RiskCard({
   title: string;
   count: number;
   amount: number;
-  tone: "orange" | "red" | "blue";
+  tone: "slate" | "orange" | "red" | "blue";
   active: boolean;
   onClick: () => void;
 }) {
   const toneClass = {
+    slate: active
+      ? "border-slate-400 bg-slate-50 text-slate-700"
+      : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50",
     orange: active
       ? "border-orange-400 bg-orange-50 text-orange-700"
       : "border-orange-100 bg-white text-orange-700 hover:bg-orange-50",
@@ -404,6 +581,7 @@ function RiskTable({
       [
         row.workName,
         row.company,
+        row.claimSide,
         row.status,
         row.claimDate,
         row.elapsedDays === null ? "" : `${row.elapsedDays}일`,
@@ -457,7 +635,7 @@ function RiskTable({
         <input
           value={searchText}
           onChange={(event) => setSearchText(event.target.value)}
-          placeholder="작명 / 보험사 / 상태 검색"
+          placeholder="작명 / 보험사 / 구분 / 상태 검색"
           className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 md:w-80"
         />
       </div>
@@ -481,14 +659,16 @@ function RiskTable({
                     {row.workName}
                   </div>
                   <div className="mt-1 truncate text-xs font-semibold text-slate-500">
-                    {row.company || "-"} / {row.claimDate || "청구일 없음"}
+                    {row.company || "-"} / {row.claimSide || "-"} / {row.claimDate || "청구일 없음"}
                   </div>
                 </div>
                 <span
                   className={
-                    row.status.includes("완결") || row.status.includes("꾧")
-                      ? "shrink-0 rounded-full bg-green-100 px-2 py-1 text-[11px] font-bold text-green-700"
-                      : "shrink-0 rounded-full bg-orange-100 px-2 py-1 text-[11px] font-bold text-orange-700"
+                    row.status === "미청구"
+                      ? "shrink-0 rounded-full bg-slate-100 px-2 py-1 text-[11px] font-bold text-slate-700"
+                      : row.status === "장기미결"
+                        ? "shrink-0 rounded-full bg-red-100 px-2 py-1 text-[11px] font-bold text-red-700"
+                        : "shrink-0 rounded-full bg-orange-100 px-2 py-1 text-[11px] font-bold text-orange-700"
                   }
                 >
                   {row.status}
@@ -523,6 +703,9 @@ function RiskTable({
             <SortableHeader field="company" sortField={sortField} sortOrder={sortOrder} onSort={handleSort}>
               보험사
             </SortableHeader>
+            <SortableHeader field="claimSide" sortField={sortField} sortOrder={sortOrder} onSort={handleSort}>
+              구분
+            </SortableHeader>
             <SortableHeader field="status" sortField={sortField} sortOrder={sortOrder} onSort={handleSort}>
               상태
             </SortableHeader>
@@ -548,6 +731,7 @@ function RiskTable({
           <tr className="hidden">
             <th className="border-b border-slate-200 px-3 py-2">작명</th>
             <th className="border-b border-slate-200 px-3 py-2">보험사</th>
+            <th className="border-b border-slate-200 px-3 py-2">구분</th>
             <th className="border-b border-slate-200 px-3 py-2">상태</th>
             <th className="border-b border-slate-200 px-3 py-2">청구일</th>
             <th className="border-b border-slate-200 px-3 py-2 text-right">소요일수</th>
@@ -560,13 +744,13 @@ function RiskTable({
         <tbody>
           {sortedRows.length === 0 ? (
             <tr>
-              <td colSpan={9} className="px-3 py-8 text-center text-slate-500">
+              <td colSpan={10} className="px-3 py-8 text-center text-slate-500">
                 관리 대상이 없습니다.
               </td>
             </tr>
           ) : (
             sortedRows.map((row, index) => (
-              <tr key={`${row.workName}-${index}`} className="hover:bg-slate-50">
+              <tr key={`${row.id}-${row.workName}-${index}`} className="hover:bg-slate-50">
                 <td className="border-b border-slate-100 px-3 py-2">
                   <button
                     type="button"
@@ -580,11 +764,16 @@ function RiskTable({
                   {row.company || "-"}
                 </td>
                 <td className="border-b border-slate-100 px-3 py-2">
+                  {row.claimSide || "-"}
+                </td>
+                <td className="border-b border-slate-100 px-3 py-2">
                   <span
                     className={
-                      row.status === "완결"
-                        ? "rounded-full bg-green-100 px-2 py-1 text-xs font-bold text-green-700"
-                        : "rounded-full bg-orange-100 px-2 py-1 text-xs font-bold text-orange-700"
+                      row.status === "미청구"
+                        ? "rounded-full bg-slate-100 px-2 py-1 text-xs font-bold text-slate-700"
+                        : row.status === "장기미결"
+                          ? "rounded-full bg-red-100 px-2 py-1 text-xs font-bold text-red-700"
+                          : "rounded-full bg-orange-100 px-2 py-1 text-xs font-bold text-orange-700"
                     }
                   >
                     {row.status}
