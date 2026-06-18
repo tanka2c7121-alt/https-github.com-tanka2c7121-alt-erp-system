@@ -97,6 +97,7 @@ const normalizeText = (value: unknown) => String(value ?? "").trim();
 const toAmountNumber = (value: unknown) =>
   Number(String(value ?? 0).replaceAll(",", "")) || 0;
 const claimDetails: ClaimDetail[] = ["보험", "캐피탈", "일반", "바디케어"];
+const currentYear = new Date().getFullYear();
 
 const normalizeStatus = (value: unknown): InsuranceListRow["status"] => {
   const text = normalizeText(value);
@@ -490,7 +491,15 @@ export default function PendingInsuranceListPage({
       new Set(
         listRows
           .map((row) => row.claimDate.slice(0, 4))
-          .filter((year) => /^\d{4}$/.test(year))
+          .filter((year) => {
+            const yearNumber = Number(year);
+
+            return (
+              /^\d{4}$/.test(year) &&
+              yearNumber >= 2000 &&
+              yearNumber <= currentYear
+            );
+          })
       )
     ).sort((a, b) => b.localeCompare(a));
   }, [listRows]);
