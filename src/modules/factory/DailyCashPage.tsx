@@ -1,8 +1,9 @@
-﻿"use client";
+"use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { MenuItem } from "../../data/menuData";
 import { localDateText } from "../../lib/date";
+import { fetchAllRows } from "../../lib/fetchAllRows";
 import { supabase } from "../../lib/supabase";
 
 type DailyCashPageProps = {
@@ -27,8 +28,6 @@ type DailyCashRow = {
 };
 
 const formatWon = (amount: number) => amount.toLocaleString();
-type QueryBuilder = any;
-
 const normalizeAccountName = (value: unknown) => {
   const rawText = String(value ?? "").trim();
   const accountKey = rawText
@@ -52,36 +51,6 @@ const normalizeAccountName = (value: unknown) => {
   return rawText;
 };
 
-async function fetchAllRows<T>(
-  tableName: string,
-  selectQuery: string,
-  configure?: (query: QueryBuilder) => QueryBuilder
-): Promise<{ data: T[]; error: any }> {
-  const pageSize = 1000;
-  const rows: T[] = [];
-
-  for (let from = 0; ; from += pageSize) {
-    let query = supabase.from(tableName).select(selectQuery);
-
-    if (configure) {
-      query = configure(query);
-    }
-
-    const { data, error } = await query.range(from, from + pageSize - 1);
-
-    if (error) {
-      return { data: rows, error };
-    }
-
-    rows.push(...((data ?? []) as T[]));
-
-    if (!data || data.length < pageSize) {
-      break;
-    }
-  }
-
-  return { data: rows, error: null };
-}
 
 export default function DailyCashPage({ onSelectMenu }: DailyCashPageProps) {
   const [rows, setRows] = useState<DailyCashRow[]>([]);

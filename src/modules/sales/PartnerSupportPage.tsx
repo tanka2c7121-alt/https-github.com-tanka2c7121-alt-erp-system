@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import type { MenuItem } from "../../data/menuData";
-import { supabase } from "../../lib/supabase";
+import { fetchAllRows } from "../../lib/fetchAllRows";
 import { useRealtimeRefresh } from "../../lib/useRealtimeRefresh";
 
 type PartnerSupportPageProps = {
@@ -130,38 +130,6 @@ function buildPrintPages(rows: SupportRow[]) {
   return pages;
 }
 
-type QueryBuilder = any;
-
-async function fetchAllRows<T>(
-  tableName: string,
-  selectQuery: string,
-  configure?: (query: QueryBuilder) => QueryBuilder
-): Promise<{ data: T[]; error: any }> {
-  const rows: T[] = [];
-  const fetchSize = 1000;
-
-  for (let from = 0; ; from += fetchSize) {
-    let query = supabase.from(tableName).select(selectQuery);
-
-    if (configure) {
-      query = configure(query);
-    }
-
-    const { data, error } = await query.range(from, from + fetchSize - 1);
-
-    if (error) {
-      return { data: rows, error };
-    }
-
-    rows.push(...((data ?? []) as T[]));
-
-    if (!data || data.length < fetchSize) {
-      break;
-    }
-  }
-
-  return { data: rows, error: null };
-}
 
 export default function PartnerSupportPage({
   onSelectMenu,

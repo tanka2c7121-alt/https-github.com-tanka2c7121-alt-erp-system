@@ -1,9 +1,9 @@
-﻿"use client";
+"use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { MenuItem } from "../../data/menuData";
 import { localDateText } from "../../lib/date";
-import { supabase } from "../../lib/supabase";
+import { fetchAllRows } from "../../lib/fetchAllRows";
 import { useRealtimeRefresh } from "../../lib/useRealtimeRefresh";
 
 
@@ -102,45 +102,6 @@ const isClosedSettlement = (item: SettlementItem) =>
   item.paidAmount > 0;
 
 
-async function fetchAllRows<T>(
-  tableName: string,
-  selectQuery: string,
-  options?: {
-    order?: { column: string; ascending: boolean };
-    eq?: { column: string; value: string };
-  }
-): Promise<{ data: T[]; error: any }> {
-  const pageSize = 1000;
-  const rows: T[] = [];
-
-  for (let from = 0; ; from += pageSize) {
-    let query = supabase.from(tableName).select(selectQuery);
-
-    if (options?.eq) {
-      query = query.eq(options.eq.column, options.eq.value);
-    }
-
-    if (options?.order) {
-      query = query.order(options.order.column, {
-        ascending: options.order.ascending,
-      });
-    }
-
-    const { data, error } = await query.range(from, from + pageSize - 1);
-
-    if (error) {
-      return { data: rows, error };
-    }
-
-    rows.push(...((data ?? []) as T[]));
-
-    if (!data || data.length < pageSize) {
-      break;
-    }
-  }
-
-  return { data: rows, error: null };
-}
 export default function FactorySettlementPage({
   view = "all",
   onSelectMenu,
