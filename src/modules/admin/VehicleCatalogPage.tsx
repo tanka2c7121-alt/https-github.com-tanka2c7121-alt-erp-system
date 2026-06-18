@@ -74,6 +74,7 @@ type TabId =
   | "vehicle"
   | "rental"
   | "partner"
+  | "supportPartner"
   | "insurer"
   | "dailyCashCategory";
 
@@ -86,6 +87,7 @@ const tabs: Array<{ id: TabId; label: string }> = [
   { id: "vehicleColor", label: "칼라코드" },
   { id: "rental", label: "렌터카업체" },
   { id: "partner", label: "거래처" },
+  { id: "supportPartner", label: "입고지원업체" },
   { id: "insurer", label: "보험사" },
   { id: "dailyCashCategory", label: "입출금분류" },
 ];
@@ -94,6 +96,8 @@ const dailyCashTypes = ["수입", "고정비", "변동비", "내부이동"];
 
 const firstRelation = <T,>(value: T | T[] | null | undefined): T | null =>
   Array.isArray(value) ? value[0] ?? null : value ?? null;
+
+const supportPartnerGroupName = "입고지원";
 
 const catalogErrorMessage = (action: string, message: string) => {
   const policyHint =
@@ -419,7 +423,23 @@ function CatalogManager({ canManage }: { canManage: boolean }) {
 
   const visibleBusinessRows = useMemo(() => {
     const keyword = searchText.trim().toLowerCase();
-    const typeRows = businessRows.filter((row) => row.item_type === activeTab);
+    const typeRows = businessRows.filter((row) => {
+      if (activeTab === "supportPartner") {
+        return (
+          row.item_type === "partner" &&
+          row.group_name === supportPartnerGroupName
+        );
+      }
+
+      if (activeTab === "partner") {
+        return (
+          row.item_type === "partner" &&
+          row.group_name !== supportPartnerGroupName
+        );
+      }
+
+      return row.item_type === activeTab;
+    });
 
     if (!keyword) return typeRows;
 
@@ -441,7 +461,7 @@ function CatalogManager({ canManage }: { canManage: boolean }) {
     );
   }, [dailyCashCategoryRows, searchText]);
 
-  const resetForm = () => {
+  const resetForm = (nextTab: TabId = activeTab) => {
     setMaker("");
     setSelectedMakerId("");
     setModel("");
@@ -450,7 +470,13 @@ function CatalogManager({ canManage }: { canManage: boolean }) {
     setColorName("");
     setBusinessName("");
     setPhoneNumber("");
-    setGroupName(activeTab === "insurer" ? "보험" : "");
+    setGroupName(
+      nextTab === "insurer"
+        ? "보험"
+        : nextTab === "supportPartner"
+          ? supportPartnerGroupName
+          : ""
+    );
     setDailyCashType("수입");
     setDailyCashCategoryName("");
   };
@@ -543,7 +569,12 @@ function CatalogManager({ canManage }: { canManage: boolean }) {
     const nextName = businessName.trim();
     const nextPhoneNumber = phoneNumber.trim();
     const nextGroupName =
-      activeTab === "insurer" || activeTab === "partner" ? groupName : "";
+      activeTab === "supportPartner"
+        ? supportPartnerGroupName
+        : activeTab === "insurer" || activeTab === "partner"
+          ? groupName
+          : "";
+    const itemType = activeTab === "supportPartner" ? "partner" : activeTab;
 
     if (!nextName) {
       alert("목록명을 입력하세요.");
@@ -553,7 +584,7 @@ function CatalogManager({ canManage }: { canManage: boolean }) {
     setSaving(true);
 
     const { error } = await supabase.from("business_catalog").insert({
-      item_type: activeTab,
+      item_type: itemType,
       name: nextName,
       phone_number: nextPhoneNumber || null,
       group_name: nextGroupName || null,
@@ -809,7 +840,7 @@ function CatalogManager({ canManage }: { canManage: boolean }) {
             onClick={() => {
               setActiveTab(tab.id);
               setSearchText("");
-              resetForm();
+              resetForm(tab.id);
             }}
             className={`rounded-lg px-4 py-2 text-sm font-semibold ${
               activeTab === tab.id
@@ -970,9 +1001,11 @@ function CatalogManager({ canManage }: { canManage: boolean }) {
               placeholder={
                 activeTab === "rental"
                   ? "렌터카업체명"
-                  : activeTab === "partner"
-                    ? "거래처명"
-                    : "보험사명"
+                  : activeTab === "supportPartner"
+                    ? "입고지원업체명"
+                    : activeTab === "partner"
+                      ? "거래처명"
+                      : "보험사명"
               }
               value={businessName}
               onChange={(event) => setBusinessName(event.target.value)}
@@ -996,15 +1029,6 @@ function CatalogManager({ canManage }: { canManage: boolean }) {
                 <option value="보험">보험</option>
                 <option value="캐피탈">캐피탈</option>
                 <option value="일반">일반</option>
-              </select>
-            ) : activeTab === "partner" ? (
-              <select
-                className={inputClass}
-                value={groupName}
-                onChange={(event) => setGroupName(event.target.value)}
-              >
-                <option value="">일반 거래처</option>
-                <option value="입고지원">입고지원 대상</option>
               </select>
             ) : (
               <div />

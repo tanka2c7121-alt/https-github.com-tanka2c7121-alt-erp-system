@@ -58,6 +58,7 @@ type SupportRow = {
   carNumber: string;
   carModel: string;
   status: "미결" | "완결" | "종결";
+  paymentDate: string;
   paymentAmount: number;
   deductibleAmount: number;
   totalPaymentAmount: number;
@@ -76,6 +77,7 @@ type SortKey =
   | "workName"
   | "carNumber"
   | "carModel"
+  | "paymentDate"
   | "paymentAmount"
   | "deductibleAmount"
   | "totalPaymentAmount"
@@ -94,13 +96,6 @@ const realtimeTables = [
 const pageSize = 30;
 const printFirstPageRows = 34;
 const printNextPageRows = 41;
-const defaultSupportTargetPartners = [
-  "김병진",
-  "경인렌터카",
-  "블루모터스",
-  "상동점",
-] as const;
-const excludedSupportTargetPartners = new Set(["SK렌터카"]);
 
 const formatWon = (amount: number) => amount.toLocaleString();
 const normalizeText = (value: unknown) => String(value ?? "").trim();
@@ -112,8 +107,6 @@ const hasDateValue = (value: unknown) => {
 };
 const includesKeyword = (value: unknown, keyword: string) =>
   normalizeText(value).replace(/\s+/g, "").includes(keyword);
-const isExcludedSupportTargetPartner = (value: unknown) =>
-  excludedSupportTargetPartners.has(normalizeText(value));
 
 function buildPrintPages(rows: SupportRow[]) {
   const pages: SupportRow[][] = [];
@@ -178,19 +171,17 @@ export default function PartnerSupportPage({
         throw new Error("입고지원 거래처 조회 실패: " + businessError.message);
       }
 
-      const supportTargetPartners = new Set([
-        ...defaultSupportTargetPartners,
-        ...(businessRows ?? [])
+      const supportTargetPartners = new Set(
+        (businessRows ?? [])
           .map((row) => normalizeText(row.name))
-          .filter((name) => name && !isExcludedSupportTargetPartner(name)),
-      ]);
+          .filter(Boolean)
+      );
 
       const targetWorkOrders = (workOrders ?? []).filter((workOrder) => {
         const partnerCompany = normalizeText(workOrder.partner_company);
         return Boolean(
           normalizeText(workOrder.work_name) &&
-            supportTargetPartners.has(partnerCompany) &&
-            !isExcludedSupportTargetPartner(partnerCompany)
+            supportTargetPartners.has(partnerCompany)
         );
       });
       const workNames = Array.from(new Set(targetWorkOrders.map((row) => normalizeText(row.work_name))));
@@ -325,6 +316,11 @@ export default function PartnerSupportPage({
               (sum, row) => sum + toAmountNumber(row.payment_amount),
               0
             );
+            const paymentDate =
+              paidRows
+                .map((row) => normalizeText(row.payment_date))
+                .filter(Boolean)
+                .sort()[0] ?? "";
             const totalPaymentAmount = paymentAmount + deductibleAmount + vatAmount;
             const expenseAmount = expenseByWorkName.get(workName) ?? 0;
             const supportRate = partnerCompany === "상동점" ? 0.15 : 0.1;
@@ -343,6 +339,7 @@ export default function PartnerSupportPage({
               carNumber: normalizeText(workOrder.car_number),
               carModel: normalizeText(workOrder.car_model),
               status: "미결",
+              paymentDate,
               paymentAmount,
               deductibleAmount,
               totalPaymentAmount,
@@ -729,15 +726,16 @@ export default function PartnerSupportPage({
         </div>
 
         <div className="overflow-x-auto">
-          <table className="partner-support-table w-full min-w-[1080px] border-collapse text-sm">
+          <table className="partner-support-table w-full min-w-[1160px] border-collapse text-sm">
             <thead>
               <tr className="bg-slate-100 text-slate-700">
                 <th className="hidden">상태</th>
-                <SortableHeader label="입고일" sortKey="inboundDate" activeKey={sortKey} direction={sortDirection} onSort={handleSort} />
-                <SortableHeader label="거래처" sortKey="partnerCompany" activeKey={sortKey} direction={sortDirection} onSort={handleSort} />
-                <SortableHeader label="작업명" sortKey="workName" activeKey={sortKey} direction={sortDirection} onSort={handleSort} />
-                <SortableHeader label="차량번호" sortKey="carNumber" activeKey={sortKey} direction={sortDirection} onSort={handleSort} />
-                <SortableHeader label="차량명" sortKey="carModel" activeKey={sortKey} direction={sortDirection} onSort={handleSort} />
+                <SortableHeader label="입고일" sortKey="inboundDate" activeKey={sortKey} direction={sortDirection} align="center" onSort={handleSort} />
+                <SortableHeader label="거래처" sortKey="partnerCompany" activeKey={sortKey} direction={sortDirection} align="center" onSort={handleSort} />
+                <SortableHeader label="작명" sortKey="workName" activeKey={sortKey} direction={sortDirection} align="center" onSort={handleSort} />
+                <SortableHeader label="차량번호" sortKey="carNumber" activeKey={sortKey} direction={sortDirection} align="center" onSort={handleSort} />
+                <SortableHeader label="차량명" sortKey="carModel" activeKey={sortKey} direction={sortDirection} align="center" onSort={handleSort} />
+                <SortableHeader label="입금일" sortKey="paymentDate" activeKey={sortKey} direction={sortDirection} align="center" onSort={handleSort} />
                 <SortableHeader label="입금금액" sortKey="paymentAmount" activeKey={sortKey} direction={sortDirection} align="right" onSort={handleSort} />
                 <SortableHeader label="면책금" sortKey="deductibleAmount" activeKey={sortKey} direction={sortDirection} align="right" onSort={handleSort} />
                 <SortableHeader label="총입금액" sortKey="totalPaymentAmount" activeKey={sortKey} direction={sortDirection} align="right" onSort={handleSort} />
@@ -746,12 +744,13 @@ export default function PartnerSupportPage({
                 <th className="border border-slate-300 px-2 py-2">관리</th>
               </tr>
               <tr className="bg-slate-100 text-slate-700">
-                <th className="border border-slate-300 px-2 py-2">상태</th>
-                <th className="border border-slate-300 px-2 py-2">출고일</th>
-                <th className="border border-slate-300 px-2 py-2">거래처</th>
-                <th className="border border-slate-300 px-2 py-2">작명</th>
-                <th className="border border-slate-300 px-2 py-2">차량번호</th>
-                <th className="border border-slate-300 px-2 py-2">차량명</th>
+                <th className="border border-slate-300 px-2 py-2 text-center">상태</th>
+                <th className="border border-slate-300 px-2 py-2 text-center">입고일</th>
+                <th className="border border-slate-300 px-2 py-2 text-center">거래처</th>
+                <th className="border border-slate-300 px-2 py-2 text-center">작명</th>
+                <th className="border border-slate-300 px-2 py-2 text-center">차량번호</th>
+                <th className="border border-slate-300 px-2 py-2 text-center">차량명</th>
+                <th className="border border-slate-300 px-2 py-2 text-center">입금일</th>
                 <th className="border border-slate-300 px-2 py-2 text-right">입금금액</th>
                 <th className="border border-slate-300 px-2 py-2 text-right">면책금</th>
                 <th className="border border-slate-300 px-2 py-2 text-right">총입금액</th>
@@ -763,13 +762,13 @@ export default function PartnerSupportPage({
             <tbody>
               {isLoading ? (
                 <tr>
-                  <td colSpan={12} className="border border-slate-300 px-3 py-8 text-center text-slate-500">
+                  <td colSpan={13} className="border border-slate-300 px-3 py-8 text-center text-slate-500">
                     조회 중입니다.
                   </td>
                 </tr>
               ) : pagedRows.length === 0 ? (
                 <tr>
-                  <td colSpan={12} className="border border-slate-300 px-3 py-8 text-center text-slate-500">
+                  <td colSpan={13} className="border border-slate-300 px-3 py-8 text-center text-slate-500">
                     표시할 입고지원 데이터가 없습니다.
                   </td>
                 </tr>
@@ -800,7 +799,7 @@ export default function PartnerSupportPage({
                         </span>
                       </div>
                     </td>
-                    <td className="border border-slate-300 px-2 py-2">
+                    <td className="border border-slate-300 px-2 py-2 text-center">
                       <div>{row.inboundDate || "-"}</div>
                       {row.releaseDate && (
                         <div className="text-xs text-slate-500">
@@ -808,10 +807,11 @@ export default function PartnerSupportPage({
                         </div>
                       )}
                     </td>
-                    <td className="border border-slate-300 px-2 py-2 font-semibold">{row.partnerCompany}</td>
-                    <td className="border border-slate-300 px-2 py-2 font-semibold text-blue-700">{row.workName}</td>
-                    <td className="border border-slate-300 px-2 py-2">{row.carNumber || "-"}</td>
-                    <td className="border border-slate-300 px-2 py-2">{row.carModel || "-"}</td>
+                    <td className="border border-slate-300 px-2 py-2 text-center font-semibold">{row.partnerCompany}</td>
+                    <td className="border border-slate-300 px-2 py-2 text-center font-semibold text-blue-700">{row.workName}</td>
+                    <td className="border border-slate-300 px-2 py-2 text-center">{row.carNumber || "-"}</td>
+                    <td className="border border-slate-300 px-2 py-2 text-center">{row.carModel || "-"}</td>
+                    <td className="border border-slate-300 px-2 py-2 text-center">{row.paymentDate || "-"}</td>
                     <td className="border border-slate-300 px-2 py-2 text-right">{formatWon(row.paymentAmount)}</td>
                     <td className="border border-slate-300 px-2 py-2 text-right">{formatWon(row.deductibleAmount)}</td>
                     <td className="border border-slate-300 px-2 py-2 text-right">{formatWon(row.totalPaymentAmount)}</td>
@@ -1064,12 +1064,13 @@ function PartnerSupportPrintTable({
         <col className="w-[20mm]" />
         <col className="w-[18mm]" />
         <col className="w-[18mm]" />
-        <col className="w-[31mm]" />
-        <col className="w-[17mm]" />
-        <col className="w-[17mm]" />
-        <col className="w-[17mm]" />
-        <col className="w-[17mm]" />
+        <col className="w-[28mm]" />
         <col className="w-[16mm]" />
+        <col className="w-[16mm]" />
+        <col className="w-[17mm]" />
+        <col className="w-[17mm]" />
+        <col className="w-[17mm]" />
+        <col className="w-[17mm]" />
       </colgroup>
       <thead className="text-center">
         <tr className="bg-slate-50">
@@ -1078,6 +1079,7 @@ function PartnerSupportPrintTable({
           <PrintHeaderCell>작명</PrintHeaderCell>
           <PrintHeaderCell>차량번호</PrintHeaderCell>
           <PrintHeaderCell>차량명</PrintHeaderCell>
+          <PrintHeaderCell>입금일</PrintHeaderCell>
           <PrintHeaderCell>입금금액</PrintHeaderCell>
           <PrintHeaderCell>면책금</PrintHeaderCell>
           <PrintHeaderCell>총입금액</PrintHeaderCell>
@@ -1090,7 +1092,7 @@ function PartnerSupportPrintTable({
           <tr>
             <td
               className="border border-slate-900 px-3 py-12 text-center text-slate-500"
-              colSpan={10}
+              colSpan={11}
             >
               출력할 입고지원 데이터가 없습니다.
             </td>
@@ -1099,10 +1101,11 @@ function PartnerSupportPrintTable({
           rows.map((row) => (
             <tr key={`print-${row.workName}-${row.id}`} className="h-[5.8mm]">
               <PrintCell center>{row.inboundDate || "\u00A0"}</PrintCell>
-              <PrintCell strong>{row.partnerCompany || "\u00A0"}</PrintCell>
-              <PrintCell strong>{row.workName || "\u00A0"}</PrintCell>
+              <PrintCell center strong>{row.partnerCompany || "\u00A0"}</PrintCell>
+              <PrintCell center strong>{row.workName || "\u00A0"}</PrintCell>
               <PrintCell center>{row.carNumber || "\u00A0"}</PrintCell>
-              <PrintCell>{row.carModel || "\u00A0"}</PrintCell>
+              <PrintCell center>{row.carModel || "\u00A0"}</PrintCell>
+              <PrintCell center>{row.paymentDate || "\u00A0"}</PrintCell>
               <PrintCell amount>{formatWon(row.paymentAmount)}</PrintCell>
               <PrintCell amount>{formatWon(row.deductibleAmount)}</PrintCell>
               <PrintCell amount>{formatWon(row.totalPaymentAmount)}</PrintCell>
@@ -1115,7 +1118,7 @@ function PartnerSupportPrintTable({
       {showTotal && rows.length > 0 && (
         <tfoot>
           <tr className="partner-support-v2-total-row bg-blue-50 font-bold text-blue-900">
-            <th className="border border-slate-900 px-1 py-2 text-right" colSpan={5}>
+            <th className="border border-slate-900 px-1 py-2 text-right" colSpan={6}>
               합계
             </th>
             <td className="border border-slate-900 px-1 py-2 text-right">

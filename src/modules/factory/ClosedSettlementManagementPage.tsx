@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { MenuItem } from "../../data/menuData";
 import { localDateText } from "../../lib/date";
 import { fetchAllRows } from "../../lib/fetchAllRows";
@@ -26,16 +26,51 @@ type SettlementRow = {
   work_name: string | null;
   car_number: string | null;
   car_model: string | null;
+  category: string | null;
+  coverage_type?: string | null;
   insurance_company: string | null;
+  partner_company?: string | null;
   progress_status: string | null;
   claim_amount: number | null;
+  paid_amount?: number;
   total_amount: number | null;
+  payment_rate?: number | null;
 };
 
+type PaymentRow = {
+  id: number;
+  work_name: string | null;
+  payment_type: string | null;
+  payment_amount: number | null;
+};
+
+type WorkOrderRow = {
+  work_name: string | null;
+  partner_company: string | null;
+  coverage_type: string | null;
+};
+
+type SortField =
+  | "work_name"
+  | "car_number"
+  | "car_model"
+  | "category"
+  | "coverage_type"
+  | "insurance_company"
+  | "partner_company"
+  | "claim_amount"
+  | "paid_amount"
+  | "total_amount"
+  | "payment_rate";
+type SortOrder = "asc" | "desc";
 
 const normalizeText = (value: unknown) => String(value ?? "").trim();
 const formatWon = (value: unknown) =>
   `${Number(value ?? 0).toLocaleString()}원`;
+const toAmountNumber = (value: unknown) =>
+  Number(String(value ?? 0).replaceAll(",", "")) || 0;
+const calculateRate = (claimAmount: number, paidAmount: number) =>
+  claimAmount > 0 ? (paidAmount / claimAmount) * 100 : null;
 const currentDateText = localDateText();
 const currentYear = currentDateText.slice(0, 4);
 const currentMonth = currentDateText.slice(5, 7);
@@ -50,25 +85,42 @@ export default function ClosedSettlementManagementPage({
   const [selectedMonth, setSelectedMonth] = useState(currentMonth);
   const [loading, setLoading] = useState(true);
   const [unlockingId, setUnlockingId] = useState<number | null>(null);
+  const [sortField, setSortField] = useState<SortField>("work_name");
+  const [sortOrder, setSortOrder] = useState<SortOrder>("asc");
   const canCloseSettlement = user.role === "ADMIN" || user.role === "CHIEF";
 
   const loadRows = useCallback(async () => {
     setLoading(true);
 
-    const { data, error } = await fetchAllRows<SettlementRow>(
-      "repair_settlements",
-      [
-        "id",
-        "work_name",
-        "car_number",
-        "car_model",
-        "insurance_company",
-        "progress_status",
-        "claim_amount",
-        "total_amount",
-      ].join(", "),
-      (query) => query.order("id", { ascending: false })
-    );
+    const [
+      { data, error },
+      { data: payments, error: paymentError },
+      { data: works, error: workError },
+    ] = await Promise.all([
+      fetchAllRows<SettlementRow>(
+        "repair_settlements",
+        [
+          "id",
+          "work_name",
+          "car_number",
+          "car_model",
+          "category",
+          "insurance_company",
+          "progress_status",
+          "claim_amount",
+          "total_amount",
+        ].join(", "),
+        (query) => query.order("id", { ascending: false })
+      ),
+      fetchAllRows<PaymentRow>(
+        "settlement_payments",
+        "id, work_name, payment_type, payment_amount"
+      ),
+      fetchAllRows<WorkOrderRow>(
+        "work_orders",
+        "work_name, partner_company, coverage_type"
+      ),
+    ]);
 
     setLoading(false);
 
@@ -77,10 +129,53 @@ export default function ClosedSettlementManagementPage({
       return;
     }
 
+    if (paymentError) {
+      alert("입금내역 조회 실패: " + paymentError.message);
+      return;
+    }
+
+    if (workError) {
+      alert("작업정보 조회 실패: " + workError.message);
+      return;
+    }
+
+    const workInfoByWorkName = new Map(
+      (works ?? [])
+        .map((row) => [normalizeText(row.work_name), row] as const)
+        .filter(([workName]) => Boolean(workName))
+    );
+    const paidAmountByWorkName = (payments ?? []).reduce<Map<string, number>>(
+      (map, row) => {
+        const workName = normalizeText(row.work_name);
+        const paymentType = normalizeText(row.payment_type);
+
+        if (!workName || paymentType === "청구" || paymentType === "면책금") {
+          return map;
+        }
+
+        map.set(workName, (map.get(workName) ?? 0) + toAmountNumber(row.payment_amount));
+        return map;
+      },
+      new Map<string, number>()
+    );
+
     setRows(
-      ((data ?? []) as SettlementRow[]).filter((row) =>
-        normalizeText(row.progress_status).includes("완결")
-      )
+      ((data ?? []) as SettlementRow[])
+        .filter((row) => normalizeText(row.progress_status).includes("완결"))
+        .map((row) => {
+          const workName = normalizeText(row.work_name);
+          const claimAmount = toAmountNumber(row.claim_amount);
+          const paidAmount = paidAmountByWorkName.get(workName) ?? 0;
+          const workInfo = workInfoByWorkName.get(workName);
+
+          return {
+            ...row,
+            partner_company: workInfo?.partner_company ?? "",
+            coverage_type: workInfo?.coverage_type ?? "",
+            paid_amount: paidAmount,
+            payment_rate: calculateRate(claimAmount, paidAmount),
+          };
+        })
     );
   }, []);
 
@@ -109,7 +204,10 @@ export default function ClosedSettlementManagementPage({
           row.work_name,
           row.car_number,
           row.car_model,
+          row.category,
+          row.coverage_type,
           row.insurance_company,
+          row.partner_company,
           row.progress_status,
         ]
           .join(" ")
@@ -117,6 +215,45 @@ export default function ClosedSettlementManagementPage({
           .includes(keyword);
       });
   }, [rows, searchText, selectedMonth, selectedYear]);
+
+  const sortedRows = useMemo(() => {
+    const direction = sortOrder === "asc" ? 1 : -1;
+
+    return [...filteredRows].sort((left, right) => {
+      const leftValue = left[sortField];
+      const rightValue = right[sortField];
+
+      if (
+        sortField === "claim_amount" ||
+        sortField === "paid_amount" ||
+        sortField === "total_amount" ||
+        sortField === "payment_rate"
+      ) {
+        return (Number(leftValue ?? 0) - Number(rightValue ?? 0)) * direction;
+      }
+
+      const compare = normalizeText(leftValue).localeCompare(
+        normalizeText(rightValue),
+        "ko"
+      );
+
+      if (compare !== 0) return compare * direction;
+      return normalizeText(left.work_name).localeCompare(
+        normalizeText(right.work_name),
+        "ko"
+      );
+    });
+  }, [filteredRows, sortField, sortOrder]);
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"));
+      return;
+    }
+
+    setSortField(field);
+    setSortOrder("asc");
+  };
 
   const yearOptions = useMemo(() => {
     return Array.from(
@@ -223,7 +360,7 @@ export default function ClosedSettlementManagementPage({
             />
           </div>
           <div className="text-sm font-semibold text-slate-600">
-            조회 {filteredRows.length.toLocaleString()}건
+            조회 {sortedRows.length.toLocaleString()}건
           </div>
         </div>
 
@@ -231,40 +368,78 @@ export default function ClosedSettlementManagementPage({
           <table className="w-full border-collapse text-sm">
             <thead>
               <tr className="bg-slate-100 text-left text-slate-700">
-                <th className="border border-slate-200 px-3 py-2">작명</th>
-                <th className="border border-slate-200 px-3 py-2">차량번호</th>
-                <th className="border border-slate-200 px-3 py-2">차량명</th>
-                <th className="border border-slate-200 px-3 py-2">보험사</th>
-                <th className="border border-slate-200 px-3 py-2 text-right">청구금액</th>
-                <th className="border border-slate-200 px-3 py-2 text-right">합계금액</th>
+                <SortableHeader field="work_name" sortField={sortField} sortOrder={sortOrder} onSort={handleSort} align="center">
+                  작명
+                </SortableHeader>
+                <SortableHeader field="car_number" sortField={sortField} sortOrder={sortOrder} onSort={handleSort} align="center">
+                  차량번호
+                </SortableHeader>
+                <SortableHeader field="car_model" sortField={sortField} sortOrder={sortOrder} onSort={handleSort} align="center">
+                  차량명
+                </SortableHeader>
+                <SortableHeader field="category" sortField={sortField} sortOrder={sortOrder} onSort={handleSort} align="center">
+                  구분
+                </SortableHeader>
+                <SortableHeader field="coverage_type" sortField={sortField} sortOrder={sortOrder} onSort={handleSort} align="center">
+                  담보
+                </SortableHeader>
+                <SortableHeader field="insurance_company" sortField={sortField} sortOrder={sortOrder} onSort={handleSort} align="center">
+                  보험사
+                </SortableHeader>
+                <SortableHeader field="partner_company" sortField={sortField} sortOrder={sortOrder} onSort={handleSort} align="center">
+                  거래처
+                </SortableHeader>
+                <SortableHeader field="claim_amount" sortField={sortField} sortOrder={sortOrder} onSort={handleSort} align="right">
+                  청구금액
+                </SortableHeader>
+                <SortableHeader field="paid_amount" sortField={sortField} sortOrder={sortOrder} onSort={handleSort} align="right">
+                  입금금액
+                </SortableHeader>
+                <SortableHeader field="total_amount" sortField={sortField} sortOrder={sortOrder} onSort={handleSort} align="right">
+                  합계금액
+                </SortableHeader>
+                <SortableHeader field="payment_rate" sortField={sortField} sortOrder={sortOrder} onSort={handleSort} align="right">
+                  결제율
+                </SortableHeader>
                 <th className="border border-slate-200 px-3 py-2 text-center">관리</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td className="border border-slate-200 px-3 py-8 text-center text-slate-500" colSpan={7}>
+                  <td className="border border-slate-200 px-3 py-8 text-center text-slate-500" colSpan={12}>
                     조회 중입니다.
                   </td>
                 </tr>
-              ) : filteredRows.length === 0 ? (
+              ) : sortedRows.length === 0 ? (
                 <tr>
-                  <td className="border border-slate-200 px-3 py-8 text-center text-slate-500" colSpan={7}>
+                  <td className="border border-slate-200 px-3 py-8 text-center text-slate-500" colSpan={12}>
                     표시할 완결 정산이 없습니다.
                   </td>
                 </tr>
               ) : (
-                filteredRows.map((row, index) => {
+                sortedRows.map((row, index) => {
                   const workName = normalizeText(row.work_name);
 
                   return (
                     <tr key={`${row.id}-${workName}-${index}`} className="hover:bg-slate-50">
-                      <td className="border border-slate-200 px-3 py-2 font-bold">{workName}</td>
-                      <td className="border border-slate-200 px-3 py-2">{row.car_number ?? ""}</td>
-                      <td className="border border-slate-200 px-3 py-2">{row.car_model ?? ""}</td>
-                      <td className="border border-slate-200 px-3 py-2">{row.insurance_company ?? ""}</td>
+                      <td className="border border-slate-200 px-3 py-2 text-center font-bold">{workName}</td>
+                      <td className="border border-slate-200 px-3 py-2 text-center">{row.car_number ?? ""}</td>
+                      <td className="border border-slate-200 px-3 py-2 text-center">{row.car_model ?? ""}</td>
+                      <td className="border border-slate-200 px-3 py-2 text-center">{row.category ?? ""}</td>
+                      <td className="border border-slate-200 px-3 py-2 text-center">{row.coverage_type ?? ""}</td>
+                      <td className="border border-slate-200 px-3 py-2 text-center">{row.insurance_company ?? ""}</td>
+                      <td className="border border-slate-200 px-3 py-2 text-center">{row.partner_company ?? ""}</td>
                       <td className="border border-slate-200 px-3 py-2 text-right">{formatWon(row.claim_amount)}</td>
+                      <td className="border border-slate-200 px-3 py-2 text-right text-blue-600">{formatWon(row.paid_amount)}</td>
                       <td className="border border-slate-200 px-3 py-2 text-right">{formatWon(row.total_amount)}</td>
+                      <td className={`border border-slate-200 px-3 py-2 text-right font-bold ${
+                        (row.payment_rate ?? 0) >= 95 ? "text-green-700" : "text-red-600"
+                      }`}>
+                        {row.payment_rate === null || row.payment_rate === undefined
+                          ? "-"
+                          : `${row.payment_rate.toFixed(1)}%`}
+                      </td>
                       <td className="border border-slate-200 px-3 py-2">
                         <div className="flex justify-center gap-2">
                           <button
@@ -295,7 +470,7 @@ export default function ClosedSettlementManagementPage({
         </div>
 
         <div className="space-y-3 md:hidden">
-          {filteredRows.map((row, index) => {
+          {sortedRows.map((row, index) => {
             const workName = normalizeText(row.work_name);
 
             return (
@@ -305,7 +480,13 @@ export default function ClosedSettlementManagementPage({
                   {row.car_number ?? ""} / {row.car_model ?? ""}
                 </div>
                 <div className="mt-2 text-sm text-slate-600">
-                  {row.insurance_company ?? ""} / 청구 {formatWon(row.claim_amount)}
+                  {row.category ?? "-"} / {row.coverage_type ?? "-"} / {row.insurance_company ?? ""} / {row.partner_company ?? "-"} / 청구 {formatWon(row.claim_amount)}
+                </div>
+                <div className="mt-1 text-sm font-semibold text-slate-700">
+                  입금 {formatWon(row.paid_amount)} / 결제율{" "}
+                  {row.payment_rate === null || row.payment_rate === undefined
+                    ? "-"
+                    : `${row.payment_rate.toFixed(1)}%`}
                 </div>
                 <div className="mt-3 flex gap-2">
                   <button
@@ -332,5 +513,55 @@ export default function ClosedSettlementManagementPage({
         </div>
       </section>
     </div>
+  );
+}
+
+function SortableHeader({
+  field,
+  sortField,
+  sortOrder,
+  onSort,
+  align = "left",
+  children,
+}: {
+  field: SortField;
+  sortField: SortField;
+  sortOrder: SortOrder;
+  onSort: (field: SortField) => void;
+  align?: "left" | "center" | "right";
+  children: ReactNode;
+}) {
+  const active = field === sortField;
+
+  return (
+    <th
+      className={[
+        "border border-slate-200 px-3 py-2",
+        align === "right"
+          ? "text-right"
+          : align === "center"
+            ? "text-center"
+            : "text-left",
+      ].join(" ")}
+    >
+      <button
+        type="button"
+        onClick={() => onSort(field)}
+        className={[
+          "inline-flex w-full items-center gap-1 font-bold hover:text-blue-700",
+          align === "right"
+            ? "justify-end"
+            : align === "center"
+              ? "justify-center"
+              : "justify-start",
+          active ? "text-blue-700" : "text-slate-700",
+        ].join(" ")}
+      >
+        <span>{children}</span>
+        <span className="text-[10px]">
+          {active ? (sortOrder === "asc" ? "▲" : "▼") : "↕"}
+        </span>
+      </button>
+    </th>
   );
 }

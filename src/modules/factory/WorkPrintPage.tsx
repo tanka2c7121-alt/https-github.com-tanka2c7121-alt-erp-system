@@ -189,6 +189,15 @@ export default function WorkPrintPage({
 
         <div className="p-3">
   <div className="mb-6 flex items-start justify-between">
+    <div className="flex min-w-[150px] justify-start pt-1">
+      {/* eslint-disable-next-line @next/next/no-img-element -- Static print logo keeps the work order layout simple. */}
+      <img
+        src="/samples/genesis-mark-inverted.png"
+        alt="Genesis"
+        className="h-auto w-[118px]"
+      />
+    </div>
+
     <div className="flex-1 text-center">
       <h1 className="text-3xl font-bold tracking-widest">
         작업지시서

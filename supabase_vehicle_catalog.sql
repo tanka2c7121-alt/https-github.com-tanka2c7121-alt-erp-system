@@ -97,6 +97,7 @@ values
   ('제네시스', 'GV80', 'NCM')
 on conflict do nothing;
 
+
 create table if not exists vehicle_makers (
   id bigserial primary key,
   name text not null,
@@ -255,4 +256,15 @@ values
   ('insurer', '오픈링크', null, '캐피탈'),
   ('insurer', '해당없음', null, '일반'),
   ('insurer', '바디케어', null, '일반')
+on conflict do nothing;
+
+insert into business_catalog (item_type, name, phone_number, group_name)
+values
+  ('partner', '김병진', null, '입고지원'),
+  ('partner', '경인렌터카', null, '입고지원'),
+  ('partner', '블루모터스', null, '입고지원'),
+  ('partner', '상동점', null, '입고지원'),
+  ('partner', 'KB견인', null, '입고지원'),
+  ('partner', 'SK렌터카', null, '입고지원'),
+  ('partner', '정수원', null, '입고지원')
 on conflict do nothing;

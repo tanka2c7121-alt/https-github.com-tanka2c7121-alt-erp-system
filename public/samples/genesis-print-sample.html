@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Genesis Print Sample</title>
+    <style>
+      @page {
+        size: A4 portrait;
+        margin: 0;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: #e5e7eb;
+        color: #111827;
+        font-family: Arial, "Malgun Gothic", sans-serif;
+      }
+
+      .sheet {
+        position: relative;
+        width: 210mm;
+        min-height: 297mm;
+        margin: 16px auto;
+        padding: 20mm 14mm 14mm;
+        background: #ffffff;
+        box-shadow: 0 8px 30px rgba(15, 23, 42, 0.18);
+      }
+
+      .print-logo {
+        position: absolute;
+        top: 9mm;
+        left: 12mm;
+        width: 42mm;
+        height: auto;
+      }
+
+      .title {
+        margin: 0 0 16mm;
+        text-align: center;
+        font-size: 24px;
+        font-weight: 800;
+        letter-spacing: 0;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+      }
+
+      th,
+      td {
+        border: 1px solid #111827;
+        padding: 8px 6px;
+      }
+
+      th {
+        background: #f3f4f6;
+      }
+
+      .center {
+        text-align: center;
+      }
+
+      .right {
+        text-align: right;
+      }
+
+      @media print {
+        body {
+          background: #ffffff;
+        }
+
+        .sheet {
+          margin: 0;
+          box-shadow: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="sheet">
+      <img class="print-logo" src="./genesis-mark-outline-thin.png" alt="Genesis logo" />
+      <h1 class="title">출력 페이지 샘플</h1>
+
+      <table>
+        <thead>
+          <tr>
+            <th class="center">입고일</th>
+            <th class="center">거래처</th>
+            <th class="center">작명</th>
+            <th class="center">차량번호</th>
+            <th class="center">차량명</th>
+            <th class="center">입금일</th>
+            <th class="right">입금금액</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="center">2026-06-18</td>
+            <td class="center">SK렌터카</td>
+            <td class="center">샘플작명</td>
+            <td class="center">1234</td>
+            <td class="center">G80</td>
+            <td class="center">2026-06-18</td>
+            <td class="right">1,250,000</td>
+          </tr>
+        </tbody>
+      </table>
+    </main>
+  </body>
+</html>
