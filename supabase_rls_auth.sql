@@ -210,6 +210,9 @@ alter table if exists public.settlement_payments enable row level security;
 alter table if exists public.settlement_expenses enable row level security;
 alter table if exists public.daily_cash enable row level security;
 alter table if exists public.vehicle_catalog enable row level security;
+alter table if exists public.vehicle_makers enable row level security;
+alter table if exists public.vehicle_models enable row level security;
+alter table if exists public.vehicle_color_codes enable row level security;
 alter table if exists public.business_catalog enable row level security;
 alter table if exists public.daily_cash_categories enable row level security;
 
@@ -234,6 +237,12 @@ drop policy if exists settlement_expenses_admin_dept_all on public.settlement_ex
 drop policy if exists daily_cash_admin_dept_all on public.daily_cash;
 drop policy if exists vehicle_catalog_authenticated_read on public.vehicle_catalog;
 drop policy if exists vehicle_catalog_admin_dept_write on public.vehicle_catalog;
+drop policy if exists vehicle_makers_authenticated_read on public.vehicle_makers;
+drop policy if exists vehicle_makers_admin_dept_write on public.vehicle_makers;
+drop policy if exists vehicle_models_authenticated_read on public.vehicle_models;
+drop policy if exists vehicle_models_admin_dept_write on public.vehicle_models;
+drop policy if exists vehicle_color_codes_authenticated_read on public.vehicle_color_codes;
+drop policy if exists vehicle_color_codes_admin_dept_write on public.vehicle_color_codes;
 drop policy if exists business_catalog_authenticated_read on public.business_catalog;
 drop policy if exists business_catalog_admin_dept_write on public.business_catalog;
 drop policy if exists daily_cash_categories_authenticated_read on public.daily_cash_categories;
@@ -291,6 +300,45 @@ using (public.current_app_user_id() is not null);
 
 create policy vehicle_catalog_admin_dept_write
 on public.vehicle_catalog
+for all
+to authenticated
+using (public.current_app_user_is_admin_dept())
+with check (public.current_app_user_is_admin_dept());
+
+create policy vehicle_makers_authenticated_read
+on public.vehicle_makers
+for select
+to authenticated
+using (public.current_app_user_id() is not null);
+
+create policy vehicle_makers_admin_dept_write
+on public.vehicle_makers
+for all
+to authenticated
+using (public.current_app_user_is_admin_dept())
+with check (public.current_app_user_is_admin_dept());
+
+create policy vehicle_models_authenticated_read
+on public.vehicle_models
+for select
+to authenticated
+using (public.current_app_user_id() is not null);
+
+create policy vehicle_models_admin_dept_write
+on public.vehicle_models
+for all
+to authenticated
+using (public.current_app_user_is_admin_dept())
+with check (public.current_app_user_is_admin_dept());
+
+create policy vehicle_color_codes_authenticated_read
+on public.vehicle_color_codes
+for select
+to authenticated
+using (public.current_app_user_id() is not null);
+
+create policy vehicle_color_codes_admin_dept_write
+on public.vehicle_color_codes
 for all
 to authenticated
 using (public.current_app_user_is_admin_dept())

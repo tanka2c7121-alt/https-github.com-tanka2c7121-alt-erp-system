@@ -108,12 +108,29 @@ type VehicleCatalogRow = {
   color_code: string | null;
 };
 
+type VehicleColorCodeCatalogRow = {
+  code: string;
+  vehicle_models?:
+    | {
+    name: string;
+        vehicle_makers?: { name: string } | { name: string }[] | null;
+      }
+    | {
+        name: string;
+        vehicle_makers?: { name: string } | { name: string }[] | null;
+      }[]
+    | null;
+};
+
 type BusinessCatalogRow = {
   item_type: string;
   name: string;
   phone_number: string | null;
   group_name: string | null;
 };
+
+const firstRelation = <T,>(value: T | T[] | null | undefined): T | null =>
+  Array.isArray(value) ? value[0] ?? null : value ?? null;
 
 function chunkArray<T>(items: T[], size: number) {
   const chunks: T[][] = [];
@@ -598,6 +615,50 @@ const activeColorOptions =
 
 useEffect(() => {
   async function loadVehicleCatalog() {
+    const [
+      { data: modelData, error: modelError },
+      { data: colorCodeData, error: colorCodeError },
+    ] = await Promise.all([
+      supabase
+        .from("vehicle_models")
+        .select("name, vehicle_makers(name)")
+        .eq("is_active", true)
+        .order("name", { ascending: true }),
+      supabase
+        .from("vehicle_color_codes")
+        .select("code, vehicle_models(name, vehicle_makers(name))")
+        .eq("is_active", true)
+        .order("code", { ascending: true }),
+    ]);
+
+    if (!modelError && modelData && modelData.length > 0) {
+      const modelRows =
+        (modelData as any[])
+          .map((row) => ({
+            maker: firstRelation<{ name: string }>(row.vehicle_makers)?.name ?? "",
+            model: row.name,
+            color_code: null,
+          }))
+          .filter((row) => row.maker && row.model);
+      const colorRows =
+        !colorCodeError && colorCodeData
+          ? (colorCodeData as VehicleColorCodeCatalogRow[])
+              .map((row) => {
+                const model = firstRelation(row.vehicle_models);
+
+                return {
+                  maker: firstRelation(model?.vehicle_makers)?.name ?? "",
+                  model: model?.name ?? "",
+                  color_code: row.code,
+                };
+              })
+              .filter((row) => row.maker && row.model)
+          : [];
+
+      setVehicleCatalog([...modelRows, ...colorRows]);
+      return;
+    }
+
     const { data, error } = await supabase
       .from("vehicle_catalog")
       .select("maker, model, color_code")

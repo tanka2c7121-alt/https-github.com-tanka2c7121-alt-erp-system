@@ -20,6 +20,36 @@ type VehicleCatalogRow = {
   is_active: boolean;
 };
 
+type VehicleMakerRow = {
+  id: number;
+  name: string;
+  is_active: boolean;
+};
+
+type VehicleModelRow = {
+  id: number;
+  maker_id: number;
+  name: string;
+  is_active: boolean;
+  vehicle_makers?: {
+    name: string;
+  } | null;
+};
+
+type VehicleColorCodeRow = {
+  id: number;
+  model_id: number;
+  code: string;
+  color_name: string | null;
+  is_active: boolean;
+  vehicle_models?: {
+    name: string;
+    vehicle_makers?: {
+      name: string;
+    } | null;
+  } | null;
+};
+
 type BusinessCatalogRow = {
   id: number;
   item_type: string;
@@ -37,13 +67,23 @@ type DailyCashCategoryRow = {
   is_active: boolean;
 };
 
-type TabId = "vehicle" | "rental" | "partner" | "insurer" | "dailyCashCategory";
+type TabId =
+  | "vehicleMaker"
+  | "vehicleModel"
+  | "vehicleColor"
+  | "vehicle"
+  | "rental"
+  | "partner"
+  | "insurer"
+  | "dailyCashCategory";
 
 const inputClass =
   "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:outline-none";
 
 const tabs: Array<{ id: TabId; label: string }> = [
-  { id: "vehicle", label: "차량목록" },
+  { id: "vehicleMaker", label: "제조사" },
+  { id: "vehicleModel", label: "차량" },
+  { id: "vehicleColor", label: "칼라코드" },
   { id: "rental", label: "렌터카업체" },
   { id: "partner", label: "거래처" },
   { id: "insurer", label: "보험사" },
@@ -51,6 +91,9 @@ const tabs: Array<{ id: TabId; label: string }> = [
 ];
 
 const dailyCashTypes = ["수입", "고정비", "변동비", "내부이동"];
+
+const firstRelation = <T,>(value: T | T[] | null | undefined): T | null =>
+  Array.isArray(value) ? value[0] ?? null : value ?? null;
 
 const catalogErrorMessage = (action: string, message: string) => {
   const policyHint =
@@ -159,15 +202,23 @@ function PasswordCheck({
 }
 
 function CatalogManager({ canManage }: { canManage: boolean }) {
-  const [activeTab, setActiveTab] = useState<TabId>("vehicle");
+  const [activeTab, setActiveTab] = useState<TabId>("vehicleMaker");
   const [vehicleRows, setVehicleRows] = useState<VehicleCatalogRow[]>([]);
+  const [vehicleMakerRows, setVehicleMakerRows] = useState<VehicleMakerRow[]>([]);
+  const [vehicleModelRows, setVehicleModelRows] = useState<VehicleModelRow[]>([]);
+  const [vehicleColorCodeRows, setVehicleColorCodeRows] = useState<
+    VehicleColorCodeRow[]
+  >([]);
   const [businessRows, setBusinessRows] = useState<BusinessCatalogRow[]>([]);
   const [dailyCashCategoryRows, setDailyCashCategoryRows] = useState<
     DailyCashCategoryRow[]
   >([]);
   const [maker, setMaker] = useState("");
+  const [selectedMakerId, setSelectedMakerId] = useState("");
   const [model, setModel] = useState("");
+  const [selectedModelId, setSelectedModelId] = useState("");
   const [colorCode, setColorCode] = useState("");
+  const [colorName, setColorName] = useState("");
   const [businessName, setBusinessName] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [groupName, setGroupName] = useState("보험");
@@ -177,13 +228,32 @@ function CatalogManager({ canManage }: { canManage: boolean }) {
   const [saving, setSaving] = useState(false);
 
   const loadRows = async () => {
-    const [vehicleResult, businessResult, dailyCashCategoryResult] = await Promise.all([
+    const [
+      vehicleResult,
+      vehicleMakerResult,
+      vehicleModelResult,
+      vehicleColorCodeResult,
+      businessResult,
+      dailyCashCategoryResult,
+    ] = await Promise.all([
       supabase
         .from("vehicle_catalog")
         .select("id, maker, model, color_code, is_active")
         .order("maker", { ascending: true })
         .order("model", { ascending: true })
         .order("color_code", { ascending: true }),
+      supabase
+        .from("vehicle_makers")
+        .select("id, name, is_active")
+        .order("name", { ascending: true }),
+      supabase
+        .from("vehicle_models")
+        .select("id, maker_id, name, is_active, vehicle_makers(name)")
+        .order("name", { ascending: true }),
+      supabase
+        .from("vehicle_color_codes")
+        .select("id, model_id, code, color_name, is_active, vehicle_models(name, vehicle_makers(name))")
+        .order("code", { ascending: true }),
       supabase
         .from("business_catalog")
         .select("id, item_type, name, phone_number, group_name, is_active")
@@ -201,6 +271,50 @@ function CatalogManager({ canManage }: { canManage: boolean }) {
       alert("차량목록 조회 실패: " + vehicleResult.error.message);
     } else {
       setVehicleRows((vehicleResult.data ?? []) as VehicleCatalogRow[]);
+    }
+
+    if (vehicleMakerResult.error) {
+      setVehicleMakerRows([]);
+    } else {
+      setVehicleMakerRows((vehicleMakerResult.data ?? []) as VehicleMakerRow[]);
+    }
+
+    if (vehicleModelResult.error) {
+      setVehicleModelRows([]);
+    } else {
+      setVehicleModelRows(
+        ((vehicleModelResult.data ?? []) as any[]).map((row) => ({
+          id: row.id,
+          maker_id: row.maker_id,
+          name: row.name,
+          is_active: row.is_active,
+          vehicle_makers: firstRelation(row.vehicle_makers),
+        }))
+      );
+    }
+
+    if (vehicleColorCodeResult.error) {
+      setVehicleColorCodeRows([]);
+    } else {
+      setVehicleColorCodeRows(
+        ((vehicleColorCodeResult.data ?? []) as any[]).map((row) => {
+          const model = firstRelation(row.vehicle_models) as any;
+
+          return {
+            id: row.id,
+            model_id: row.model_id,
+            code: row.code,
+            color_name: row.color_name,
+            is_active: row.is_active,
+            vehicle_models: model
+              ? {
+                  name: model.name,
+                  vehicle_makers: firstRelation(model.vehicle_makers),
+                }
+              : null,
+          };
+        })
+      );
     }
 
     if (businessResult.error) {
@@ -241,6 +355,46 @@ function CatalogManager({ canManage }: { canManage: boolean }) {
     );
   }, [searchText, vehicleRows]);
 
+  const visibleVehicleMakerRows = useMemo(() => {
+    const keyword = searchText.trim().toLowerCase();
+
+    if (!keyword) return vehicleMakerRows;
+
+    return vehicleMakerRows.filter((row) =>
+      row.name.toLowerCase().includes(keyword)
+    );
+  }, [searchText, vehicleMakerRows]);
+
+  const visibleVehicleModelRows = useMemo(() => {
+    const keyword = searchText.trim().toLowerCase();
+
+    return vehicleModelRows.filter((row) => {
+      const makerName = row.vehicle_makers?.name ?? "";
+      const text = [makerName, row.name].join(" ").toLowerCase();
+
+      return !keyword || text.includes(keyword);
+    });
+  }, [searchText, vehicleModelRows]);
+
+  const visibleVehicleColorCodeRows = useMemo(() => {
+    const keyword = searchText.trim().toLowerCase();
+
+    return vehicleColorCodeRows.filter((row) => {
+      const makerName = row.vehicle_models?.vehicle_makers?.name ?? "";
+      const modelName = row.vehicle_models?.name ?? "";
+      const text = [makerName, modelName, row.code, row.color_name ?? ""]
+        .join(" ")
+        .toLowerCase();
+
+      return !keyword || text.includes(keyword);
+    });
+  }, [searchText, vehicleColorCodeRows]);
+
+  const activeVehicleMakers = vehicleMakerRows.filter((row) => row.is_active);
+  const modelsForSelectedMaker = vehicleModelRows.filter(
+    (row) => !selectedMakerId || String(row.maker_id) === selectedMakerId
+  );
+
   const visibleBusinessRows = useMemo(() => {
     const keyword = searchText.trim().toLowerCase();
     const typeRows = businessRows.filter((row) => row.item_type === activeTab);
@@ -267,8 +421,11 @@ function CatalogManager({ canManage }: { canManage: boolean }) {
 
   const resetForm = () => {
     setMaker("");
+    setSelectedMakerId("");
     setModel("");
+    setSelectedModelId("");
     setColorCode("");
+    setColorName("");
     setBusinessName("");
     setPhoneNumber("");
     setGroupName(activeTab === "insurer" ? "보험" : "");
@@ -276,29 +433,83 @@ function CatalogManager({ canManage }: { canManage: boolean }) {
     setDailyCashCategoryName("");
   };
 
-  const handleAddVehicle = async () => {
+  const handleAddVehicleMaker = async () => {
     const nextMaker = maker.trim();
-    const nextModel = model.trim();
-    const nextColorCode = colorCode.trim().toUpperCase();
 
-    if (!nextMaker || !nextModel) {
-      alert("제조사와 차량명을 입력하세요.");
+    if (!nextMaker) {
+      alert("제조사를 입력하세요.");
       return;
     }
 
     setSaving(true);
 
-    const { error } = await supabase.from("vehicle_catalog").insert({
-      maker: nextMaker,
-      model: nextModel,
-      color_code: nextColorCode || null,
+    const { error } = await supabase.from("vehicle_makers").insert({
+      name: nextMaker,
       is_active: true,
     });
 
     setSaving(false);
 
     if (error) {
-      alert(catalogErrorMessage("차량목록 추가 실패", error.message));
+      alert(catalogErrorMessage("제조사 추가 실패", error.message));
+      return;
+    }
+
+    resetForm();
+    void loadRows();
+  };
+
+  const handleAddVehicleModel = async () => {
+    const makerId = Number(selectedMakerId);
+    const nextModel = model.trim();
+
+    if (!makerId || !nextModel) {
+      alert("제조사와 차량명을 선택/입력하세요.");
+      return;
+    }
+
+    setSaving(true);
+
+    const { error } = await supabase.from("vehicle_models").insert({
+      maker_id: makerId,
+      name: nextModel,
+      is_active: true,
+    });
+
+    setSaving(false);
+
+    if (error) {
+      alert(catalogErrorMessage("차량 추가 실패", error.message));
+      return;
+    }
+
+    resetForm();
+    void loadRows();
+  };
+
+  const handleAddVehicleColorCode = async () => {
+    const modelId = Number(selectedModelId);
+    const nextColorCode = colorCode.trim().toUpperCase();
+    const nextColorName = colorName.trim();
+
+    if (!modelId || !nextColorCode) {
+      alert("차량과 칼라코드를 선택/입력하세요.");
+      return;
+    }
+
+    setSaving(true);
+
+    const { error } = await supabase.from("vehicle_color_codes").insert({
+      model_id: modelId,
+      code: nextColorCode,
+      color_name: nextColorName || null,
+      is_active: true,
+    });
+
+    setSaving(false);
+
+    if (error) {
+      alert(catalogErrorMessage("칼라코드 추가 실패", error.message));
       return;
     }
 
@@ -380,6 +591,48 @@ function CatalogManager({ canManage }: { canManage: boolean }) {
     void loadRows();
   };
 
+  const toggleVehicleMakerActive = async (row: VehicleMakerRow) => {
+    const { error } = await supabase
+      .from("vehicle_makers")
+      .update({ is_active: !row.is_active })
+      .eq("id", row.id);
+
+    if (error) {
+      alert(catalogErrorMessage("제조사 상태 변경 실패", error.message));
+      return;
+    }
+
+    void loadRows();
+  };
+
+  const toggleVehicleModelActive = async (row: VehicleModelRow) => {
+    const { error } = await supabase
+      .from("vehicle_models")
+      .update({ is_active: !row.is_active })
+      .eq("id", row.id);
+
+    if (error) {
+      alert(catalogErrorMessage("차량 상태 변경 실패", error.message));
+      return;
+    }
+
+    void loadRows();
+  };
+
+  const toggleVehicleColorCodeActive = async (row: VehicleColorCodeRow) => {
+    const { error } = await supabase
+      .from("vehicle_color_codes")
+      .update({ is_active: !row.is_active })
+      .eq("id", row.id);
+
+    if (error) {
+      alert(catalogErrorMessage("칼라코드 상태 변경 실패", error.message));
+      return;
+    }
+
+    void loadRows();
+  };
+
   const toggleBusinessActive = async (row: BusinessCatalogRow) => {
     const { error } = await supabase
       .from("business_catalog")
@@ -423,6 +676,54 @@ function CatalogManager({ canManage }: { canManage: boolean }) {
     void loadRows();
   };
 
+  const deleteVehicleMaker = async (row: VehicleMakerRow) => {
+    if (!confirm(`${row.name} 제조사를 삭제할까요? 연결된 차량과 칼라코드도 함께 삭제됩니다.`)) {
+      return;
+    }
+
+    const { error } = await supabase.from("vehicle_makers").delete().eq("id", row.id);
+
+    if (error) {
+      alert(catalogErrorMessage("제조사 삭제 실패", error.message));
+      return;
+    }
+
+    void loadRows();
+  };
+
+  const deleteVehicleModel = async (row: VehicleModelRow) => {
+    if (!confirm(`${row.vehicle_makers?.name ?? ""} ${row.name} 차량을 삭제할까요? 연결된 칼라코드도 함께 삭제됩니다.`)) {
+      return;
+    }
+
+    const { error } = await supabase.from("vehicle_models").delete().eq("id", row.id);
+
+    if (error) {
+      alert(catalogErrorMessage("차량 삭제 실패", error.message));
+      return;
+    }
+
+    void loadRows();
+  };
+
+  const deleteVehicleColorCode = async (row: VehicleColorCodeRow) => {
+    if (!confirm(`${row.vehicle_models?.name ?? ""} ${row.code} 칼라코드를 삭제할까요?`)) {
+      return;
+    }
+
+    const { error } = await supabase
+      .from("vehicle_color_codes")
+      .delete()
+      .eq("id", row.id);
+
+    if (error) {
+      alert(catalogErrorMessage("칼라코드 삭제 실패", error.message));
+      return;
+    }
+
+    void loadRows();
+  };
+
   const deleteBusiness = async (row: BusinessCatalogRow) => {
     if (!confirm(`${row.name} 항목을 삭제할까요?`)) {
       return;
@@ -457,7 +758,13 @@ function CatalogManager({ canManage }: { canManage: boolean }) {
   };
 
   const currentCount =
-    activeTab === "vehicle"
+    activeTab === "vehicleMaker"
+      ? visibleVehicleMakerRows.length
+      : activeTab === "vehicleModel"
+        ? visibleVehicleModelRows.length
+        : activeTab === "vehicleColor"
+          ? visibleVehicleColorCodeRows.length
+          : activeTab === "vehicle"
       ? visibleVehicleRows.length
       : activeTab === "dailyCashCategory"
         ? visibleDailyCashCategoryRows.length
@@ -495,7 +802,7 @@ function CatalogManager({ canManage }: { canManage: boolean }) {
 
       {canManage ? (
       <section className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-        {activeTab === "vehicle" ? (
+        {activeTab === "vehicleMaker" ? (
           <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
             <input
               className={inputClass}
@@ -503,27 +810,104 @@ function CatalogManager({ canManage }: { canManage: boolean }) {
               value={maker}
               onChange={(event) => setMaker(event.target.value)}
             />
+            <div />
+            <div />
+            <button
+              type="button"
+              onClick={() => {
+                void handleAddVehicleMaker();
+              }}
+              disabled={saving}
+              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:bg-slate-400"
+            >
+              {saving ? "추가 중..." : "제조사추가"}
+            </button>
+          </div>
+        ) : activeTab === "vehicleModel" ? (
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+            <select
+              className={inputClass}
+              value={selectedMakerId}
+              onChange={(event) => setSelectedMakerId(event.target.value)}
+            >
+              <option value="">제조사 선택</option>
+              {activeVehicleMakers.map((row) => (
+                <option key={row.id} value={row.id}>
+                  {row.name}
+                </option>
+              ))}
+            </select>
             <input
               className={inputClass}
               placeholder="차량명 예: 그랜저"
               value={model}
               onChange={(event) => setModel(event.target.value)}
             />
+            <div />
+            <button
+              type="button"
+              onClick={() => {
+                void handleAddVehicleModel();
+              }}
+              disabled={saving}
+              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:bg-slate-400"
+            >
+              {saving ? "추가 중..." : "차량추가"}
+            </button>
+          </div>
+        ) : activeTab === "vehicleColor" ? (
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-5">
+            <select
+              className={inputClass}
+              value={selectedMakerId}
+              onChange={(event) => {
+                setSelectedMakerId(event.target.value);
+                setSelectedModelId("");
+              }}
+            >
+              <option value="">제조사 선택</option>
+              {activeVehicleMakers.map((row) => (
+                <option key={row.id} value={row.id}>
+                  {row.name}
+                </option>
+              ))}
+            </select>
+            <select
+              className={inputClass}
+              value={selectedModelId}
+              onChange={(event) => setSelectedModelId(event.target.value)}
+              disabled={!selectedMakerId}
+            >
+              <option value="">
+                {selectedMakerId ? "차량 선택" : "제조사 먼저 선택"}
+              </option>
+              {modelsForSelectedMaker.map((row) => (
+                <option key={row.id} value={row.id}>
+                  {row.name}
+                </option>
+              ))}
+            </select>
             <input
               className={inputClass}
               placeholder="칼라코드 예: A2B"
               value={colorCode}
               onChange={(event) => setColorCode(event.target.value)}
             />
+            <input
+              className={inputClass}
+              placeholder="색상명"
+              value={colorName}
+              onChange={(event) => setColorName(event.target.value)}
+            />
             <button
               type="button"
               onClick={() => {
-                void handleAddVehicle();
+                void handleAddVehicleColorCode();
               }}
               disabled={saving}
               className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:bg-slate-400"
             >
-              {saving ? "추가 중..." : "목록추가"}
+              {saving ? "추가 중..." : "칼라코드추가"}
             </button>
           </div>
         ) : activeTab === "dailyCashCategory" ? (
@@ -634,7 +1018,28 @@ function CatalogManager({ canManage }: { canManage: boolean }) {
         />
       </div>
 
-      {activeTab === "vehicle" ? (
+      {activeTab === "vehicleMaker" ? (
+        <VehicleMakerTable
+          rows={visibleVehicleMakerRows}
+          canManage={canManage}
+          onToggle={toggleVehicleMakerActive}
+          onDelete={deleteVehicleMaker}
+        />
+      ) : activeTab === "vehicleModel" ? (
+        <VehicleModelTable
+          rows={visibleVehicleModelRows}
+          canManage={canManage}
+          onToggle={toggleVehicleModelActive}
+          onDelete={deleteVehicleModel}
+        />
+      ) : activeTab === "vehicleColor" ? (
+        <VehicleColorCodeTable
+          rows={visibleVehicleColorCodeRows}
+          canManage={canManage}
+          onToggle={toggleVehicleColorCodeActive}
+          onDelete={deleteVehicleColorCode}
+        />
+      ) : activeTab === "vehicle" ? (
         <VehicleTable
           rows={visibleVehicleRows}
           canManage={canManage}
@@ -673,6 +1078,169 @@ function StatusButton({ active, onClick }: { active: boolean; onClick?: () => vo
       } ${onClick ? "" : "cursor-default"}`}
     >
       {active ? "사용중" : "중지"}
+    </button>
+  );
+}
+
+function VehicleMakerTable({
+  rows,
+  canManage,
+  onToggle,
+  onDelete,
+}: {
+  rows: VehicleMakerRow[];
+  canManage: boolean;
+  onToggle: (row: VehicleMakerRow) => Promise<void>;
+  onDelete: (row: VehicleMakerRow) => Promise<void>;
+}) {
+  return (
+    <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[520px] border-collapse">
+          <thead className="bg-slate-100">
+            <tr>
+              <th className="border-b border-slate-200 px-3 py-2 text-left text-sm font-semibold">제조사</th>
+              <th className="border-b border-slate-200 px-3 py-2 text-center text-sm font-semibold">사용</th>
+              <th className="border-b border-slate-200 px-3 py-2 text-center text-sm font-semibold">관리</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.id} className="hover:bg-slate-50">
+                <td className="border-b border-slate-100 px-3 py-2 text-sm font-semibold">{row.name}</td>
+                <td className="border-b border-slate-100 px-3 py-2 text-center">
+                  <StatusButton
+                    active={row.is_active}
+                    onClick={canManage ? () => void onToggle(row) : undefined}
+                  />
+                </td>
+                <td className="border-b border-slate-100 px-3 py-2 text-center">
+                  <DeleteButton disabled={!canManage} onClick={() => void onDelete(row)} />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function VehicleModelTable({
+  rows,
+  canManage,
+  onToggle,
+  onDelete,
+}: {
+  rows: VehicleModelRow[];
+  canManage: boolean;
+  onToggle: (row: VehicleModelRow) => Promise<void>;
+  onDelete: (row: VehicleModelRow) => Promise<void>;
+}) {
+  return (
+    <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[640px] border-collapse">
+          <thead className="bg-slate-100">
+            <tr>
+              <th className="border-b border-slate-200 px-3 py-2 text-left text-sm font-semibold">제조사</th>
+              <th className="border-b border-slate-200 px-3 py-2 text-left text-sm font-semibold">차량명</th>
+              <th className="border-b border-slate-200 px-3 py-2 text-center text-sm font-semibold">사용</th>
+              <th className="border-b border-slate-200 px-3 py-2 text-center text-sm font-semibold">관리</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.id} className="hover:bg-slate-50">
+                <td className="border-b border-slate-100 px-3 py-2 text-sm">{row.vehicle_makers?.name ?? "-"}</td>
+                <td className="border-b border-slate-100 px-3 py-2 text-sm font-semibold">{row.name}</td>
+                <td className="border-b border-slate-100 px-3 py-2 text-center">
+                  <StatusButton
+                    active={row.is_active}
+                    onClick={canManage ? () => void onToggle(row) : undefined}
+                  />
+                </td>
+                <td className="border-b border-slate-100 px-3 py-2 text-center">
+                  <DeleteButton disabled={!canManage} onClick={() => void onDelete(row)} />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function VehicleColorCodeTable({
+  rows,
+  canManage,
+  onToggle,
+  onDelete,
+}: {
+  rows: VehicleColorCodeRow[];
+  canManage: boolean;
+  onToggle: (row: VehicleColorCodeRow) => Promise<void>;
+  onDelete: (row: VehicleColorCodeRow) => Promise<void>;
+}) {
+  return (
+    <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[760px] border-collapse">
+          <thead className="bg-slate-100">
+            <tr>
+              <th className="border-b border-slate-200 px-3 py-2 text-left text-sm font-semibold">제조사</th>
+              <th className="border-b border-slate-200 px-3 py-2 text-left text-sm font-semibold">차량명</th>
+              <th className="border-b border-slate-200 px-3 py-2 text-left text-sm font-semibold">칼라코드</th>
+              <th className="border-b border-slate-200 px-3 py-2 text-left text-sm font-semibold">색상명</th>
+              <th className="border-b border-slate-200 px-3 py-2 text-center text-sm font-semibold">사용</th>
+              <th className="border-b border-slate-200 px-3 py-2 text-center text-sm font-semibold">관리</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.id} className="hover:bg-slate-50">
+                <td className="border-b border-slate-100 px-3 py-2 text-sm">
+                  {row.vehicle_models?.vehicle_makers?.name ?? "-"}
+                </td>
+                <td className="border-b border-slate-100 px-3 py-2 text-sm">
+                  {row.vehicle_models?.name ?? "-"}
+                </td>
+                <td className="border-b border-slate-100 px-3 py-2 text-sm font-semibold">{row.code}</td>
+                <td className="border-b border-slate-100 px-3 py-2 text-sm">{row.color_name || "-"}</td>
+                <td className="border-b border-slate-100 px-3 py-2 text-center">
+                  <StatusButton
+                    active={row.is_active}
+                    onClick={canManage ? () => void onToggle(row) : undefined}
+                  />
+                </td>
+                <td className="border-b border-slate-100 px-3 py-2 text-center">
+                  <DeleteButton disabled={!canManage} onClick={() => void onDelete(row)} />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function DeleteButton({
+  disabled,
+  onClick,
+}: {
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="rounded-lg border border-red-300 px-3 py-1 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:border-slate-200 disabled:text-slate-400 disabled:hover:bg-transparent"
+    >
+      삭제
     </button>
   );
 }

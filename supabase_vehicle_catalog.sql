@@ -97,6 +97,86 @@ values
   ('제네시스', 'GV80', 'NCM')
 on conflict do nothing;
 
+create table if not exists vehicle_makers (
+  id bigserial primary key,
+  name text not null,
+  is_active boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create unique index if not exists vehicle_makers_unique
+on vehicle_makers (lower(trim(name)));
+
+create table if not exists vehicle_models (
+  id bigserial primary key,
+  maker_id bigint not null references vehicle_makers(id) on delete cascade,
+  name text not null,
+  is_active boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create unique index if not exists vehicle_models_unique
+on vehicle_models (maker_id, lower(trim(name)));
+
+create table if not exists vehicle_color_codes (
+  id bigserial primary key,
+  model_id bigint not null references vehicle_models(id) on delete cascade,
+  code text not null,
+  color_name text,
+  is_active boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create unique index if not exists vehicle_color_codes_unique
+on vehicle_color_codes (model_id, lower(trim(code)));
+
+drop trigger if exists vehicle_makers_set_updated_at on vehicle_makers;
+
+create trigger vehicle_makers_set_updated_at
+before update on vehicle_makers
+for each row
+execute function set_vehicle_catalog_updated_at();
+
+drop trigger if exists vehicle_models_set_updated_at on vehicle_models;
+
+create trigger vehicle_models_set_updated_at
+before update on vehicle_models
+for each row
+execute function set_vehicle_catalog_updated_at();
+
+drop trigger if exists vehicle_color_codes_set_updated_at on vehicle_color_codes;
+
+create trigger vehicle_color_codes_set_updated_at
+before update on vehicle_color_codes
+for each row
+execute function set_vehicle_catalog_updated_at();
+
+insert into vehicle_makers (name)
+select distinct trim(maker)
+from vehicle_catalog
+where trim(maker) <> ''
+on conflict do nothing;
+
+insert into vehicle_models (maker_id, name)
+select distinct makers.id, trim(catalog.model)
+from vehicle_catalog catalog
+join vehicle_makers makers on lower(trim(makers.name)) = lower(trim(catalog.maker))
+where trim(catalog.model) <> ''
+on conflict do nothing;
+
+insert into vehicle_color_codes (model_id, code)
+select distinct models.id, upper(trim(catalog.color_code))
+from vehicle_catalog catalog
+join vehicle_makers makers on lower(trim(makers.name)) = lower(trim(catalog.maker))
+join vehicle_models models
+  on models.maker_id = makers.id
+  and lower(trim(models.name)) = lower(trim(catalog.model))
+where trim(coalesce(catalog.color_code, '')) <> ''
+on conflict do nothing;
+
 create table if not exists business_catalog (
   id bigserial primary key,
   item_type text not null check (item_type in ('rental', 'partner', 'insurer')),
