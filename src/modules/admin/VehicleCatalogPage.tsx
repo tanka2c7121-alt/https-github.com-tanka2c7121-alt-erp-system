@@ -368,27 +368,49 @@ function CatalogManager({ canManage }: { canManage: boolean }) {
   const visibleVehicleModelRows = useMemo(() => {
     const keyword = searchText.trim().toLowerCase();
 
-    return vehicleModelRows.filter((row) => {
-      const makerName = row.vehicle_makers?.name ?? "";
-      const text = [makerName, row.name].join(" ").toLowerCase();
+    return vehicleModelRows
+      .filter((row) => !selectedMakerId || String(row.maker_id) === selectedMakerId)
+      .filter((row) => {
+        const makerName = row.vehicle_makers?.name ?? "";
+        const text = [makerName, row.name].join(" ").toLowerCase();
 
-      return !keyword || text.includes(keyword);
-    });
-  }, [searchText, vehicleModelRows]);
+        return !keyword || text.includes(keyword);
+      });
+  }, [searchText, selectedMakerId, vehicleModelRows]);
 
   const visibleVehicleColorCodeRows = useMemo(() => {
     const keyword = searchText.trim().toLowerCase();
 
-    return vehicleColorCodeRows.filter((row) => {
-      const makerName = row.vehicle_models?.vehicle_makers?.name ?? "";
-      const modelName = row.vehicle_models?.name ?? "";
-      const text = [makerName, modelName, row.code, row.color_name ?? ""]
-        .join(" ")
-        .toLowerCase();
+    return vehicleColorCodeRows
+      .filter((row) => {
+        if (!selectedModelId) return true;
+        return String(row.model_id) === selectedModelId;
+      })
+      .filter((row) => {
+        if (!selectedMakerId) return true;
 
-      return !keyword || text.includes(keyword);
-    });
-  }, [searchText, vehicleColorCodeRows]);
+        const model = vehicleModelRows.find(
+          (modelRow) => modelRow.id === row.model_id
+        );
+
+        return model ? String(model.maker_id) === selectedMakerId : true;
+      })
+      .filter((row) => {
+        const makerName = row.vehicle_models?.vehicle_makers?.name ?? "";
+        const modelName = row.vehicle_models?.name ?? "";
+        const text = [makerName, modelName, row.code, row.color_name ?? ""]
+          .join(" ")
+          .toLowerCase();
+
+        return !keyword || text.includes(keyword);
+      });
+  }, [
+    searchText,
+    selectedMakerId,
+    selectedModelId,
+    vehicleColorCodeRows,
+    vehicleModelRows,
+  ]);
 
   const activeVehicleMakers = vehicleMakerRows.filter((row) => row.is_active);
   const modelsForSelectedMaker = vehicleModelRows.filter(
