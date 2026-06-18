@@ -6,7 +6,7 @@ import { localDateText } from "../../lib/date";
 import { fetchAllRows } from "../../lib/fetchAllRows";
 
 
-type RiskView = "unclaimed" | "pending" | "longPending" | "lowClaimRate";
+type RiskView = "unclaimed" | "pending" | "longPending" | "lowPaymentRate";
 
 type ClaimDetail = "보험" | "캐피탈" | "일반" | "바디케어";
 
@@ -46,7 +46,7 @@ const normalizeStatus = (value: unknown) => {
   const text = normalizeText(value);
 
   if (text.includes("종결")) return "종결";
-  if (text.includes("완결")) return "완결";
+  if (text.includes("완결") || text.includes("완료")) return "완결";
   if (text.includes("미결")) return "미결";
   return text || "미결";
 };
@@ -298,7 +298,9 @@ export default function PendingSettlementPage({
 
   const riskRows = settlementRows
     .flatMap((row): RiskRow[] => {
-      if (normalizeStatus(row.progress_status) !== "미결") return [];
+      const progressStatus = normalizeStatus(row.progress_status);
+
+      if (progressStatus !== "미결" && progressStatus !== "완결") return [];
 
       const workName = normalizeText(row.work_name);
       const workPayments = paymentRowsByWork.get(workName) ?? [];
@@ -383,7 +385,10 @@ export default function PendingSettlementPage({
       return assignPaymentsByDetail(targets, workPayments)
         .filter((target) => target.workName)
         .map((target) => {
-          const status = getClaimStatus(target.claimDate, target.claimAmount);
+          const status =
+            progressStatus === "완결"
+              ? "완결"
+              : getClaimStatus(target.claimDate, target.claimAmount);
           const elapsedDays = dateDiffDays(target.claimDate);
           const claimRate =
             target.claimAmount > 0
@@ -418,8 +423,9 @@ export default function PendingSettlementPage({
   const unclaimedRows = riskRows.filter((row) => row.status === "미청구");
   const pendingRows = riskRows.filter((row) => row.status === "미결");
   const longPendingRows = riskRows.filter((row) => row.status === "장기미결");
-  const lowClaimRateRows = riskRows.filter(
+  const lowPaymentRateRows = riskRows.filter(
     (row) =>
+      row.status === "완결" &&
       row.claimAmount > 0 &&
       row.paidAmount > 0 &&
       (row.claimRate ?? 0) < 95
@@ -432,7 +438,7 @@ export default function PendingSettlementPage({
       ? pendingRows
       : activeRiskView === "longPending"
         ? longPendingRows
-        : lowClaimRateRows;
+        : lowPaymentRateRows;
 
   const activeTitle =
     activeRiskView === "unclaimed"
@@ -441,14 +447,14 @@ export default function PendingSettlementPage({
       ? "미결건"
       : activeRiskView === "longPending"
         ? "장기미결건"
-        : "청구율 95% 미만";
+        : "결제율 95% 미만";
 
   return (
     <div className="space-y-5 text-slate-900">
       <div>
         <h3 className="text-2xl font-bold">미결관리</h3>
         <p className="text-sm text-slate-600">
-          미청구, 미결, 장기미결, 청구율 95% 미만 차량을 따로 확인합니다.
+          미청구, 미결, 장기미결, 결제율 95% 미만 차량을 따로 확인합니다.
         </p>
         <p className="mt-1 text-xs font-semibold text-slate-500">
           원본: 차량정산 {sourceCounts.settlements.toLocaleString()}건 / 입금{" "}
@@ -487,12 +493,12 @@ export default function PendingSettlementPage({
           onClick={() => setActiveRiskView("longPending")}
         />
         <RiskCard
-          title="청구율 95% 미만"
-          count={lowClaimRateRows.length}
-          amount={lowClaimRateRows.reduce((sum, row) => sum + row.shortageAmount, 0)}
+          title="결제율 95% 미만"
+          count={lowPaymentRateRows.length}
+          amount={lowPaymentRateRows.reduce((sum, row) => sum + row.shortageAmount, 0)}
           tone="blue"
-          active={activeRiskView === "lowClaimRate"}
-          onClick={() => setActiveRiskView("lowClaimRate")}
+          active={activeRiskView === "lowPaymentRate"}
+          onClick={() => setActiveRiskView("lowPaymentRate")}
         />
       </section>
 
@@ -668,7 +674,9 @@ function RiskTable({
                       ? "shrink-0 rounded-full bg-slate-100 px-2 py-1 text-[11px] font-bold text-slate-700"
                       : row.status === "장기미결"
                         ? "shrink-0 rounded-full bg-red-100 px-2 py-1 text-[11px] font-bold text-red-700"
-                        : "shrink-0 rounded-full bg-orange-100 px-2 py-1 text-[11px] font-bold text-orange-700"
+                        : row.status === "완결"
+                          ? "shrink-0 rounded-full bg-green-100 px-2 py-1 text-[11px] font-bold text-green-700"
+                          : "shrink-0 rounded-full bg-orange-100 px-2 py-1 text-[11px] font-bold text-orange-700"
                   }
                 >
                   {row.status}
@@ -679,7 +687,7 @@ function RiskTable({
                 <InfoPill label="청구" value={`₩ ${row.claimAmount.toLocaleString()}`} />
                 <InfoPill label="입금" value={`₩ ${row.paidAmount.toLocaleString()}`} />
                 <InfoPill
-                  label="청구율"
+                  label="결제율"
                   value={row.claimRate === null ? "-" : `${row.claimRate.toFixed(1)}%`}
                 />
                 <InfoPill
@@ -722,7 +730,7 @@ function RiskTable({
               입금금액
             </SortableHeader>
             <SortableHeader field="claimRate" sortField={sortField} sortOrder={sortOrder} onSort={handleSort} align="right">
-              청구율
+              결제율
             </SortableHeader>
             <SortableHeader field="shortageAmount" sortField={sortField} sortOrder={sortOrder} onSort={handleSort} align="right">
               부족금액
@@ -737,7 +745,7 @@ function RiskTable({
             <th className="border-b border-slate-200 px-3 py-2 text-right">소요일수</th>
             <th className="border-b border-slate-200 px-3 py-2 text-right">청구금액</th>
             <th className="border-b border-slate-200 px-3 py-2 text-right">입금금액</th>
-            <th className="border-b border-slate-200 px-3 py-2 text-right">청구율</th>
+            <th className="border-b border-slate-200 px-3 py-2 text-right">결제율</th>
             <th className="border-b border-slate-200 px-3 py-2 text-right">금액</th>
           </tr>
         </thead>
@@ -773,7 +781,9 @@ function RiskTable({
                         ? "rounded-full bg-slate-100 px-2 py-1 text-xs font-bold text-slate-700"
                         : row.status === "장기미결"
                           ? "rounded-full bg-red-100 px-2 py-1 text-xs font-bold text-red-700"
-                          : "rounded-full bg-orange-100 px-2 py-1 text-xs font-bold text-orange-700"
+                          : row.status === "완결"
+                            ? "rounded-full bg-green-100 px-2 py-1 text-xs font-bold text-green-700"
+                            : "rounded-full bg-orange-100 px-2 py-1 text-xs font-bold text-orange-700"
                     }
                   >
                     {row.status}
