@@ -31,6 +31,8 @@ type SettlementRow = {
   insurance_company: string | null;
   partner_company?: string | null;
   progress_status: string | null;
+  completed_at?: string | null;
+  completed_by_name?: string | null;
   claim_amount: number | null;
   paid_amount?: number;
   total_amount: number | null;
@@ -58,6 +60,7 @@ type SortField =
   | "coverage_type"
   | "insurance_company"
   | "partner_company"
+  | "completed_at"
   | "claim_amount"
   | "paid_amount"
   | "total_amount"
@@ -107,6 +110,8 @@ export default function ClosedSettlementManagementPage({
           "category",
           "insurance_company",
           "progress_status",
+          "completed_at",
+          "completed_by_name",
           "claim_amount",
           "total_amount",
         ].join(", "),
@@ -208,6 +213,8 @@ export default function ClosedSettlementManagementPage({
           row.coverage_type,
           row.insurance_company,
           row.partner_company,
+          row.completed_at,
+          row.completed_by_name,
           row.progress_status,
         ]
           .join(" ")
@@ -389,6 +396,9 @@ export default function ClosedSettlementManagementPage({
                 <SortableHeader field="partner_company" sortField={sortField} sortOrder={sortOrder} onSort={handleSort} align="center">
                   거래처
                 </SortableHeader>
+                <SortableHeader field="completed_at" sortField={sortField} sortOrder={sortOrder} onSort={handleSort} align="center">
+                  완결일시
+                </SortableHeader>
                 <SortableHeader field="claim_amount" sortField={sortField} sortOrder={sortOrder} onSort={handleSort} align="right">
                   청구금액
                 </SortableHeader>
@@ -407,13 +417,13 @@ export default function ClosedSettlementManagementPage({
             <tbody>
               {loading ? (
                 <tr>
-                  <td className="border border-slate-200 px-3 py-8 text-center text-slate-500" colSpan={12}>
+                  <td className="border border-slate-200 px-3 py-8 text-center text-slate-500" colSpan={13}>
                     조회 중입니다.
                   </td>
                 </tr>
               ) : sortedRows.length === 0 ? (
                 <tr>
-                  <td className="border border-slate-200 px-3 py-8 text-center text-slate-500" colSpan={12}>
+                  <td className="border border-slate-200 px-3 py-8 text-center text-slate-500" colSpan={13}>
                     표시할 완결 정산이 없습니다.
                   </td>
                 </tr>
@@ -430,6 +440,7 @@ export default function ClosedSettlementManagementPage({
                       <td className="border border-slate-200 px-3 py-2 text-center">{row.coverage_type ?? ""}</td>
                       <td className="border border-slate-200 px-3 py-2 text-center">{row.insurance_company ?? ""}</td>
                       <td className="border border-slate-200 px-3 py-2 text-center">{row.partner_company ?? ""}</td>
+                      <td className="border border-slate-200 px-3 py-2 text-center">{row.completed_at ?? "-"}</td>
                       <td className="border border-slate-200 px-3 py-2 text-right">{formatWon(row.claim_amount)}</td>
                       <td className="border border-slate-200 px-3 py-2 text-right text-blue-600">{formatWon(row.paid_amount)}</td>
                       <td className="border border-slate-200 px-3 py-2 text-right">{formatWon(row.total_amount)}</td>
@@ -481,6 +492,9 @@ export default function ClosedSettlementManagementPage({
                 </div>
                 <div className="mt-2 text-sm text-slate-600">
                   {row.category ?? "-"} / {row.coverage_type ?? "-"} / {row.insurance_company ?? ""} / {row.partner_company ?? "-"} / 청구 {formatWon(row.claim_amount)}
+                </div>
+                <div className="mt-1 text-sm text-slate-600">
+                  완결일시 {row.completed_at ?? "-"}
                 </div>
                 <div className="mt-1 text-sm font-semibold text-slate-700">
                   입금 {formatWon(row.paid_amount)} / 결제율{" "}
