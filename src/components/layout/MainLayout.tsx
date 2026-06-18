@@ -1001,14 +1001,16 @@ function getVisibleMenuItems(
   department?: string | null
 ): MenuItem[] {
   return items.filter((item) => {
-    if (item.roles && !item.roles.includes(role)) {
-      return false;
+    const roleAllowed = !item.roles || item.roles.includes(role);
+    const departmentAllowed =
+      !item.departments ||
+      role === "ADMIN" ||
+      item.departments.includes(department ?? "");
+
+    if (item.roles && item.departments) {
+      return roleAllowed || departmentAllowed;
     }
 
-    if (item.departments && role !== "ADMIN" && !item.departments.includes(department ?? "")) {
-      return false;
-    }
-
-    return true;
+    return roleAllowed && departmentAllowed;
   });
 }

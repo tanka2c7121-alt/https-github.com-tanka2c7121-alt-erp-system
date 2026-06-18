@@ -97,6 +97,7 @@ export const menuData: MenuItem[] = [
     id: "factory-settlement-pending",
     title: "미결관리",
     roles: ["ADMIN", "CHIEF"],
+    departments: ["관리부"],
     children: [
       { id: "factory-settlement-pending-insurance", title: "청구처별 미결 리스트" },
     ],

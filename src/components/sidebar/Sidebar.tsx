@@ -33,17 +33,23 @@ export default function Sidebar({
     }));
   };
 
+  const canViewMenu = (item: MenuItem) => {
+    const roleAllowed = !item.roles || item.roles.includes(userRole);
+    const departmentAllowed =
+      !item.departments ||
+      isAdmin ||
+      item.departments.includes(userDepartment ?? "");
+
+    if (item.roles && item.departments) {
+      return roleAllowed || departmentAllowed;
+    }
+
+    return roleAllowed && departmentAllowed;
+  };
+
   const getVisibleExpandableMenuIds = (items: MenuItem[]): string[] => {
     return items.flatMap((item) => {
-      if (item.roles && !item.roles.includes(userRole)) {
-        return [];
-      }
-
-      if (
-        item.departments &&
-        !isAdmin &&
-        !item.departments.includes(userDepartment ?? "")
-      ) {
+      if (!canViewMenu(item)) {
         return [];
       }
 
@@ -66,15 +72,7 @@ export default function Sidebar({
 
   const renderMenu = (items: MenuItem[], depth = 0) => {
     return items.map((item) => {
-      if (item.roles && !item.roles.includes(userRole)) {
-        return null;
-      }
-
-      if (
-        item.departments &&
-        !isAdmin &&
-        !item.departments.includes(userDepartment ?? "")
-      ) {
+      if (!canViewMenu(item)) {
         return null;
       }
 
