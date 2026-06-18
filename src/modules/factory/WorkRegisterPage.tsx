@@ -1762,9 +1762,14 @@ const activeRentalCompanies =
 
 const activePartnerCompanies =
   businessCatalog.filter((item) => item.item_type === "partner").length > 0
-    ? businessCatalog
-        .filter((item) => item.item_type === "partner")
-        .map((item) => item.name)
+    ? Array.from(
+        new Set(
+          businessCatalog
+            .filter((item) => item.item_type === "partner")
+            .map((item) => item.name.trim())
+            .filter(Boolean)
+        )
+      ).sort((a, b) => a.localeCompare(b, "ko"))
     : [
         "자력",
         "블루모터스",
@@ -2731,6 +2736,7 @@ function handleClearWorkRow(index: number) {
         <option>탈부착</option>
         <option>수리</option>
         <option>조정</option>
+        <option>점검</option>
       </select>
     </td>
 

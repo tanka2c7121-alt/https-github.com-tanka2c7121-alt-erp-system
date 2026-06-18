@@ -39,6 +39,11 @@ type WorkDetail = {
   work_type: string;
 };
 
+type PrintableWorkDetail = WorkDetail & {
+  repair_area: string;
+  display_text: string;
+};
+
 const firstPageDetailRows = 19;
 const nextPageDetailRows = 36;
 const emptyDetail: WorkDetail = {
@@ -47,22 +52,58 @@ const emptyDetail: WorkDetail = {
   part: "",
   work_type: "",
 };
+const emptyPrintableDetail: PrintableWorkDetail = {
+  ...emptyDetail,
+  repair_area: "",
+  display_text: "",
+};
 
-function fillDetailRows(rows: WorkDetail[], minRows: number) {
+function fillPrintableRows(rows: PrintableWorkDetail[], minRows: number) {
   return [
     ...rows,
-    ...Array.from({ length: Math.max(0, minRows - rows.length) }, () => emptyDetail),
+    ...Array.from(
+      { length: Math.max(0, minRows - rows.length) },
+      () => emptyPrintableDetail
+    ),
   ];
 }
 
-function chunkDetailRows(rows: WorkDetail[], size: number) {
-  const chunks: WorkDetail[][] = [];
+function chunkDetailRows(rows: PrintableWorkDetail[], size: number) {
+  const chunks: PrintableWorkDetail[][] = [];
 
   for (let index = 0; index < rows.length; index += size) {
     chunks.push(rows.slice(index, index + size));
   }
 
   return chunks;
+}
+
+function buildPrintableDetails(rows: WorkDetail[]): PrintableWorkDetail[] {
+  let lastSide = "";
+
+  return rows.map((row) => {
+    const side = row.side.trim();
+    const part = row.part.trim();
+    const workType = row.work_type.trim();
+    const hasContent = Boolean(part || workType);
+
+    if (side) {
+      lastSide = side;
+    }
+
+    const displaySide = side || (hasContent ? lastSide : "");
+
+    return {
+      ...row,
+      repair_area: [displaySide, part].filter(Boolean).join(" "),
+      display_text: [
+        [displaySide, part].filter(Boolean).join(" "),
+        workType,
+      ]
+        .filter(Boolean)
+        .join(" - "),
+    };
+  });
 }
 
 function formatWorkName(value: string) {
@@ -87,13 +128,22 @@ export default function WorkPrintPage({
   const [searchWorkName, setSearchWorkName] = useState(workName ?? "");
   const [order, setOrder] = useState<WorkOrder | null>(null);
   const [details, setDetails] = useState<WorkDetail[]>([]);
+  const printableDetails = useMemo(() => buildPrintableDetails(details), [details]);
   const firstPageDetails = useMemo(
-    () => fillDetailRows(details.slice(0, firstPageDetailRows), firstPageDetailRows),
-    [details]
+    () =>
+      fillPrintableRows(
+        printableDetails.slice(0, firstPageDetailRows),
+        firstPageDetailRows
+      ),
+    [printableDetails]
   );
   const nextDetailPages = useMemo(
-    () => chunkDetailRows(details.slice(firstPageDetailRows), nextPageDetailRows),
-    [details]
+    () =>
+      chunkDetailRows(
+        printableDetails.slice(firstPageDetailRows),
+        nextPageDetailRows
+      ),
+    [printableDetails]
   );
 
   const handleLoadPrintData = useCallback(async (
@@ -189,13 +239,16 @@ export default function WorkPrintPage({
 
         <div className="p-3">
   <div className="mb-6 flex items-start justify-between">
-    <div className="flex min-w-[150px] justify-start pt-1">
+    <div className="flex min-w-[180px] flex-col items-center pt-1">
       {/* eslint-disable-next-line @next/next/no-img-element -- Static print logo keeps the work order layout simple. */}
       <img
-        src="/samples/genesis-mark-inverted.png"
+        src="/samples/genesis-mark-inverted-cropped.png"
         alt="Genesis"
-        className="h-auto w-[118px]"
+        className="h-auto w-[138px]"
       />
+      <div className="mt-1 text-[13px] font-bold tracking-[0.28em] text-slate-900">
+        GENESIS
+      </div>
     </div>
 
     <div className="flex-1 text-center">
@@ -208,7 +261,8 @@ export default function WorkPrintPage({
       </p>
     </div>
 
-    <div className="min-w-[150px] rounded-lg border-2 border-slate-800 px-2 py-[2px]">
+    <div className="min-w-[180px]">
+      <div className="ml-auto w-[170px] rounded-lg border-2 border-slate-800 px-2 py-[2px]">
   <div className="flex items-center justify-center border-b border-slate-300 pb-[1px]">
     <span className="text-xl font-black tracking-wider text-slate-900">
       {order?.work_name || "\u00A0"}
@@ -221,6 +275,7 @@ export default function WorkPrintPage({
     </span>
   </div>
 </div>
+    </div>
     </div>
 
 <table className="w-full border-collapse text-[12px] leading-none text-center">
@@ -236,7 +291,7 @@ export default function WorkPrintPage({
   <th className="w-20 border border-slate-900 bg-slate-100 px-2 py-0 align-middle">
     차량명
   </th>
-  <td className="h-8 border border-slate-900 px-2 py-0 align-middle whitespace-nowrap overflow-hidden">
+  <td className="h-8 border border-slate-900 bg-blue-50 px-2 py-0 align-middle text-base font-black text-blue-900 whitespace-nowrap overflow-hidden">
     {order?.car_model || "\u00A0"}
   </td>
 
@@ -406,24 +461,19 @@ export default function WorkPrintPage({
             <table className="w-full border-collapse text-[11px]">
               <thead>
                 <tr>
-                  <th className="w-20 border border-slate-900 bg-slate-100 p-2">좌우</th>
-                  <th className="border border-slate-900 bg-slate-100 p-2">부위</th>
-                  <th className="w-16 border border-slate-900 bg-slate-100 px-2 py-1 text-center ">작업</th>
+                  <th className="border border-slate-900 bg-slate-100 p-2">작업내용</th>
                 </tr>
               </thead>
               <tbody>
   {firstPageDetails.map((row, index) => (
-    <tr key={index} className="h-6 text-[12px] leading-none">
-  <td className="border border-slate-900 px-2 py-0 text-center align-middle">
-    {row.side || "\u00A0"}
-  </td>
-
-  <td className="border border-slate-900 px-2 py-0 align-middle">
-    {row.part || "\u00A0"}
-  </td>
-
-  <td className="border border-slate-900 px-2 py-0 text-center align-middle">
-    {row.work_type || "\u00A0"}
+    <tr
+      key={index}
+      className={`h-6 text-[12px] leading-none ${
+        index % 2 === 1 ? "bg-slate-50" : "bg-white"
+      }`}
+    >
+  <td className="border border-slate-900 px-3 py-0 text-center align-middle font-semibold">
+    {row.display_text || "\u00A0"}
   </td>
 </tr>
   ))}
@@ -457,22 +507,19 @@ export default function WorkPrintPage({
           <table className="w-full border-collapse text-[11px]">
             <thead>
               <tr>
-                <th className="w-20 border border-slate-900 bg-slate-100 p-2">좌우</th>
-                <th className="border border-slate-900 bg-slate-100 p-2">부위</th>
-                <th className="w-16 border border-slate-900 bg-slate-100 px-2 py-1 text-center">작업</th>
+                <th className="border border-slate-900 bg-slate-100 p-2">작업내용</th>
               </tr>
             </thead>
             <tbody>
               {pageRows.map((row, rowIndex) => (
-                <tr key={`${row.line_no}-${rowIndex}`} className="h-6 text-[12px] leading-none">
-                  <td className="border border-slate-900 px-2 py-0 text-center align-middle">
-                    {row.side || "\u00A0"}
-                  </td>
-                  <td className="border border-slate-900 px-2 py-0 align-middle">
-                    {row.part || "\u00A0"}
-                  </td>
-                  <td className="border border-slate-900 px-2 py-0 text-center align-middle">
-                    {row.work_type || "\u00A0"}
+                <tr
+                  key={`${row.line_no}-${rowIndex}`}
+                  className={`h-6 text-[12px] leading-none ${
+                    rowIndex % 2 === 1 ? "bg-slate-50" : "bg-white"
+                  }`}
+                >
+                  <td className="border border-slate-900 px-3 py-0 text-center align-middle font-semibold">
+                    {row.display_text || "\u00A0"}
                   </td>
                 </tr>
               ))}
