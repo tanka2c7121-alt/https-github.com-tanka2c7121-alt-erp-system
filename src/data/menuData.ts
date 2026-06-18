@@ -99,12 +99,12 @@ export const menuData: MenuItem[] = [
     title: "미결관리",
     roles: ["ADMIN", "CHIEF"],
     children: [
-      { id: "factory-settlement-pending-insurance", title: "보험사별 리스트" },
+      { id: "factory-settlement-pending-insurance", title: "청구처별 미결 리스트" },
     ],
   },
   {
     id: "factory-settlement-closed-management",
-    title: "종결관리",
+    title: "완결관리",
     roles: ["ADMIN", "CHIEF"],
   },
   {

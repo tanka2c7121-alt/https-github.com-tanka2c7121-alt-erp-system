@@ -50,7 +50,7 @@ export default function ClosedSettlementManagementPage({
   const [selectedMonth, setSelectedMonth] = useState(currentMonth);
   const [loading, setLoading] = useState(true);
   const [unlockingId, setUnlockingId] = useState<number | null>(null);
-  const isAdmin = user.role === "ADMIN";
+  const canCloseSettlement = user.role === "ADMIN" || user.role === "CHIEF";
 
   const loadRows = useCallback(async () => {
     setLoading(true);
@@ -73,13 +73,13 @@ export default function ClosedSettlementManagementPage({
     setLoading(false);
 
     if (error) {
-      alert("종결 정산 조회 실패: " + error.message);
+      alert("완결 정산 조회 실패: " + error.message);
       return;
     }
 
     setRows(
       ((data ?? []) as SettlementRow[]).filter((row) =>
-        normalizeText(row.progress_status).includes("종결")
+        normalizeText(row.progress_status).includes("완결")
       )
     );
   }, []);
@@ -137,13 +137,13 @@ export default function ClosedSettlementManagementPage({
     });
   };
 
-  const unlockSettlement = async (row: SettlementRow) => {
+  const closeSettlement = async (row: SettlementRow) => {
     const workName = normalizeText(row.work_name);
 
-    if (!isAdmin || !workName) return;
+    if (!canCloseSettlement || !workName) return;
 
     const ok = window.confirm(
-      `${workName} 종결을 해제하고 완결 상태로 되돌릴까요?`
+      `${workName} 정산을 종결 처리할까요?`
     );
 
     if (!ok) return;
@@ -153,33 +153,32 @@ export default function ClosedSettlementManagementPage({
     const { error } = await supabase
       .from("repair_settlements")
       .update({
-        progress_status: "완결",
+        progress_status: "종결",
       })
       .eq("id", row.id);
 
     setUnlockingId(null);
 
     if (error) {
-      alert("종결 해제 실패: " + error.message);
+      alert("종결 처리 실패: " + error.message);
       return;
     }
 
-    alert("종결을 해제했습니다. 정산등록에서 내용을 확인해 주세요.");
+    alert("종결 처리했습니다.");
     await loadRows();
-    openSettlement(workName);
   };
 
   return (
     <div className="space-y-5 text-slate-900">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h3 className="text-2xl font-bold">종결관리</h3>
+          <h3 className="text-2xl font-bold">완결관리</h3>
           <p className="text-sm text-slate-600">
-            종결 처리된 정산을 작명 기준으로 검색하고, 문제가 있을 때 관리자만 해제합니다.
+            완결 처리된 정산을 확인하고, 관리자와 총괄관리자가 종결 처리합니다.
           </p>
         </div>
         <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-bold text-slate-700">
-          종결 {rows.length.toLocaleString()}건
+          완결 {rows.length.toLocaleString()}건
         </div>
       </div>
 
@@ -251,7 +250,7 @@ export default function ClosedSettlementManagementPage({
               ) : filteredRows.length === 0 ? (
                 <tr>
                   <td className="border border-slate-200 px-3 py-8 text-center text-slate-500" colSpan={7}>
-                    표시할 종결 정산이 없습니다.
+                    표시할 완결 정산이 없습니다.
                   </td>
                 </tr>
               ) : (
@@ -275,14 +274,14 @@ export default function ClosedSettlementManagementPage({
                           >
                             보기
                           </button>
-                          {isAdmin && (
+                          {canCloseSettlement && (
                             <button
                               type="button"
-                              onClick={() => void unlockSettlement(row)}
+                              onClick={() => void closeSettlement(row)}
                               disabled={unlockingId === row.id}
                               className="rounded bg-blue-600 px-3 py-1 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
                             >
-                              {unlockingId === row.id ? "해제중" : "종결해제"}
+                              {unlockingId === row.id ? "처리중" : "종결처리"}
                             </button>
                           )}
                         </div>
@@ -316,14 +315,14 @@ export default function ClosedSettlementManagementPage({
                   >
                     보기
                   </button>
-                  {isAdmin && (
+                  {canCloseSettlement && (
                     <button
                       type="button"
-                      onClick={() => void unlockSettlement(row)}
+                      onClick={() => void closeSettlement(row)}
                       disabled={unlockingId === row.id}
                       className="flex-1 rounded-lg bg-blue-600 py-2 text-sm font-semibold text-white disabled:opacity-50"
                     >
-                      {unlockingId === row.id ? "해제중" : "종결해제"}
+                      {unlockingId === row.id ? "처리중" : "종결처리"}
                     </button>
                   )}
                 </div>
