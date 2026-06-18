@@ -154,6 +154,27 @@ const getDailyCashPaymentKey = (row: PaymentRow) =>
     row.cardNumber,
   ].join("|");
 
+const getDailyCashEntryKey = (row: Pick<PaymentRow, "paymentType" | "paymentDetail" | "amount" | "claimAmount" | "date" | "method">) =>
+  [
+    row.paymentType,
+    row.paymentDetail,
+    toNumber(row.amount || row.claimAmount),
+    row.date,
+    row.method,
+  ].join("|");
+
+const getStoredDailyCashEntryKey = (row: any) => {
+  const [paymentType = "", paymentDetail = ""] = String(row.content ?? "").split(" / ");
+
+  return [
+    paymentType,
+    paymentDetail,
+    Number(row.income ?? 0),
+    row.date ?? "",
+    row.account ?? "",
+  ].join("|");
+};
+
 const getPaymentRowCountMap = (rows: PaymentRow[]) =>
   rows.reduce<Map<string, number>>((map, row) => {
     const key = getDailyCashPaymentKey(row);
@@ -593,6 +614,31 @@ export default function SettlementRegisterPage({
 
   const saveDailyCashRows = async (targetForm = form) => {
     const today = localDateText();
+    const { data: existingCashRows, error: existingCashError } =
+      await supabase
+        .from("daily_cash")
+        .select("date, created_on, account, content, income")
+        .eq("source_type", "settlement_payment")
+        .eq("source_work_name", targetForm.workName);
+
+    if (existingCashError) return existingCashError;
+
+    const existingCashCounts = (existingCashRows ?? []).reduce<Map<string, number>>(
+      (map, row) => {
+        const key = getStoredDailyCashEntryKey(row);
+        map.set(key, (map.get(key) ?? 0) + 1);
+        return map;
+      },
+      new Map()
+    );
+    const existingTodayCashCounts = (existingCashRows ?? [])
+      .filter((row) => row.created_on === today)
+      .reduce<Map<string, number>>((map, row) => {
+        const key = getStoredDailyCashEntryKey(row);
+        map.set(key, (map.get(key) ?? 0) + 1);
+        return map;
+      }, new Map());
+
     const { error: deleteError } = await supabase
       .from("daily_cash")
       .delete()
@@ -615,12 +661,24 @@ export default function SettlementRegisterPage({
           !isPartnerSupportPaymentRow(row)
       )
       .filter((row) => {
+        const existingTodayCashKey = getDailyCashEntryKey(row);
+        const existingTodayCashCount =
+          existingTodayCashCounts.get(existingTodayCashKey) ?? 0;
+
+        if (existingTodayCashCount > 0) {
+          existingTodayCashCounts.set(
+            existingTodayCashKey,
+            existingTodayCashCount - 1
+          );
+          return true;
+        }
+
         const key = getDailyCashPaymentKey(row);
         const loadedCount = loadedCounts.get(key) ?? 0;
 
         if (loadedCount > 0) {
           loadedCounts.set(key, loadedCount - 1);
-          return false;
+          return (existingCashCounts.get(existingTodayCashKey) ?? 0) === 0;
         }
 
         return true;
