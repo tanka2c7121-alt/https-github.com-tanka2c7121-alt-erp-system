@@ -33,16 +33,16 @@ export const menuData: MenuItem[] = [
     children: [
       {
         id: "factory-inbound",
-        title: "입고현황",
+        title: "입고관리",
         children: [
           { id: "factory-work-register", title: "작업등록" },
-          { id: "factory-release-list", title: "출고리스트" },
         ],
       },
       {
         id: "factory-outbound",
-        title: "출고현황",
+        title: "출고관리",
         children: [
+          { id: "factory-release-list", title: "출고리스트" },
           { id: "factory-deductible-management", title: "면책금관리" },
         ],
       },
@@ -89,9 +89,8 @@ export const menuData: MenuItem[] = [
       { id: "sales-capital", title: "캐피탈매출" },
       { id: "sales-general", title: "일반매출" },
       { id: "sales-partner", title: "거래처매출" },
-      { id: "sales-partner-support", title: "입고지원관리" },
-      { id: "sales-card", title: "카드승인" },
-      { id: "sales-blue", title: "BLUE POINT" },
+      { id: "sales-card", title: "카드매출" },
+      { id: "sales-blue", title: "BLUE POINT 매출" },
     ],
   },
   {
@@ -103,9 +102,12 @@ export const menuData: MenuItem[] = [
     ],
   },
   {
-    id: "factory-settlement-closed-management",
+    id: "factory-settlement-complete-management",
     title: "완결관리",
     roles: ["ADMIN", "CHIEF"],
+    children: [
+      { id: "sales-partner-support", title: "입고지원관리" },
+    ],
   },
   {
     id: "documents",

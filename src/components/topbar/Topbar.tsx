@@ -1,6 +1,7 @@
-﻿import { useState } from "react";
+import { useState } from "react";
 import type { MenuItem } from "../../data/menuData";
 import { roleLabel } from "../../types/roles";
+import GlobalVehicleSearch from "./GlobalVehicleSearch";
 
 export type NotificationItem = {
   id: string;
@@ -41,6 +42,8 @@ export default function Topbar({
       </div>
 
       <div className="flex shrink-0 items-center gap-2 md:gap-4">
+        <GlobalVehicleSearch onSelectMenu={onSelectMenu} />
+
         <div className="hidden text-sm text-slate-600 sm:block">
           {roleLabel(user?.role)} 모드
         </div>

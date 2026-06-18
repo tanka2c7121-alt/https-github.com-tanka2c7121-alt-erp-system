@@ -568,7 +568,10 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
     if (menu.id === "factory-settlement-pending-insurance") {
       return <PendingInsuranceListPage onSelectMenu={handleSelectMenu} />;
     }
-    if (menu.id === "factory-settlement-closed-management") {
+    if (
+      menu.id === "factory-settlement-complete-management" ||
+      menu.id === "factory-settlement-closed-management"
+    ) {
       return (
         <ClosedSettlementManagementPage
           user={user}
