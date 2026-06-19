@@ -25,6 +25,7 @@ type WorkOrderRow = {
   work_name: string | null;
   car_number: string | null;
   car_model: string | null;
+  category: string | null;
   coverage_type: string | null;
   insurance_company: string | null;
   other_insurance_company: string | null;
@@ -133,18 +134,47 @@ const inferClaimDetailFromCompany = (company: unknown): ClaimDetail | null => {
 const isClaimRow = (payment: PaymentRow) =>
   normalizeText(payment.payment_type) === "청구";
 
+const isReceivablePaymentRow = (payment: PaymentRow) => {
+  const paymentType = normalizeText(payment.payment_type);
+
+  return (
+    toAmountNumber(payment.payment_amount) > 0 &&
+    (paymentType === "수리비" || paymentType === "부가세")
+  );
+};
+
+const isAllowedPaymentForWorkCategory = (
+  payment: PaymentRow,
+  workCategory: unknown
+) => {
+  const category = normalizeText(workCategory);
+  const paymentDetail = normalizeClaimDetail(payment.payment_detail);
+
+  if (category === "일반") {
+    return paymentDetail === "일반" || paymentDetail === "바디케어";
+  }
+
+  if (category === "보험" || category === "캐피탈") {
+    return paymentDetail === "보험" || paymentDetail === "캐피탈";
+  }
+
+  return paymentDetail !== "일반";
+};
+
 const calculateCollectionRate = (claimAmount: number, paidAmount: number) =>
   claimAmount > 0 ? (paidAmount / claimAmount) * 100 : null;
 
 const assignPaymentsByTarget = (
   targets: ClaimTarget[],
-  payments: PaymentRow[]
+  payments: PaymentRow[],
+  workCategory: unknown
 ) => {
   const nextTargets = targets.map((target) => ({ ...target }));
 
   payments
     .filter((payment) => !isClaimRow(payment))
-    .filter((payment) => normalizeText(payment.payment_type) !== "면책금")
+    .filter(isReceivablePaymentRow)
+    .filter((payment) => isAllowedPaymentForWorkCategory(payment, workCategory))
     .forEach((payment) => {
       const paymentAmount = toAmountNumber(payment.payment_amount);
       const paymentDetail = normalizeClaimDetail(payment.payment_detail);
@@ -252,7 +282,7 @@ export default function PendingInsuranceListPage({
       ),
       fetchAllRows<WorkOrderRow>(
         "work_orders",
-        "id, work_name, car_number, car_model, coverage_type, insurance_company, other_insurance_company, release_date"
+        "id, work_name, car_number, car_model, category, coverage_type, insurance_company, other_insurance_company, release_date"
       ),
       fetchAllRows<PaymentRow>(
         "settlement_payments",
@@ -422,7 +452,9 @@ export default function PendingInsuranceListPage({
             },
           ];
 
-          return toListRows(assignPaymentsByTarget(targets, workPayments));
+          return toListRows(
+            assignPaymentsByTarget(targets, workPayments, workOrder.category)
+          );
         }
 
         const detailListTargets = claimRows
@@ -456,7 +488,11 @@ export default function PendingInsuranceListPage({
 
         if (detailListTargets.size > 0) {
           return toListRows(
-            assignPaymentsByTarget(Array.from(detailListTargets.values()), workPayments)
+            assignPaymentsByTarget(
+              Array.from(detailListTargets.values()),
+              workPayments,
+              workOrder.category
+            )
           );
         }
 
@@ -474,7 +510,8 @@ export default function PendingInsuranceListPage({
                 paidAmount: 0,
               },
             ],
-            workPayments
+            workPayments,
+            workOrder.category
           )
         );
       });

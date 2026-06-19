@@ -59,15 +59,36 @@ const isClaimPaymentRow = (row: any) =>
 const isDeductiblePaymentRow = (row: any) =>
   normalizeText(row.payment_type) === "면책금";
 
-const isRepairPaymentAmountRow = (row: any) =>
-  toAmountNumber(row.payment_amount) > 0 &&
-  !isClaimPaymentRow(row) &&
-  !isDeductiblePaymentRow(row);
+const isRepairPaymentAmountRow = (row: any) => {
+  const paymentType = normalizeText(row.payment_type);
+
+  return (
+    toAmountNumber(row.payment_amount) > 0 &&
+    (paymentType === "수리비" || paymentType === "부가세") &&
+    !isClaimPaymentRow(row) &&
+    !isDeductiblePaymentRow(row)
+  );
+};
 
 const normalizeClaimDetail = (value: unknown): ClaimDetail | null => {
   const text = normalizeText(value);
 
   return claimDetails.find((detail) => text.includes(detail)) ?? null;
+};
+
+const isAllowedPaymentForWorkCategory = (payment: any, workCategory: unknown) => {
+  const category = normalizeText(workCategory);
+  const paymentDetail = normalizeClaimDetail(payment.payment_detail);
+
+  if (category === "일반") {
+    return paymentDetail === "일반" || paymentDetail === "바디케어";
+  }
+
+  if (category === "보험" || category === "캐피탈") {
+    return paymentDetail === "보험" || paymentDetail === "캐피탈";
+  }
+
+  return paymentDetail !== "일반";
 };
 
 const getClaimStatus = (claimDate: string, claimAmount: number) => {
@@ -163,7 +184,7 @@ export default function PendingSettlementPage({
 
     const { data: workData, error: workError } = await fetchAllRows<any>(
       "work_orders",
-      "id, work_name, car_number, car_model, insurance_company, other_insurance_company, coverage_type, release_date"
+      "id, work_name, car_number, car_model, category, insurance_company, other_insurance_company, coverage_type, release_date"
     );
 
     if (error) {
@@ -287,10 +308,12 @@ export default function PendingSettlementPage({
         ).join(" / ") || "청구";
       const paidAmount = workPayments
         .filter(isRepairPaymentAmountRow)
+        .filter((payment) => isAllowedPaymentForWorkCategory(payment, row.category))
         .filter((payment) => !isEmptyDateValue(payment.payment_date))
         .reduce((sum, payment) => sum + toAmountNumber(payment.payment_amount), 0);
       const receivableAmount = workPayments
         .filter(isRepairPaymentAmountRow)
+        .filter((payment) => isAllowedPaymentForWorkCategory(payment, row.category))
         .filter((payment) => isEmptyDateValue(payment.payment_date))
         .reduce((sum, payment) => sum + toAmountNumber(payment.payment_amount), 0);
       const collectionAmount = paidAmount + receivableAmount;
