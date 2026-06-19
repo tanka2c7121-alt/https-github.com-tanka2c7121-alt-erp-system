@@ -291,8 +291,8 @@ export default function DeductibleManagementPage({
     safeCurrentPage * pageSize
   );
 
-  const pendingCount = items.filter((item) => !item.hasDeductiblePayment).length;
-  const completeCount = items.filter((item) => item.hasDeductiblePayment).length;
+  const pendingCount = filteredItems.filter((item) => !item.hasDeductiblePayment).length;
+  const completeCount = filteredItems.filter((item) => item.hasDeductiblePayment).length;
   const paidAmount = filteredItems.reduce((sum, item) => sum + item.paidAmount, 0);
 
   const headers: Array<{
@@ -409,7 +409,7 @@ export default function DeductibleManagementPage({
       </div>
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-        <SummaryCard title="전체" value={`${items.length.toLocaleString()}건`} />
+        <SummaryCard title="전체" value={`${filteredItems.length.toLocaleString()}건`} />
         <SummaryCard title="미수" value={`${pendingCount.toLocaleString()}건`} tone="red" />
         <SummaryCard title="완료" value={`${completeCount.toLocaleString()}건`} tone="green" />
       </div>
@@ -504,7 +504,7 @@ export default function DeductibleManagementPage({
                     )}
                   </th>
                 ))}
-                <th className="border border-slate-300 px-2 py-2">면책금 입력</th>
+                <th className="w-[500px] border border-slate-300 px-2 py-2">면책금 입력</th>
                 <th className="border border-slate-300 px-2 py-2">관리</th>
               </tr>
             </thead>
@@ -557,16 +557,16 @@ export default function DeductibleManagementPage({
                           paymentMethod={item.paymentMethod}
                         />
                       </td>
-                      <td className="border border-slate-200 px-2 py-2">
+                      <td className="w-[500px] border border-slate-200 px-2 py-2">
                         {isComplete ? (
                           <span className="text-xs font-semibold text-slate-500">
                             입력완료
                           </span>
                         ) : (
-                          <div className="min-w-[720px] space-y-2">
-                            <div className="grid grid-cols-[1fr_120px_120px_120px_80px] gap-2">
+                          <div className="space-y-1">
+                            <div className="mx-auto inline-grid grid-cols-[86px_118px_104px_96px_56px] items-center gap-1 rounded-lg bg-slate-50 p-1">
                               <input
-                                className="rounded-lg border border-blue-200 bg-blue-50 px-2 py-1 text-right text-sm"
+                                className="h-8 rounded-md border border-blue-200 bg-white px-2 text-right text-xs font-semibold"
                                 placeholder="입금금액"
                                 value={input.amount}
                                 onChange={(event) =>
@@ -579,14 +579,14 @@ export default function DeductibleManagementPage({
                               />
                               <input
                                 type="date"
-                                className="rounded-lg border border-slate-300 px-2 py-1 text-sm"
+                                className="h-8 rounded-md border border-slate-300 bg-white px-2 text-xs"
                                 value={input.date}
                                 onChange={(event) =>
                                   updateInput(item.workName, "date", event.target.value)
                                 }
                               />
                               <select
-                                className="rounded-lg border border-slate-300 px-2 py-1 text-sm"
+                                className="h-8 rounded-md border border-slate-300 bg-white px-2 text-xs"
                                 value={input.method}
                                 onChange={(event) =>
                                   updateInput(item.workName, "method", event.target.value)
@@ -597,7 +597,7 @@ export default function DeductibleManagementPage({
                                 ))}
                               </select>
                               <select
-                                className="rounded-lg border border-slate-300 px-2 py-1 text-sm"
+                                className="h-8 rounded-md border border-slate-300 bg-white px-2 text-xs"
                                 value={input.detail}
                                 onChange={(event) =>
                                   updateInput(item.workName, "detail", event.target.value)
@@ -611,15 +611,15 @@ export default function DeductibleManagementPage({
                                 type="button"
                                 onClick={() => handleSaveDeductible(item)}
                                 disabled={savingWorkName === item.workName}
-                                className="rounded-lg bg-blue-600 px-3 py-1 text-sm font-semibold text-white disabled:opacity-50"
+                                className="h-8 whitespace-nowrap rounded-md bg-blue-600 px-2 text-xs font-semibold text-white disabled:opacity-50"
                               >
                                 {savingWorkName === item.workName ? "저장중" : "저장"}
                               </button>
                             </div>
                             {input.method === "카드" && (
-                              <div className="grid grid-cols-3 gap-2 rounded-lg bg-blue-50 p-2">
+                              <div className="mx-auto grid w-[420px] grid-cols-3 gap-1 rounded-lg bg-blue-50 p-1">
                                 <input
-                                  className="rounded-lg border border-blue-200 px-2 py-1 text-sm"
+                                  className="h-8 rounded-md border border-blue-200 px-2 text-xs"
                                   placeholder="승인번호"
                                   value={input.approvalNumber}
                                   onChange={(event) =>
@@ -627,7 +627,7 @@ export default function DeductibleManagementPage({
                                   }
                                 />
                                 <input
-                                  className="rounded-lg border border-blue-200 px-2 py-1 text-sm"
+                                  className="h-8 rounded-md border border-blue-200 px-2 text-xs"
                                   placeholder="가맹번호"
                                   value={input.merchantNumber}
                                   onChange={(event) =>
@@ -635,7 +635,7 @@ export default function DeductibleManagementPage({
                                   }
                                 />
                                 <input
-                                  className="rounded-lg border border-blue-200 px-2 py-1 text-sm"
+                                  className="h-8 rounded-md border border-blue-200 px-2 text-xs"
                                   placeholder="카드번호"
                                   value={input.cardNumber}
                                   onChange={(event) =>
@@ -886,18 +886,24 @@ function StatusBadge({
 }) {
   if (!isComplete) {
     return (
-      <span className="inline-flex rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-700">
+      <span className="inline-flex whitespace-nowrap rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-700">
         미수
       </span>
     );
   }
 
+  const tooltip = [
+    `입금금액: ${formatWon(paidAmount)}원`,
+    `입금일: ${paymentDate || "-"}`,
+    `입금계정: ${paymentMethod || "-"}`,
+  ].join("\n");
+
   return (
-    <span className="inline-flex flex-col rounded-lg bg-green-100 px-3 py-1 text-xs font-semibold text-green-700">
-      <span>완료 {formatWon(paidAmount)}원</span>
-      <span className="font-medium text-green-600">
-        {paymentDate || "-"} / {paymentMethod || "-"}
-      </span>
+    <span
+      className="inline-flex whitespace-nowrap rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700"
+      title={tooltip}
+    >
+      완료
     </span>
   );
 }

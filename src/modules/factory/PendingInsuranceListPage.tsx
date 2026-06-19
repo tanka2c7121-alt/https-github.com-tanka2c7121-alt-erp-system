@@ -143,38 +143,22 @@ const isReceivablePaymentRow = (payment: PaymentRow) => {
   );
 };
 
-const isAllowedPaymentForWorkCategory = (
-  payment: PaymentRow,
-  workCategory: unknown
-) => {
-  const category = normalizeText(workCategory);
-  const paymentDetail = normalizeClaimDetail(payment.payment_detail);
-
-  if (category === "일반") {
-    return paymentDetail === "일반" || paymentDetail === "바디케어";
-  }
-
-  if (category === "보험" || category === "캐피탈") {
-    return paymentDetail === "보험" || paymentDetail === "캐피탈";
-  }
-
-  return paymentDetail !== "일반";
-};
+const hasSettlementPaymentDetail = (payment: PaymentRow) =>
+  Boolean(normalizeClaimDetail(payment.payment_detail));
 
 const calculateCollectionRate = (claimAmount: number, paidAmount: number) =>
   claimAmount > 0 ? (paidAmount / claimAmount) * 100 : null;
 
 const assignPaymentsByTarget = (
   targets: ClaimTarget[],
-  payments: PaymentRow[],
-  workCategory: unknown
+  payments: PaymentRow[]
 ) => {
   const nextTargets = targets.map((target) => ({ ...target }));
 
   payments
     .filter((payment) => !isClaimRow(payment))
     .filter(isReceivablePaymentRow)
-    .filter((payment) => isAllowedPaymentForWorkCategory(payment, workCategory))
+    .filter(hasSettlementPaymentDetail)
     .forEach((payment) => {
       const paymentAmount = toAmountNumber(payment.payment_amount);
       const paymentDetail = normalizeClaimDetail(payment.payment_detail);
@@ -453,7 +437,7 @@ export default function PendingInsuranceListPage({
           ];
 
           return toListRows(
-            assignPaymentsByTarget(targets, workPayments, workOrder.category)
+            assignPaymentsByTarget(targets, workPayments)
           );
         }
 
@@ -490,8 +474,7 @@ export default function PendingInsuranceListPage({
           return toListRows(
             assignPaymentsByTarget(
               Array.from(detailListTargets.values()),
-              workPayments,
-              workOrder.category
+              workPayments
             )
           );
         }
@@ -510,8 +493,7 @@ export default function PendingInsuranceListPage({
                 paidAmount: 0,
               },
             ],
-            workPayments,
-            workOrder.category
+            workPayments
           )
         );
       });

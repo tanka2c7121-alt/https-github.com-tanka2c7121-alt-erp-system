@@ -32,8 +32,45 @@ type RiskSortField = keyof RiskRow;
 
 const pendingCutoffDays = 90;
 const claimDetails: ClaimDetail[] = ["보험", "캐피탈"];
+const receivableAccountNames = ["국민은행", "부산은행", "BLUE POINT"];
 
 const normalizeText = (value: unknown) => String(value ?? "").trim();
+
+function normalizeBluePointAccount(value: unknown) {
+  const rawText = normalizeText(value);
+  const accountKey = rawText
+    .replace(/\s+/g, "")
+    .replaceAll("-", "")
+    .replaceAll("_", "")
+    .toUpperCase();
+
+  return accountKey.includes("BLUE") || accountKey.includes("블루")
+    ? "BLUE POINT"
+    : rawText;
+}
+
+function normalizeAccountName(value: unknown) {
+  const rawText = normalizeBluePointAccount(value);
+  const accountKey = rawText
+    .replace(/\s+/g, "")
+    .replaceAll("-", "")
+    .replaceAll("_", "")
+    .toUpperCase();
+
+  if (accountKey.includes("국민") || accountKey.includes("KB")) {
+    return "국민은행";
+  }
+
+  if (accountKey.includes("부산") || accountKey.includes("BNK")) {
+    return "부산은행";
+  }
+
+  if (accountKey.includes("BLUE") || accountKey.includes("블루")) {
+    return "BLUE POINT";
+  }
+
+  return rawText;
+}
 
 const normalizeStatus = (value: unknown) => {
   const text = normalizeText(value);
@@ -76,20 +113,16 @@ const normalizeClaimDetail = (value: unknown): ClaimDetail | null => {
   return claimDetails.find((detail) => text.includes(detail)) ?? null;
 };
 
-const isAllowedPaymentForWorkCategory = (payment: any, workCategory: unknown) => {
-  const category = normalizeText(workCategory);
-  const paymentDetail = normalizeClaimDetail(payment.payment_detail);
+const hasSettlementPaymentDetail = (payment: any) =>
+  Boolean(normalizeClaimDetail(payment.payment_detail));
 
-  if (category === "일반") {
-    return paymentDetail === "일반" || paymentDetail === "바디케어";
-  }
+const isReceivableAccountPaymentRow = (payment: any) =>
+  receivableAccountNames.includes(normalizeAccountName(payment.payment_method));
 
-  if (category === "보험" || category === "캐피탈") {
-    return paymentDetail === "보험" || paymentDetail === "캐피탈";
-  }
-
-  return paymentDetail !== "일반";
-};
+const isSettlementReceivablePaymentRow = (payment: any) =>
+  toAmountNumber(payment.payment_amount) > 0 &&
+  isEmptyDateValue(payment.payment_date) &&
+  isReceivableAccountPaymentRow(payment);
 
 const getClaimStatus = (claimDate: string, claimAmount: number) => {
   if (!claimAmount && isEmptyDateValue(claimDate)) return "미청구";
@@ -144,7 +177,7 @@ export default function PendingSettlementPage({
 
     const { data, error } = await fetchAllRows<any>(
       "settlement_payments",
-      "id, work_name, payment_type, payment_detail, claim_amount, claim_date, payment_amount, payment_date",
+      "id, work_name, payment_type, payment_detail, claim_amount, claim_date, payment_amount, payment_date, payment_method",
       (query) => query.order("id", { ascending: true })
     );
 
@@ -308,12 +341,13 @@ export default function PendingSettlementPage({
         ).join(" / ") || "청구";
       const paidAmount = workPayments
         .filter(isRepairPaymentAmountRow)
-        .filter((payment) => isAllowedPaymentForWorkCategory(payment, row.category))
+        .filter(hasSettlementPaymentDetail)
         .filter((payment) => !isEmptyDateValue(payment.payment_date))
         .reduce((sum, payment) => sum + toAmountNumber(payment.payment_amount), 0);
       const receivableAmount = workPayments
         .filter(isRepairPaymentAmountRow)
-        .filter((payment) => isAllowedPaymentForWorkCategory(payment, row.category))
+        .filter(hasSettlementPaymentDetail)
+        .filter(isReceivableAccountPaymentRow)
         .filter((payment) => isEmptyDateValue(payment.payment_date))
         .reduce((sum, payment) => sum + toAmountNumber(payment.payment_amount), 0);
       const collectionAmount = paidAmount + receivableAmount;
@@ -362,6 +396,9 @@ export default function PendingSettlementPage({
       row.paidAmount > 0 &&
       (row.claimRate ?? 0) < 95
   );
+  const settlementReceivableAmount = paymentRows
+    .filter(isSettlementReceivablePaymentRow)
+    .reduce((sum, payment) => sum + toAmountNumber(payment.payment_amount), 0);
 
   const activeRows =
     activeRiskView === "unclaimed"
@@ -423,7 +460,7 @@ export default function PendingSettlementPage({
         <RiskCard
           title="미수건"
           count={receivableRows.length}
-          amount={receivableRows.reduce((sum, row) => sum + row.receivableAmount, 0)}
+          amount={settlementReceivableAmount}
           tone="amber"
           active={activeRiskView === "receivable"}
           onClick={() => setActiveRiskView("receivable")}
