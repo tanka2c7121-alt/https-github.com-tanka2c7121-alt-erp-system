@@ -512,6 +512,7 @@ export default function PendingInsuranceListPage({
         if (insuranceFilter && row.insuranceCompany !== insuranceFilter) return false;
 
         if (row.status !== "미결") return false;
+        if (!row.claimAmount && !row.claimDate) return false;
 
         if (selectedYear && row.claimDate.slice(0, 4) !== selectedYear) return false;
         if (selectedMonth && row.claimDate.slice(5, 7) !== selectedMonth) return false;
@@ -572,6 +573,7 @@ export default function PendingInsuranceListPage({
   };
 
   const summary = useMemo(() => {
+    const managementCount = new Set(sortedRows.map((row) => row.workName)).size;
     const claimAmount = sortedRows.reduce((sum, row) => sum + row.claimAmount, 0);
     const paidAmount = sortedRows.reduce((sum, row) => sum + row.paidAmount, 0);
     const receivableAmount = sortedRows.reduce(
@@ -581,7 +583,7 @@ export default function PendingInsuranceListPage({
     const collectionRate = calculateCollectionRate(claimAmount, paidAmount);
 
     return {
-      count: sortedRows.length,
+      count: managementCount,
       claimAmount,
       paidAmount,
       receivableAmount,
@@ -607,7 +609,7 @@ export default function PendingInsuranceListPage({
       </div>
 
       <section className="grid grid-cols-1 gap-3 md:grid-cols-5">
-        <SummaryCard label="건수" value={`${summary.count.toLocaleString()}건`} />
+        <SummaryCard label="관리건수" value={`${summary.count.toLocaleString()}건`} />
         <SummaryCard label="청구금액" value={`₩ ${formatWon(summary.claimAmount)}`} tone="blue" />
         <SummaryCard label="입금금액" value={`₩ ${formatWon(summary.paidAmount)}`} tone="green" />
         <SummaryCard label="미수금" value={`₩ ${formatWon(summary.receivableAmount)}`} tone="red" />

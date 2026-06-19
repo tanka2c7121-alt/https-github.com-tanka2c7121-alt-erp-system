@@ -28,20 +28,8 @@ type RiskRow = {
 
 type RiskSortField = keyof RiskRow;
 
-type ClaimTarget = {
-  id: string;
-  workName: string;
-  company: string;
-  claimSide: string;
-  claimDetail: ClaimDetail | null;
-  claimDate: string;
-  claimAmount: number;
-  paidAmount: number;
-  receivableAmount: number;
-};
-
 const pendingCutoffDays = 90;
-const claimDetails: ClaimDetail[] = ["보험", "캐피탈", "일반", "바디케어"];
+const claimDetails: ClaimDetail[] = ["보험", "캐피탈"];
 
 const normalizeText = (value: unknown) => String(value ?? "").trim();
 
@@ -80,29 +68,7 @@ const normalizeClaimDetail = (value: unknown): ClaimDetail | null => {
   return claimDetails.find((detail) => text.includes(detail)) ?? null;
 };
 
-const inferClaimDetailFromCompany = (company: unknown): ClaimDetail | null => {
-  const text = normalizeText(company);
-
-  if (!text || text === "미지정") return null;
-  if (text.includes("캐피탈")) return "캐피탈";
-  return "보험";
-};
-
-const isFaultCoverage = (value: unknown) => normalizeText(value) === "과실";
-
-const matchesSide = (detail: unknown, side: "자차" | "상대") => {
-  const text = normalizeText(detail);
-
-  if (side === "자차") return text.includes("자차");
-  return text.includes("대물") || text.includes("상대");
-};
-
-const getClaimStatus = (
-  releaseDate: unknown,
-  claimDate: string,
-  claimAmount: number
-) => {
-  if (isEmptyDateValue(releaseDate)) return "";
+const getClaimStatus = (claimDate: string, claimAmount: number) => {
   if (!claimAmount && isEmptyDateValue(claimDate)) return "미청구";
   if (isEmptyDateValue(claimDate)) return "미결";
 
@@ -110,53 +76,17 @@ const getClaimStatus = (
   return (elapsedDays ?? 0) > pendingCutoffDays ? "장기미결" : "미결";
 };
 
-const hasClaimData = (target: Pick<ClaimTarget, "claimAmount" | "claimDate">) =>
-  target.claimAmount > 0 || !isEmptyDateValue(target.claimDate);
-
-const assignPaymentsByDetail = (targets: ClaimTarget[], payments: any[]) => {
-  const nextTargets = targets.map((target) => ({ ...target }));
-
-  payments.filter(isRepairPaymentAmountRow).forEach((payment) => {
-    const paymentAmount = toAmountNumber(payment.payment_amount);
-    const paymentDetail = normalizeClaimDetail(payment.payment_detail);
-    const sideMatchedTargets = nextTargets.filter((target) =>
-      target.claimSide === "자차" || target.claimSide === "상대"
-        ? matchesSide(payment.payment_detail, target.claimSide)
-        : false
-    );
-    const detailMatchedTargets = paymentDetail
-      ? nextTargets.filter((target) => target.claimDetail === paymentDetail)
-      : [];
-    const candidates =
-      sideMatchedTargets.length > 0
-        ? sideMatchedTargets
-        : detailMatchedTargets.length > 0
-          ? detailMatchedTargets
-          : nextTargets.length === 1
-            ? nextTargets
-            : [];
-
-    if (candidates.length === 0) return;
-
-    const selected = candidates.reduce((best, target) => {
-      const bestGap = Math.abs(
-        best.claimAmount - (best.paidAmount + best.receivableAmount + paymentAmount)
-      );
-      const targetGap = Math.abs(
-        target.claimAmount - (target.paidAmount + target.receivableAmount + paymentAmount)
-      );
-
-      return targetGap < bestGap ? target : best;
-    });
-
-    if (isEmptyDateValue(payment.payment_date)) {
-      selected.receivableAmount += paymentAmount;
-    } else {
-      selected.paidAmount += paymentAmount;
-    }
-  });
-
-  return nextTargets;
+const getPendingStatus = ({
+  claimDate,
+  claimAmount,
+  receivableAmount,
+}: {
+  claimDate: string;
+  claimAmount: number;
+  receivableAmount: number;
+}) => {
+  if (receivableAmount > 0) return "미수";
+  return getClaimStatus(claimDate, claimAmount);
 };
 
 const dateDiffDays = (fromDate: unknown, toDate = localDateText()) => {
@@ -317,171 +247,76 @@ export default function PendingSettlementPage({
   }, [paymentRows]);
 
   const riskRows = settlementRows
-    .flatMap((row): RiskRow[] => {
+    .map((row): RiskRow | null => {
       const progressStatus = normalizeStatus(row.progress_status);
 
-      if (progressStatus !== "미결" && progressStatus !== "완결") return [];
+      if (progressStatus !== "미결" && progressStatus !== "완결") return null;
 
       const workName = normalizeText(row.work_name);
 
-      if (isEmptyDateValue(row.release_date)) return [];
+      if (!workName || isEmptyDateValue(row.release_date)) return null;
 
       const workPayments = paymentRowsByWork.get(workName) ?? [];
       const claimRows = workPayments.filter(isClaimPaymentRow);
-      const detailClaimRows = claimRows.filter((payment) =>
-        normalizeClaimDetail(payment.payment_detail)
+      const claimDetailRows = claimRows.filter((payment) =>
+        normalizeClaimDetail(payment.payment_detail) === "보험" ||
+        normalizeClaimDetail(payment.payment_detail) === "캐피탈"
       );
-      const claimSourceRows =
-        detailClaimRows.length > 0 ? detailClaimRows : claimRows;
-      const targets: ClaimTarget[] = [];
+      const claimSourceRows = claimDetailRows.length > 0 ? claimDetailRows : claimRows;
       const settlementClaimAmount = toAmountNumber(row.claim_amount);
       const settlementClaimDate = normalizeText(row.claim_date);
+      const paymentClaimAmount = claimSourceRows.reduce(
+        (sum, payment) => sum + toAmountNumber(payment.claim_amount),
+        0
+      );
+      const claimAmount = paymentClaimAmount || settlementClaimAmount;
+      const claimDate =
+        claimSourceRows
+          .map((payment) => normalizeText(payment.claim_date))
+          .filter((date) => !isEmptyDateValue(date))
+          .sort()[0] ?? settlementClaimDate;
+      const claimSide =
+        Array.from(
+          new Set(
+            claimSourceRows
+              .map((payment) => normalizeClaimDetail(payment.payment_detail))
+              .filter(Boolean)
+          )
+        ).join(" / ") || "청구";
+      const paidAmount = workPayments
+        .filter(isRepairPaymentAmountRow)
+        .filter((payment) => !isEmptyDateValue(payment.payment_date))
+        .reduce((sum, payment) => sum + toAmountNumber(payment.payment_amount), 0);
+      const receivableAmount = workPayments
+        .filter(isRepairPaymentAmountRow)
+        .filter((payment) => isEmptyDateValue(payment.payment_date))
+        .reduce((sum, payment) => sum + toAmountNumber(payment.payment_amount), 0);
+      const collectionAmount = paidAmount + receivableAmount;
+      const status =
+        progressStatus === "완결"
+          ? "완결"
+          : getPendingStatus({ claimDate, claimAmount, receivableAmount });
+      const elapsedDays = dateDiffDays(claimDate);
+      const claimRate =
+        claimAmount > 0 ? (collectionAmount / claimAmount) * 100 : null;
 
-      if (isFaultCoverage(row.coverage_type)) {
-        const ownClaimRow = claimSourceRows[0];
-        const otherClaimRow = claimSourceRows[1];
-        const ownCompany = normalizeText(row.insurance_company) || "미지정";
-        const otherCompany = normalizeText(row.other_insurance_company) || "미지정";
-        const ownClaimAmount =
-          toAmountNumber(row.own_claim_amount) ||
-          toAmountNumber(ownClaimRow?.claim_amount);
-        const otherClaimAmount =
-          toAmountNumber(row.other_claim_amount) ||
-          toAmountNumber(otherClaimRow?.claim_amount);
-        const ownClaimDate =
-          normalizeText(row.own_claim_date) ||
-          normalizeText(ownClaimRow?.claim_date);
-        const otherClaimDate =
-          normalizeText(row.other_claim_date) ||
-          normalizeText(otherClaimRow?.claim_date);
-        const hasSideClaim =
-          ownClaimAmount > 0 ||
-          otherClaimAmount > 0 ||
-          !isEmptyDateValue(ownClaimDate) ||
-          !isEmptyDateValue(otherClaimDate);
-
-        if (!hasSideClaim && (settlementClaimAmount > 0 || !isEmptyDateValue(settlementClaimDate))) {
-          targets.push({
-            id: String(row.id ?? workName),
-            workName,
-            company: ownCompany,
-            claimSide: "청구",
-            claimDetail: inferClaimDetailFromCompany(ownCompany),
-            claimDate: settlementClaimDate,
-            claimAmount: settlementClaimAmount,
-            paidAmount: 0,
-            receivableAmount: 0,
-          });
-        } else {
-          targets.push(
-            {
-              id: `${row.id ?? workName}-own`,
-              workName,
-              company: ownCompany,
-              claimSide: "자차",
-              claimDetail:
-                normalizeClaimDetail(ownClaimRow?.payment_detail) ||
-                inferClaimDetailFromCompany(ownCompany),
-              claimDate:
-                ownClaimDate ||
-                (ownClaimAmount > 0 ? settlementClaimDate : ""),
-              claimAmount: ownClaimAmount,
-              paidAmount: 0,
-              receivableAmount: 0,
-            },
-            {
-              id: `${row.id ?? workName}-other`,
-              workName,
-              company: otherCompany,
-              claimSide: "상대",
-              claimDetail:
-                normalizeClaimDetail(otherClaimRow?.payment_detail) ||
-                inferClaimDetailFromCompany(otherCompany),
-              claimDate:
-                otherClaimDate ||
-                (otherClaimAmount > 0 ? settlementClaimDate : ""),
-              claimAmount: otherClaimAmount,
-              paidAmount: 0,
-              receivableAmount: 0,
-            }
-          );
-        }
-      } else if (claimSourceRows.length > 0) {
-        claimSourceRows.forEach((payment, index) => {
-          const detail = normalizeClaimDetail(payment.payment_detail);
-
-          targets.push({
-            id: `${row.id ?? workName}-${detail ?? index}`,
-            workName,
-            company: normalizeText(row.insurance_company) || "미지정",
-            claimSide: detail ?? "청구",
-            claimDetail: detail,
-            claimDate: normalizeText(payment.claim_date),
-            claimAmount: toAmountNumber(payment.claim_amount),
-            paidAmount: 0,
-            receivableAmount: 0,
-          });
-        });
-      } else {
-          targets.push({
-            id: String(row.id ?? workName),
-            workName,
-            company: normalizeText(row.insurance_company) || "미지정",
-            claimSide: "-",
-            claimDetail: inferClaimDetailFromCompany(row.insurance_company),
-            claimDate: settlementClaimDate,
-            claimAmount: settlementClaimAmount,
-            paidAmount: 0,
-            receivableAmount: 0,
-        });
-      }
-
-      const hasAnyFaultClaim =
-        isFaultCoverage(row.coverage_type) && targets.some(hasClaimData);
-
-      return assignPaymentsByDetail(targets, workPayments)
-        .filter((target) => target.workName)
-        .filter(
-          (target) =>
-            !hasAnyFaultClaim ||
-            hasClaimData(target) ||
-            target.paidAmount > 0 ||
-            target.receivableAmount > 0
-        )
-        .map((target) => {
-          const status =
-            progressStatus === "완결"
-              ? "완결"
-              : getClaimStatus(row.release_date, target.claimDate, target.claimAmount);
-          const elapsedDays = dateDiffDays(target.claimDate);
-          const claimRate =
-            target.claimAmount > 0
-              ? (target.paidAmount / target.claimAmount) * 100
-              : null;
-
-          return {
-            id: target.id,
-            workName: target.workName,
-            company: target.company,
-            claimSide:
-              target.claimDetail && target.claimSide !== target.claimDetail
-                ? `${target.claimSide} / ${target.claimDetail}`
-                : target.claimSide,
-            coverageType: normalizeText(row.coverage_type),
-            status,
-            claimDate: target.claimDate,
-            elapsedDays,
-            claimAmount: target.claimAmount,
-            paidAmount: target.paidAmount,
-            receivableAmount: target.receivableAmount,
-            shortageAmount: Math.max(
-              0,
-              target.claimAmount - target.paidAmount - target.receivableAmount
-            ),
-            claimRate,
-          };
-        });
+      return {
+        id: String(row.id ?? workName),
+        workName,
+        company: normalizeText(row.insurance_company) || "미지정",
+        claimSide,
+        coverageType: normalizeText(row.coverage_type),
+        status,
+        claimDate,
+        elapsedDays,
+        claimAmount,
+        paidAmount,
+        receivableAmount,
+        shortageAmount: Math.max(0, claimAmount - collectionAmount),
+        claimRate,
+      };
     })
+    .filter((row): row is RiskRow => Boolean(row))
     .sort((a, b) => {
       const dayCompare = (b.elapsedDays ?? -1) - (a.elapsedDays ?? -1);
 
@@ -490,13 +325,9 @@ export default function PendingSettlementPage({
     });
 
   const unclaimedRows = riskRows.filter((row) => row.status === "미청구");
-  const receivableRows = riskRows.filter((row) => row.receivableAmount > 0);
-  const pendingRows = riskRows.filter(
-    (row) => row.status === "미결" && row.receivableAmount <= 0
-  );
-  const longPendingRows = riskRows.filter(
-    (row) => row.status === "장기미결" && row.receivableAmount <= 0
-  );
+  const receivableRows = riskRows.filter((row) => row.status === "미수");
+  const pendingRows = riskRows.filter((row) => row.status === "미결");
+  const longPendingRows = riskRows.filter((row) => row.status === "장기미결");
   const lowPaymentRateRows = riskRows.filter(
     (row) =>
       row.status === "완결" &&
@@ -532,7 +363,7 @@ export default function PendingSettlementPage({
       <div>
         <h3 className="text-2xl font-bold">미결관리</h3>
         <p className="text-sm text-slate-600">
-          미청구, 미결, 미수, 장기미결, 결제율 95% 미만 차량을 따로 확인합니다.
+          출고된 미결 차량을 미청구, 미결, 미수, 장기미결, 결제율 95% 미만으로 나누어 확인합니다.
         </p>
         <p className="mt-1 text-xs font-semibold text-slate-500">
           원본: 차량정산 {sourceCounts.settlements.toLocaleString()}건 / 입금{" "}
@@ -761,18 +592,16 @@ function RiskTable({
                 </div>
                 <span
                   className={
-                    row.receivableAmount > 0
+                    row.status === "미수"
                       ? "shrink-0 rounded-full bg-amber-100 px-2 py-1 text-[11px] font-bold text-amber-700"
                       : row.status === "미청구"
                       ? "shrink-0 rounded-full bg-slate-100 px-2 py-1 text-[11px] font-bold text-slate-700"
                       : row.status === "장기미결"
                         ? "shrink-0 rounded-full bg-red-100 px-2 py-1 text-[11px] font-bold text-red-700"
-                        : row.status === "완결"
-                          ? "shrink-0 rounded-full bg-green-100 px-2 py-1 text-[11px] font-bold text-green-700"
-                          : "shrink-0 rounded-full bg-orange-100 px-2 py-1 text-[11px] font-bold text-orange-700"
+                        : "shrink-0 rounded-full bg-orange-100 px-2 py-1 text-[11px] font-bold text-orange-700"
                   }
                 >
-                  {row.receivableAmount > 0 ? "미수" : row.status}
+                  {row.status}
                 </span>
               </div>
 
@@ -877,18 +706,16 @@ function RiskTable({
                 <td className="border-b border-slate-100 px-3 py-2">
                   <span
                     className={
-                      row.receivableAmount > 0
+                      row.status === "미수"
                         ? "rounded-full bg-amber-100 px-2 py-1 text-xs font-bold text-amber-700"
                         : row.status === "미청구"
                         ? "rounded-full bg-slate-100 px-2 py-1 text-xs font-bold text-slate-700"
                         : row.status === "장기미결"
                           ? "rounded-full bg-red-100 px-2 py-1 text-xs font-bold text-red-700"
-                          : row.status === "완결"
-                            ? "rounded-full bg-green-100 px-2 py-1 text-xs font-bold text-green-700"
-                            : "rounded-full bg-orange-100 px-2 py-1 text-xs font-bold text-orange-700"
+                          : "rounded-full bg-orange-100 px-2 py-1 text-xs font-bold text-orange-700"
                     }
                   >
-                    {row.receivableAmount > 0 ? "미수" : row.status}
+                    {row.status}
                   </span>
                 </td>
                 <td className="border-b border-slate-100 px-3 py-2">
