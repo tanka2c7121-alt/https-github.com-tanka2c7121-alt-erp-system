@@ -28,6 +28,7 @@ export function useRealtimeRefresh({
 }: UseRealtimeRefreshOptions) {
   const refreshRef = useRef(onRefresh);
   const timerRef = useRef<number | null>(null);
+  const channelInstanceRef = useRef(0);
 
   useEffect(() => {
     refreshRef.current = onRefresh;
@@ -36,7 +37,10 @@ export function useRealtimeRefresh({
   useEffect(() => {
     if (!enabled || tables.length === 0) return;
 
-    const channel = supabase.channel(channelName);
+    channelInstanceRef.current += 1;
+    const channel = supabase.channel(
+      `${channelName}-${channelInstanceRef.current}-${Date.now()}`
+    );
     const scheduleRefresh = () => {
       if (timerRef.current) {
         window.clearTimeout(timerRef.current);

@@ -6,7 +6,7 @@ import { localDateText } from "../../lib/date";
 import { fetchAllRows } from "../../lib/fetchAllRows";
 
 
-type RiskView = "unclaimed" | "pending" | "longPending" | "lowPaymentRate";
+type RiskView = "unclaimed" | "pending" | "receivable" | "longPending" | "lowPaymentRate";
 
 type ClaimDetail = "보험" | "캐피탈" | "일반" | "바디케어";
 
@@ -21,6 +21,7 @@ type RiskRow = {
   elapsedDays: number | null;
   claimAmount: number;
   paidAmount: number;
+  receivableAmount: number;
   shortageAmount: number;
   claimRate: number | null;
 };
@@ -36,6 +37,7 @@ type ClaimTarget = {
   claimDate: string;
   claimAmount: number;
   paidAmount: number;
+  receivableAmount: number;
 };
 
 const pendingCutoffDays = 90;
@@ -95,12 +97,21 @@ const matchesSide = (detail: unknown, side: "자차" | "상대") => {
   return text.includes("대물") || text.includes("상대");
 };
 
-const getClaimStatus = (claimDate: string, claimAmount: number) => {
-  if (!claimAmount || isEmptyDateValue(claimDate)) return "미청구";
+const getClaimStatus = (
+  releaseDate: unknown,
+  claimDate: string,
+  claimAmount: number
+) => {
+  if (isEmptyDateValue(releaseDate)) return "";
+  if (!claimAmount && isEmptyDateValue(claimDate)) return "미청구";
+  if (isEmptyDateValue(claimDate)) return "미결";
 
   const elapsedDays = dateDiffDays(claimDate);
   return (elapsedDays ?? 0) > pendingCutoffDays ? "장기미결" : "미결";
 };
+
+const hasClaimData = (target: Pick<ClaimTarget, "claimAmount" | "claimDate">) =>
+  target.claimAmount > 0 || !isEmptyDateValue(target.claimDate);
 
 const assignPaymentsByDetail = (targets: ClaimTarget[], payments: any[]) => {
   const nextTargets = targets.map((target) => ({ ...target }));
@@ -128,13 +139,21 @@ const assignPaymentsByDetail = (targets: ClaimTarget[], payments: any[]) => {
     if (candidates.length === 0) return;
 
     const selected = candidates.reduce((best, target) => {
-      const bestGap = Math.abs(best.claimAmount - (best.paidAmount + paymentAmount));
-      const targetGap = Math.abs(target.claimAmount - (target.paidAmount + paymentAmount));
+      const bestGap = Math.abs(
+        best.claimAmount - (best.paidAmount + best.receivableAmount + paymentAmount)
+      );
+      const targetGap = Math.abs(
+        target.claimAmount - (target.paidAmount + target.receivableAmount + paymentAmount)
+      );
 
       return targetGap < bestGap ? target : best;
     });
 
-    selected.paidAmount += paymentAmount;
+    if (isEmptyDateValue(payment.payment_date)) {
+      selected.receivableAmount += paymentAmount;
+    } else {
+      selected.paidAmount += paymentAmount;
+    }
   });
 
   return nextTargets;
@@ -304,16 +323,23 @@ export default function PendingSettlementPage({
       if (progressStatus !== "미결" && progressStatus !== "완결") return [];
 
       const workName = normalizeText(row.work_name);
+
+      if (isEmptyDateValue(row.release_date)) return [];
+
       const workPayments = paymentRowsByWork.get(workName) ?? [];
       const claimRows = workPayments.filter(isClaimPaymentRow);
       const detailClaimRows = claimRows.filter((payment) =>
         normalizeClaimDetail(payment.payment_detail)
       );
+      const claimSourceRows =
+        detailClaimRows.length > 0 ? detailClaimRows : claimRows;
       const targets: ClaimTarget[] = [];
+      const settlementClaimAmount = toAmountNumber(row.claim_amount);
+      const settlementClaimDate = normalizeText(row.claim_date);
 
       if (isFaultCoverage(row.coverage_type)) {
-        const ownClaimRow = detailClaimRows[0];
-        const otherClaimRow = detailClaimRows[1];
+        const ownClaimRow = claimSourceRows[0];
+        const otherClaimRow = claimSourceRows[1];
         const ownCompany = normalizeText(row.insurance_company) || "미지정";
         const otherCompany = normalizeText(row.other_insurance_company) || "미지정";
         const ownClaimAmount =
@@ -328,35 +354,60 @@ export default function PendingSettlementPage({
         const otherClaimDate =
           normalizeText(row.other_claim_date) ||
           normalizeText(otherClaimRow?.claim_date);
+        const hasSideClaim =
+          ownClaimAmount > 0 ||
+          otherClaimAmount > 0 ||
+          !isEmptyDateValue(ownClaimDate) ||
+          !isEmptyDateValue(otherClaimDate);
 
-        targets.push(
-          {
-            id: `${row.id ?? workName}-own`,
+        if (!hasSideClaim && (settlementClaimAmount > 0 || !isEmptyDateValue(settlementClaimDate))) {
+          targets.push({
+            id: String(row.id ?? workName),
             workName,
             company: ownCompany,
-            claimSide: "자차",
-            claimDetail:
-              normalizeClaimDetail(ownClaimRow?.payment_detail) ||
-              inferClaimDetailFromCompany(ownCompany),
-            claimDate: ownClaimDate,
-            claimAmount: ownClaimAmount,
+            claimSide: "청구",
+            claimDetail: inferClaimDetailFromCompany(ownCompany),
+            claimDate: settlementClaimDate,
+            claimAmount: settlementClaimAmount,
             paidAmount: 0,
-          },
-          {
-            id: `${row.id ?? workName}-other`,
-            workName,
-            company: otherCompany,
-            claimSide: "상대",
-            claimDetail:
-              normalizeClaimDetail(otherClaimRow?.payment_detail) ||
-              inferClaimDetailFromCompany(otherCompany),
-            claimDate: otherClaimDate,
-            claimAmount: otherClaimAmount,
-            paidAmount: 0,
-          }
-        );
-      } else if (detailClaimRows.length > 0) {
-        detailClaimRows.forEach((payment, index) => {
+            receivableAmount: 0,
+          });
+        } else {
+          targets.push(
+            {
+              id: `${row.id ?? workName}-own`,
+              workName,
+              company: ownCompany,
+              claimSide: "자차",
+              claimDetail:
+                normalizeClaimDetail(ownClaimRow?.payment_detail) ||
+                inferClaimDetailFromCompany(ownCompany),
+              claimDate:
+                ownClaimDate ||
+                (ownClaimAmount > 0 ? settlementClaimDate : ""),
+              claimAmount: ownClaimAmount,
+              paidAmount: 0,
+              receivableAmount: 0,
+            },
+            {
+              id: `${row.id ?? workName}-other`,
+              workName,
+              company: otherCompany,
+              claimSide: "상대",
+              claimDetail:
+                normalizeClaimDetail(otherClaimRow?.payment_detail) ||
+                inferClaimDetailFromCompany(otherCompany),
+              claimDate:
+                otherClaimDate ||
+                (otherClaimAmount > 0 ? settlementClaimDate : ""),
+              claimAmount: otherClaimAmount,
+              paidAmount: 0,
+              receivableAmount: 0,
+            }
+          );
+        }
+      } else if (claimSourceRows.length > 0) {
+        claimSourceRows.forEach((payment, index) => {
           const detail = normalizeClaimDetail(payment.payment_detail);
 
           targets.push({
@@ -368,6 +419,7 @@ export default function PendingSettlementPage({
             claimDate: normalizeText(payment.claim_date),
             claimAmount: toAmountNumber(payment.claim_amount),
             paidAmount: 0,
+            receivableAmount: 0,
           });
         });
       } else {
@@ -377,19 +429,30 @@ export default function PendingSettlementPage({
             company: normalizeText(row.insurance_company) || "미지정",
             claimSide: "-",
             claimDetail: inferClaimDetailFromCompany(row.insurance_company),
-            claimDate: normalizeText(row.claim_date),
-            claimAmount: toAmountNumber(row.claim_amount),
+            claimDate: settlementClaimDate,
+            claimAmount: settlementClaimAmount,
             paidAmount: 0,
+            receivableAmount: 0,
         });
       }
 
+      const hasAnyFaultClaim =
+        isFaultCoverage(row.coverage_type) && targets.some(hasClaimData);
+
       return assignPaymentsByDetail(targets, workPayments)
         .filter((target) => target.workName)
+        .filter(
+          (target) =>
+            !hasAnyFaultClaim ||
+            hasClaimData(target) ||
+            target.paidAmount > 0 ||
+            target.receivableAmount > 0
+        )
         .map((target) => {
           const status =
             progressStatus === "완결"
               ? "완결"
-              : getClaimStatus(target.claimDate, target.claimAmount);
+              : getClaimStatus(row.release_date, target.claimDate, target.claimAmount);
           const elapsedDays = dateDiffDays(target.claimDate);
           const claimRate =
             target.claimAmount > 0
@@ -410,7 +473,11 @@ export default function PendingSettlementPage({
             elapsedDays,
             claimAmount: target.claimAmount,
             paidAmount: target.paidAmount,
-            shortageAmount: Math.max(0, target.claimAmount - target.paidAmount),
+            receivableAmount: target.receivableAmount,
+            shortageAmount: Math.max(
+              0,
+              target.claimAmount - target.paidAmount - target.receivableAmount
+            ),
             claimRate,
           };
         });
@@ -423,8 +490,13 @@ export default function PendingSettlementPage({
     });
 
   const unclaimedRows = riskRows.filter((row) => row.status === "미청구");
-  const pendingRows = riskRows.filter((row) => row.status === "미결");
-  const longPendingRows = riskRows.filter((row) => row.status === "장기미결");
+  const receivableRows = riskRows.filter((row) => row.receivableAmount > 0);
+  const pendingRows = riskRows.filter(
+    (row) => row.status === "미결" && row.receivableAmount <= 0
+  );
+  const longPendingRows = riskRows.filter(
+    (row) => row.status === "장기미결" && row.receivableAmount <= 0
+  );
   const lowPaymentRateRows = riskRows.filter(
     (row) =>
       row.status === "완결" &&
@@ -438,6 +510,8 @@ export default function PendingSettlementPage({
       ? unclaimedRows
       : activeRiskView === "pending"
       ? pendingRows
+      : activeRiskView === "receivable"
+      ? receivableRows
       : activeRiskView === "longPending"
         ? longPendingRows
         : lowPaymentRateRows;
@@ -447,6 +521,8 @@ export default function PendingSettlementPage({
       ? "미청구"
       : activeRiskView === "pending"
       ? "미결건"
+      : activeRiskView === "receivable"
+      ? "미수건"
       : activeRiskView === "longPending"
         ? "장기미결건"
         : "결제율 95% 미만";
@@ -456,7 +532,7 @@ export default function PendingSettlementPage({
       <div>
         <h3 className="text-2xl font-bold">미결관리</h3>
         <p className="text-sm text-slate-600">
-          미청구, 미결, 장기미결, 결제율 95% 미만 차량을 따로 확인합니다.
+          미청구, 미결, 미수, 장기미결, 결제율 95% 미만 차량을 따로 확인합니다.
         </p>
         <p className="mt-1 text-xs font-semibold text-slate-500">
           원본: 차량정산 {sourceCounts.settlements.toLocaleString()}건 / 입금{" "}
@@ -469,7 +545,7 @@ export default function PendingSettlementPage({
         )}
       </div>
 
-      <section className="grid grid-cols-2 gap-1.5 md:grid-cols-4 md:gap-3">
+      <section className="grid grid-cols-2 gap-1.5 md:grid-cols-5 md:gap-3">
         <RiskCard
           title="미청구"
           count={unclaimedRows.length}
@@ -485,6 +561,14 @@ export default function PendingSettlementPage({
           tone="orange"
           active={activeRiskView === "pending"}
           onClick={() => setActiveRiskView("pending")}
+        />
+        <RiskCard
+          title="미수건"
+          count={receivableRows.length}
+          amount={receivableRows.reduce((sum, row) => sum + row.receivableAmount, 0)}
+          tone="amber"
+          active={activeRiskView === "receivable"}
+          onClick={() => setActiveRiskView("receivable")}
         />
         <RiskCard
           title="장기미결건"
@@ -530,7 +614,7 @@ function RiskCard({
   title: string;
   count: number;
   amount: number;
-  tone: "slate" | "orange" | "red" | "blue";
+  tone: "slate" | "orange" | "amber" | "red" | "blue";
   active: boolean;
   onClick: () => void;
 }) {
@@ -541,6 +625,9 @@ function RiskCard({
     orange: active
       ? "border-orange-400 bg-orange-50 text-orange-700"
       : "border-orange-100 bg-white text-orange-700 hover:bg-orange-50",
+    amber: active
+      ? "border-amber-400 bg-amber-50 text-amber-700"
+      : "border-amber-100 bg-white text-amber-700 hover:bg-amber-50",
     red: active
       ? "border-red-400 bg-red-50 text-red-700"
       : "border-red-100 bg-white text-red-700 hover:bg-red-50",
@@ -596,6 +683,7 @@ function RiskTable({
         row.elapsedDays === null ? "" : `${row.elapsedDays}일`,
         row.claimAmount.toLocaleString(),
         row.paidAmount.toLocaleString(),
+        row.receivableAmount.toLocaleString(),
         row.shortageAmount.toLocaleString(),
         row.claimRate === null ? "" : `${row.claimRate.toFixed(1)}%`,
       ]
@@ -673,7 +761,9 @@ function RiskTable({
                 </div>
                 <span
                   className={
-                    row.status === "미청구"
+                    row.receivableAmount > 0
+                      ? "shrink-0 rounded-full bg-amber-100 px-2 py-1 text-[11px] font-bold text-amber-700"
+                      : row.status === "미청구"
                       ? "shrink-0 rounded-full bg-slate-100 px-2 py-1 text-[11px] font-bold text-slate-700"
                       : row.status === "장기미결"
                         ? "shrink-0 rounded-full bg-red-100 px-2 py-1 text-[11px] font-bold text-red-700"
@@ -682,7 +772,7 @@ function RiskTable({
                           : "shrink-0 rounded-full bg-orange-100 px-2 py-1 text-[11px] font-bold text-orange-700"
                   }
                 >
-                  {row.status}
+                  {row.receivableAmount > 0 ? "미수" : row.status}
                 </span>
               </div>
 
@@ -787,7 +877,9 @@ function RiskTable({
                 <td className="border-b border-slate-100 px-3 py-2">
                   <span
                     className={
-                      row.status === "미청구"
+                      row.receivableAmount > 0
+                        ? "rounded-full bg-amber-100 px-2 py-1 text-xs font-bold text-amber-700"
+                        : row.status === "미청구"
                         ? "rounded-full bg-slate-100 px-2 py-1 text-xs font-bold text-slate-700"
                         : row.status === "장기미결"
                           ? "rounded-full bg-red-100 px-2 py-1 text-xs font-bold text-red-700"
@@ -796,7 +888,7 @@ function RiskTable({
                             : "rounded-full bg-orange-100 px-2 py-1 text-xs font-bold text-orange-700"
                     }
                   >
-                    {row.status}
+                    {row.receivableAmount > 0 ? "미수" : row.status}
                   </span>
                 </td>
                 <td className="border-b border-slate-100 px-3 py-2">
@@ -834,13 +926,15 @@ function InfoPill({
 }: {
   label: string;
   value: string;
-  tone?: "slate" | "red";
+  tone?: "slate" | "amber" | "red";
 }) {
   return (
     <div
       className={
         tone === "red"
           ? "rounded-lg bg-red-50 px-2 py-1.5 text-red-700"
+          : tone === "amber"
+          ? "rounded-lg bg-amber-50 px-2 py-1.5 text-amber-700"
           : "rounded-lg bg-slate-50 px-2 py-1.5 text-slate-700"
       }
     >
