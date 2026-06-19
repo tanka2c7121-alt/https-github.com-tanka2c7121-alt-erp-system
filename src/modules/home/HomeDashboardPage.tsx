@@ -140,6 +140,12 @@ const formatKoreanDate = (dateText: string) => {
   const date = parseLocalDate(dateText);
   return `${date.getMonth() + 1}월 ${date.getDate()}일(${weekDays[date.getDay()]})`;
 };
+const getVehicleKey = (order: Pick<WorkOrder, "work_name" | "car_number" | "car_model">) => {
+  const carNumber = String(order.car_number ?? "").trim();
+  const carModel = String(order.car_model ?? "").trim();
+
+  return carNumber || [order.work_name, carModel].filter(Boolean).join("|");
+};
 const buildMonthDays = (monthText: string) => {
   const [year, month] = monthText.split("-").map(Number);
   const firstDate = new Date(year, month - 1, 1);
@@ -302,7 +308,7 @@ export default function HomeDashboardPage({
       isDateInMonth(item.inbound_date, thisMonth)
     );
     const thisMonthInboundVehicleCount = new Set(
-      thisMonthInbound.map((item) => item.work_name).filter(Boolean)
+      thisMonthInbound.map(getVehicleKey).filter(Boolean)
     ).size;
     const todayOutbound = workOrders.filter((item) => item.release_date === today);
     const thisMonthOutbound = workOrders.filter((item) =>
