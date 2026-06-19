@@ -175,6 +175,15 @@ const getStoredDailyCashEntryKey = (row: any) => {
   ].join("|");
 };
 
+const getDailyCashEligiblePaymentRows = (rows: PaymentRow[]) =>
+  rows.filter(
+    (row) =>
+      row.amount &&
+      row.date &&
+      row.method &&
+      !isPartnerSupportPaymentRow(row)
+  );
+
 const getPaymentRowCountMap = (rows: PaymentRow[]) =>
   rows.reduce<Map<string, number>>((map, row) => {
     const key = getDailyCashPaymentKey(row);
@@ -206,6 +215,7 @@ export default function SettlementRegisterPage({
   >("unlock");
   const [adminPassword, setAdminPassword] = useState("");
   const loadedDailyCashPaymentCountsRef = useRef<Map<string, number>>(new Map());
+  const loadedDailyCashEntryKeysRef = useRef<string[]>([]);
   const [form, setForm] = useState({
     workName: "",
     carNumber: "",
@@ -463,6 +473,9 @@ export default function SettlementRegisterPage({
         : defaultPaymentRows();
 
     loadedDailyCashPaymentCountsRef.current = getPaymentRowCountMap(loadedPaymentRows);
+    loadedDailyCashEntryKeysRef.current = getDailyCashEligiblePaymentRows(loadedPaymentRows).map(
+      getDailyCashEntryKey
+    );
     setPaymentRows(normalizePaymentRowsForWorkOrder(loadedPaymentRows));
 
     const loadedClaimRows =
@@ -617,73 +630,35 @@ export default function SettlementRegisterPage({
     const { data: existingCashRows, error: existingCashError } =
       await supabase
         .from("daily_cash")
-        .select("date, created_on, account, content, income")
+        .select("id, date, created_on, account, content, income")
         .eq("source_type", "settlement_payment")
         .eq("source_work_name", targetForm.workName);
 
     if (existingCashError) return existingCashError;
 
-    const existingCashCounts = (existingCashRows ?? []).reduce<Map<string, number>>(
+    const existingRowsByKey = (existingCashRows ?? []).reduce<Map<string, any[]>>(
       (map, row) => {
         const key = getStoredDailyCashEntryKey(row);
-        map.set(key, (map.get(key) ?? 0) + 1);
+        map.set(key, [...(map.get(key) ?? []), row]);
         return map;
       },
-      new Map()
+      new Map<string, any[]>()
     );
-    const existingTodayCashCounts = (existingCashRows ?? [])
-      .filter((row) => row.created_on === today)
-      .reduce<Map<string, number>>((map, row) => {
-        const key = getStoredDailyCashEntryKey(row);
-        map.set(key, (map.get(key) ?? 0) + 1);
-        return map;
-      }, new Map());
 
-    const { error: deleteError } = await supabase
-      .from("daily_cash")
-      .delete()
-      .eq("source_type", "settlement_payment")
-      .eq("source_work_name", targetForm.workName)
-      .eq("created_on", today);
+    const takeExistingRow = (key: string) => {
+      const rows = existingRowsByKey.get(key) ?? [];
+      const row = rows.shift();
 
-    if (deleteError) return deleteError;
+      if (rows.length > 0) {
+        existingRowsByKey.set(key, rows);
+      } else {
+        existingRowsByKey.delete(key);
+      }
 
-    const loadedCounts = isEditMode
-      ? new Map(loadedDailyCashPaymentCountsRef.current)
-      : new Map<string, number>();
+      return row;
+    };
 
-    const rows = paymentRows
-      .filter(
-        (row) =>
-          row.amount &&
-          row.date &&
-          row.method &&
-          !isPartnerSupportPaymentRow(row)
-      )
-      .filter((row) => {
-        const existingTodayCashKey = getDailyCashEntryKey(row);
-        const existingTodayCashCount =
-          existingTodayCashCounts.get(existingTodayCashKey) ?? 0;
-
-        if (existingTodayCashCount > 0) {
-          existingTodayCashCounts.set(
-            existingTodayCashKey,
-            existingTodayCashCount - 1
-          );
-          return true;
-        }
-
-        const key = getDailyCashPaymentKey(row);
-        const loadedCount = loadedCounts.get(key) ?? 0;
-
-        if (loadedCount > 0) {
-          loadedCounts.set(key, loadedCount - 1);
-          return (existingCashCounts.get(existingTodayCashKey) ?? 0) === 0;
-        }
-
-        return true;
-      })
-      .map((row) => ({
+    const toDailyCashPayload = (row: PaymentRow) => ({
         date: row.date,
         created_on: today,
         account: row.method,
@@ -695,11 +670,68 @@ export default function SettlementRegisterPage({
         memo: targetForm.workName,
         source_type: "settlement_payment",
         source_work_name: targetForm.workName,
-      }));
+    });
 
-    if (rows.length === 0) return null;
+    const desiredRows = getDailyCashEligiblePaymentRows(paymentRows);
+    const updateTasks: PromiseLike<{ error: any }>[] = [];
+    const insertRows: Array<ReturnType<typeof toDailyCashPayload>> = [];
 
-    const { error } = await supabase.from("daily_cash").insert(rows);
+    desiredRows.forEach((row, index) => {
+      const key = getDailyCashEntryKey(row);
+      const unchangedExistingRow = takeExistingRow(key);
+
+      if (unchangedExistingRow) {
+        return;
+      }
+
+      const previousKey = loadedDailyCashEntryKeysRef.current[index];
+      const previousExistingRow = previousKey ? takeExistingRow(previousKey) : null;
+      const payload = toDailyCashPayload(row);
+
+      if (previousExistingRow?.id) {
+        updateTasks.push(
+          supabase
+            .from("daily_cash")
+            .update({
+              date: payload.date,
+              account: payload.account,
+              type: payload.type,
+              category: payload.category,
+              content: payload.content,
+              income: payload.income,
+              expense: payload.expense,
+              memo: payload.memo,
+              source_type: payload.source_type,
+              source_work_name: payload.source_work_name,
+            })
+            .eq("id", previousExistingRow.id)
+        );
+        return;
+      }
+
+      insertRows.push(payload);
+    });
+
+    const remainingRows = Array.from(existingRowsByKey.values()).flat();
+    const loadedKeys = new Set(loadedDailyCashEntryKeysRef.current);
+    const deleteIds = remainingRows
+      .filter((row) => loadedKeys.has(getStoredDailyCashEntryKey(row)))
+      .map((row) => row.id)
+      .filter(Boolean);
+
+    for (const task of updateTasks) {
+      const { error } = await task;
+      if (error) return error;
+    }
+
+    if (deleteIds.length > 0) {
+      const { error } = await supabase.from("daily_cash").delete().in("id", deleteIds);
+      if (error) return error;
+    }
+
+    if (insertRows.length === 0) return null;
+
+    const { error } = await supabase.from("daily_cash").insert(insertRows);
     return error;
   };
 

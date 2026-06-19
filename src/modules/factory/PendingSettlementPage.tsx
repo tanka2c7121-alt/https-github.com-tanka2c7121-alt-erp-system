@@ -31,7 +31,7 @@ type RiskRow = {
 type RiskSortField = keyof RiskRow;
 
 const pendingCutoffDays = 90;
-const claimDetails: ClaimDetail[] = ["보험", "캐피탈"];
+const claimDetails: ClaimDetail[] = ["보험", "캐피탈", "일반", "바디케어"];
 const receivableAccountNames = ["국민은행", "부산은행", "BLUE POINT"];
 
 const normalizeText = (value: unknown) => String(value ?? "").trim();
@@ -393,7 +393,6 @@ export default function PendingSettlementPage({
     (row) =>
       row.status === "완결" &&
       row.claimAmount > 0 &&
-      row.paidAmount > 0 &&
       (row.claimRate ?? 0) < 95
   );
   const settlementReceivableAmount = paymentRows

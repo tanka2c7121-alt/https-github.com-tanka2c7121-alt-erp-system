@@ -10,7 +10,14 @@ import { useRealtimeRefresh } from "../../lib/useRealtimeRefresh";
 
 
 type FactorySettlementPageProps = {
-  view?: "all" | "complete" | "closed" | "pending" | "receivable" | "deductible";
+  view?:
+    | "all"
+    | "unclaimed"
+    | "complete"
+    | "closed"
+    | "pending"
+    | "receivable"
+    | "deductible";
   onSelectMenu: (menu: MenuItem) => void;
 };
 
@@ -23,8 +30,9 @@ type SettlementItem = {
   coverage_type: string;
   company: string;
   deductible_amount: string;
-  status: "완결" | "미결" | "종결";
+  status: "미청구" | "미결" | "미수" | "완결" | "종결";
   release_date: string;
+  claimDate: string;
   hasReceivable: boolean;
   hasExpense: boolean;
   chargeAmount: number;
@@ -71,35 +79,112 @@ const isEmptyDateValue = (value: unknown) => {
 const toAmountNumber = (value: unknown) =>
   Number(String(value ?? 0).replaceAll(",", "")) || 0;
 
-const normalizeSettlementStatus = (value: unknown): SettlementItem["status"] => {
+const normalizeText = (value: unknown) => String(value ?? "").trim();
+
+const normalizeProgressStatus = (value: unknown) => {
   const text = String(value ?? "").trim();
 
   if (text.includes("종결")) return "종결";
-  if (text.includes("완결")) return "완결";
+  if (text.includes("완결") || text.includes("완료")) return "완결";
   return "미결";
+};
+
+const claimDetails = ["보험", "캐피탈", "일반", "바디케어"];
+const receivableAccountNames = ["국민은행", "부산은행", "BLUE POINT"];
+
+function normalizeBluePointAccount(value: unknown) {
+  const rawText = normalizeText(value);
+  const accountKey = rawText
+    .replace(/\s+/g, "")
+    .replaceAll("-", "")
+    .replaceAll("_", "")
+    .toUpperCase();
+
+  return accountKey.includes("BLUE") || accountKey.includes("블루")
+    ? "BLUE POINT"
+    : rawText;
+}
+
+function normalizeAccountName(value: unknown) {
+  const rawText = normalizeBluePointAccount(value);
+  const accountKey = rawText
+    .replace(/\s+/g, "")
+    .replaceAll("-", "")
+    .replaceAll("_", "")
+    .toUpperCase();
+
+  if (accountKey.includes("국민") || accountKey.includes("KB")) return "국민은행";
+  if (accountKey.includes("부산") || accountKey.includes("BNK")) return "부산은행";
+  if (accountKey.includes("BLUE") || accountKey.includes("블루")) return "BLUE POINT";
+
+  return rawText;
+}
+
+const isClaimPaymentRow = (row: any) => normalizeText(row.payment_type) === "청구";
+
+const isDeductiblePaymentRow = (row: any) => normalizeText(row.payment_type) === "면책금";
+
+const isRepairPaymentAmountRow = (row: any) => {
+  const paymentType = normalizeText(row.payment_type);
+
+  return (
+    toAmountNumber(row.payment_amount) > 0 &&
+    (paymentType === "수리비" || paymentType === "부가세") &&
+    !isClaimPaymentRow(row) &&
+    !isDeductiblePaymentRow(row)
+  );
+};
+
+const hasSettlementPaymentDetail = (row: any) => {
+  const detail = normalizeText(row.payment_detail);
+
+  return claimDetails.some((claimDetail) => detail.includes(claimDetail));
 };
 
 const isReceivablePaymentRow = (row: any) =>
   toAmountNumber(row.payment_amount) > 0 &&
-  isEmptyDateValue(row.payment_date);
+  isEmptyDateValue(row.payment_date) &&
+  receivableAccountNames.includes(normalizeAccountName(row.payment_method));
+
+const getSettlementItemStatus = ({
+  progressStatus,
+  claimAmount,
+  claimDate,
+  receivableAmount,
+}: {
+  progressStatus: string;
+  claimAmount: number;
+  claimDate: string;
+  receivableAmount: number;
+}): SettlementItem["status"] => {
+  if (progressStatus === "종결") return "종결";
+  if (progressStatus === "완결") return "완결";
+  if (receivableAmount > 0) return "미수";
+  if (!claimAmount && isEmptyDateValue(claimDate)) return "미청구";
+  return "미결";
+};
 
 const isDeductibleTarget = (
   item: Pick<SettlementItem, "coverage_type" | "deductible_amount">
 ) => hasDeductibleCoverage(item.coverage_type) && hasDeductibleValue(item.deductible_amount);
 
+const isReleasedSettlement = (item: Pick<SettlementItem, "release_date">) =>
+  !isEmptyDateValue(item.release_date);
+
 const isPendingSettlement = (item: SettlementItem) =>
-  item.status === "미결" && !item.hasReceivable;
+  isReleasedSettlement(item) && item.status === "미결";
 
 const isReceivableSettlement = (item: SettlementItem) =>
-  item.status === "미결" && item.hasReceivable;
+  isReleasedSettlement(item) && item.status === "미수";
+
+const isUnclaimedSettlement = (item: SettlementItem) =>
+  isReleasedSettlement(item) && item.status === "미청구";
 
 const isCompleteSettlement = (item: SettlementItem) =>
-  item.status === "완결" && item.chargeAmount > 0 && item.paidAmount > 0;
+  isReleasedSettlement(item) && item.status === "완결";
 
 const isClosedSettlement = (item: SettlementItem) =>
-  item.status === "종결" &&
-  item.chargeAmount > 0 &&
-  item.paidAmount > 0;
+  isReleasedSettlement(item) && item.status === "종결";
 
 
 export default function FactorySettlementPage({
@@ -150,7 +235,7 @@ const handleSort = (field: keyof SettlementItem) => {
 
     const { data: settlementRows, error: settlementError } = await fetchAllRows<any>(
       "repair_settlements",
-      "work_name, progress_status, claim_amount"
+      "work_name, progress_status, claim_amount, claim_date"
     );
 
     if (settlementError) {
@@ -160,7 +245,7 @@ const handleSort = (field: keyof SettlementItem) => {
 
     const { data: paymentRows, error: paymentError } = await fetchAllRows<any>(
       "settlement_payments",
-      "work_name, payment_type, claim_amount, payment_amount, payment_date, payment_method"
+      "work_name, payment_type, payment_detail, claim_amount, claim_date, payment_amount, payment_date, payment_method"
     );
 
     if (paymentError) {
@@ -184,7 +269,7 @@ const handleSort = (field: keyof SettlementItem) => {
     const settlementMap = new Map(
       (settlementRows ?? []).map((row) => [
         row.work_name,
-        row.progress_status,
+        row,
       ])
     );
     const expenseWorkNames = new Set(
@@ -198,31 +283,25 @@ const handleSort = (field: keyof SettlementItem) => {
         .map((row) => row.work_name)
         .filter(Boolean)
     );
-    const settlementClaimAmountMap = new Map(
-      (settlementRows ?? []).map((row) => [
-        row.work_name,
-        toAmountNumber(row.claim_amount),
-      ])
-    );
     const paymentAmountMap = new Map<string, number>();
     const receivableAmountMap = new Map<string, number>();
-    const paymentClaimAmountMap = new Map<string, number>();
+    const paymentRowsByWorkName = new Map<string, any[]>();
 
     paymentRows.forEach((row) => {
       const workName = String(row.work_name ?? "");
       if (!workName) return;
 
-      paymentClaimAmountMap.set(
-        workName,
-        (paymentClaimAmountMap.get(workName) ?? 0) + toAmountNumber(row.claim_amount)
-      );
+      paymentRowsByWorkName.set(workName, [
+        ...(paymentRowsByWorkName.get(workName) ?? []),
+        row,
+      ]);
 
-      if (!isEmptyDateValue(row.payment_date)) {
+      if (isRepairPaymentAmountRow(row) && hasSettlementPaymentDetail(row) && !isEmptyDateValue(row.payment_date)) {
         paymentAmountMap.set(
           workName,
           (paymentAmountMap.get(workName) ?? 0) + toAmountNumber(row.payment_amount)
         );
-      } else {
+      } else if (isRepairPaymentAmountRow(row) && hasSettlementPaymentDetail(row) && isReceivablePaymentRow(row)) {
         receivableAmountMap.set(
           workName,
           (receivableAmountMap.get(workName) ?? 0) + toAmountNumber(row.payment_amount)
@@ -232,6 +311,8 @@ const handleSort = (field: keyof SettlementItem) => {
 
     const receivableWorkNames = new Set(
       paymentRows
+        .filter(isRepairPaymentAmountRow)
+        .filter(hasSettlementPaymentDetail)
         .filter(isReceivablePaymentRow)
         .map((row) => row.work_name)
         .filter(Boolean)
@@ -245,11 +326,39 @@ const handleSort = (field: keyof SettlementItem) => {
       )
     );
 
+    const seenWorkNames = new Set<string>();
+    const uniqueWorkOrders = (data ?? []).filter((item) => {
+      const workName = String(item.work_name ?? "").trim();
+
+      if (!workName || seenWorkNames.has(workName)) {
+        return false;
+      }
+
+      seenWorkNames.add(workName);
+      return true;
+    });
+
     setSettlementList(
-      (data ?? []).map((item) => {
+      uniqueWorkOrders.map((item) => {
         const workName = item.work_name ?? "";
-        const settlementClaimAmount = settlementClaimAmountMap.get(workName) ?? 0;
-        const paymentClaimAmount = paymentClaimAmountMap.get(workName) ?? 0;
+        const settlement = settlementMap.get(workName);
+        const workPayments = paymentRowsByWorkName.get(workName) ?? [];
+        const claimRows = workPayments.filter(isClaimPaymentRow);
+        const settlementClaimAmount = toAmountNumber(settlement?.claim_amount);
+        const paymentClaimAmount = claimRows.reduce(
+          (sum, payment) => sum + toAmountNumber(payment.claim_amount),
+          0
+        );
+        const claimAmount = paymentClaimAmount || settlementClaimAmount;
+        const claimDate =
+          claimRows
+            .map((payment) => normalizeText(payment.claim_date))
+            .filter((date) => !isEmptyDateValue(date))
+            .sort()[0] ?? normalizeText(settlement?.claim_date);
+        const progressStatus = normalizeProgressStatus(settlement?.progress_status);
+        const receivableAmount = receivableAmountMap.get(workName) ?? 0;
+        const paidAmount = paymentAmountMap.get(workName) ?? 0;
+        const collectionAmount = paidAmount + receivableAmount;
 
         return {
         id: item.id,
@@ -260,18 +369,22 @@ const handleSort = (field: keyof SettlementItem) => {
         coverage_type: item.coverage_type ?? "",
         company: item.insurance_company || item.partner_company || "",
         deductible_amount: item.deductible_amount ?? "",
-        status: normalizeSettlementStatus(settlementMap.get(workName)),
+        status: getSettlementItemStatus({
+          progressStatus,
+          claimAmount,
+          claimDate,
+          receivableAmount,
+        }),
         release_date: item.release_date ?? "",
+        claimDate,
         hasReceivable: receivableWorkNames.has(workName),
         hasExpense: expenseWorkNames.has(workName),
-        chargeAmount: settlementClaimAmount || paymentClaimAmount,
-        paidAmount: paymentAmountMap.get(workName) ?? 0,
-        receivableAmount: receivableAmountMap.get(workName) ?? 0,
+        chargeAmount: claimAmount,
+        paidAmount,
+        receivableAmount,
         paymentRate:
-          (settlementClaimAmount || paymentClaimAmount) > 0
-            ? ((paymentAmountMap.get(workName) ?? 0) /
-                (settlementClaimAmount || paymentClaimAmount)) *
-              100
+          claimAmount > 0
+            ? (collectionAmount / claimAmount) * 100
             : null,
       };
     })
@@ -314,8 +427,8 @@ const handleSort = (field: keyof SettlementItem) => {
       return item.work_name.slice(5, 7) === selectedMonth;
     })
     .filter((item) => {
-      if (activeView !== "deductible" && isEmptyDateValue(item.release_date)) return false;
-      if (activeView === "all" && (item.status === "완결" || item.status === "종결")) return false;
+      if (!isReleasedSettlement(item)) return false;
+      if (activeView === "unclaimed" && !isUnclaimedSettlement(item)) return false;
       if (activeView === "complete" && !isCompleteSettlement(item)) return false;
       if (activeView === "closed" && !isClosedSettlement(item)) return false;
       if (activeView === "pending" && !isPendingSettlement(item)) return false;
@@ -344,22 +457,23 @@ const handleSort = (field: keyof SettlementItem) => {
     ).sort((a, b) => b.localeCompare(a));
   }, [settlementList]);
 
-  const releasedSettlementItems = settlementList.filter(
-    (item) => !isEmptyDateValue(item.release_date)
-  );
+  const releasedSettlementItems = settlementList.filter(isReleasedSettlement);
   const totalCount = releasedSettlementItems.length;
+  const unclaimedCount = releasedSettlementItems.filter(isUnclaimedSettlement).length;
   const receivableCount = releasedSettlementItems.filter(isReceivableSettlement).length;
   const pendingCount = releasedSettlementItems.filter(isPendingSettlement).length;
   const completeCount = releasedSettlementItems.filter(isCompleteSettlement).length;
   const closedCount = releasedSettlementItems.filter(isClosedSettlement).length;
-  const deductibleTargetItems = settlementList.filter(isDeductibleTarget);
+  const deductibleTargetItems = releasedSettlementItems.filter(isDeductibleTarget);
   const deductibleTargetCount = deductibleTargetItems.length;
   const deductibleCompleteCount = deductibleTargetItems.filter((item) =>
     deductiblePaidWorkNames.has(item.work_name)
   ).length;
 
   const pageTitle =
-    activeView === "complete"
+    activeView === "unclaimed"
+      ? "미청구 정산"
+      : activeView === "complete"
       ? "완결 정산"
       : activeView === "closed"
       ? "종결 정산"
@@ -390,7 +504,7 @@ const pagedList = filteredList.slice(
         </p>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-6">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-7">
         <button
           type="button"
           onClick={() => {
@@ -404,6 +518,21 @@ const pagedList = filteredList.slice(
         >
           <p className="text-sm font-semibold text-slate-700">전체</p>
           <p className="mt-2 text-2xl font-bold">{totalCount}건</p>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setActiveView("unclaimed");
+            setCurrentPage(1);
+          }}
+          className={[
+            "rounded-xl border bg-white p-4 text-left transition hover:border-slate-300 hover:bg-slate-50",
+            activeView === "unclaimed" ? "border-slate-500 ring-2 ring-slate-100" : "",
+          ].join(" ")}
+        >
+          <p className="text-sm font-semibold text-slate-700">미청구</p>
+          <p className="mt-2 text-2xl font-bold text-slate-700">{unclaimedCount}건</p>
         </button>
 
         <button
@@ -648,8 +777,10 @@ const pagedList = filteredList.slice(
                             ? "rounded-full bg-slate-200 px-3 py-1 text-xs font-semibold text-slate-700"
                             : item.status === "완결"
                             ? "rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700"
-                            : item.hasReceivable
+                            : item.status === "미수"
                               ? "rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold text-orange-700"
+                              : item.status === "미청구"
+                                ? "rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700"
                               : "rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-700"
                         }
                       >
@@ -657,8 +788,10 @@ const pagedList = filteredList.slice(
                           ? "종결"
                           : item.status === "완결"
                             ? "완결"
-                            : item.hasReceivable
+                            : item.status === "미수"
                               ? "미수"
+                              : item.status === "미청구"
+                                ? "미청구"
                               : "미결"}
                       </span>
                     </td>
