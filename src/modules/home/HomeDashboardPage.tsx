@@ -301,6 +301,9 @@ export default function HomeDashboardPage({
     const thisMonthInbound = workOrders.filter((item) =>
       isDateInMonth(item.inbound_date, thisMonth)
     );
+    const thisMonthInboundVehicleCount = new Set(
+      thisMonthInbound.map((item) => item.work_name).filter(Boolean)
+    ).size;
     const todayOutbound = workOrders.filter((item) => item.release_date === today);
     const thisMonthOutbound = workOrders.filter((item) =>
       isDateInMonth(item.release_date, thisMonth)
@@ -403,6 +406,7 @@ export default function HomeDashboardPage({
       activeOrders,
       todayInbound,
       thisMonthInbound,
+      thisMonthInboundVehicleCount,
       todayOutbound,
       thisMonthOutbound,
       calendarMonth: visibleScheduleMonth,
@@ -680,7 +684,11 @@ export default function HomeDashboardPage({
         <SummaryCard title="현재 입고" value={dashboard.activeOrders.length} tone="blue" />
         <SummaryCard title="오늘 입고" value={dashboard.todayInbound.length} tone="green" />
         <SummaryCard title="오늘 출고" value={dashboard.todayOutbound.length} tone="indigo" />
-        <SummaryCard title="해당월 입고" value={dashboard.thisMonthInbound.length} tone="orange" />
+        <SummaryCard
+          title="해당월입고/RO발행건수"
+          value={`${dashboard.thisMonthInboundVehicleCount}/${dashboard.thisMonthInbound.length}`}
+          tone="orange"
+        />
         <SummaryCard title="이번 달 출고" value={dashboard.thisMonthOutbound.length} tone="slate" />
       </section>
 
