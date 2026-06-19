@@ -14,6 +14,8 @@ type RiskRow = {
   id: string;
   workName: string;
   company: string;
+  carNumber: string;
+  carModel: string;
   claimSide: string;
   coverageType: string;
   status: string;
@@ -161,7 +163,7 @@ export default function PendingSettlementPage({
 
     const { data: workData, error: workError } = await fetchAllRows<any>(
       "work_orders",
-      "id, work_name, insurance_company, other_insurance_company, coverage_type, release_date"
+      "id, work_name, car_number, car_model, insurance_company, other_insurance_company, coverage_type, release_date"
     );
 
     if (error) {
@@ -304,6 +306,8 @@ export default function PendingSettlementPage({
         id: String(row.id ?? workName),
         workName,
         company: normalizeText(row.insurance_company) || "미지정",
+        carNumber: normalizeText(row.car_number),
+        carModel: normalizeText(row.car_model),
         claimSide,
         coverageType: normalizeText(row.coverage_type),
         status,
@@ -507,6 +511,8 @@ function RiskTable({
       [
         row.workName,
         row.company,
+        row.carNumber,
+        row.carModel,
         row.claimSide,
         row.coverageType,
         row.status,
@@ -563,7 +569,7 @@ function RiskTable({
         <input
           value={searchText}
           onChange={(event) => setSearchText(event.target.value)}
-          placeholder="작명 / 보험사 / 구분 / 담보 / 상태 검색"
+          placeholder="작명 / 보험사 / 차량번호 / 차량명 / 구분 / 담보 / 상태 검색"
           className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 md:w-80"
         />
       </div>
@@ -587,7 +593,7 @@ function RiskTable({
                     {row.workName}
                   </div>
                   <div className="mt-1 truncate text-xs font-semibold text-slate-500">
-                    {row.company || "-"} / {row.claimSide || "-"} / {row.coverageType || "-"} / {row.claimDate || "청구일 없음"}
+                    {row.company || "-"} / {row.carNumber || "-"} / {row.carModel || "-"} / {row.claimSide || "-"} / {row.coverageType || "-"} / {row.claimDate || "청구일 없음"}
                   </div>
                 </div>
                 <span
@@ -633,6 +639,12 @@ function RiskTable({
             <SortableHeader field="company" sortField={sortField} sortOrder={sortOrder} onSort={handleSort}>
               보험사
             </SortableHeader>
+            <SortableHeader field="carNumber" sortField={sortField} sortOrder={sortOrder} onSort={handleSort}>
+              차량번호
+            </SortableHeader>
+            <SortableHeader field="carModel" sortField={sortField} sortOrder={sortOrder} onSort={handleSort}>
+              차량명
+            </SortableHeader>
             <SortableHeader field="claimSide" sortField={sortField} sortOrder={sortOrder} onSort={handleSort}>
               구분
             </SortableHeader>
@@ -664,6 +676,8 @@ function RiskTable({
           <tr className="hidden">
             <th className="border-b border-slate-200 px-3 py-2">작명</th>
             <th className="border-b border-slate-200 px-3 py-2">보험사</th>
+            <th className="border-b border-slate-200 px-3 py-2">차량번호</th>
+            <th className="border-b border-slate-200 px-3 py-2">차량명</th>
             <th className="border-b border-slate-200 px-3 py-2">구분</th>
             <th className="border-b border-slate-200 px-3 py-2">담보</th>
             <th className="border-b border-slate-200 px-3 py-2">상태</th>
@@ -678,7 +692,7 @@ function RiskTable({
         <tbody>
           {sortedRows.length === 0 ? (
             <tr>
-              <td colSpan={11} className="px-3 py-8 text-center text-slate-500">
+              <td colSpan={13} className="px-3 py-8 text-center text-slate-500">
                 관리 대상이 없습니다.
               </td>
             </tr>
@@ -696,6 +710,12 @@ function RiskTable({
                 </td>
                 <td className="border-b border-slate-100 px-3 py-2">
                   {row.company || "-"}
+                </td>
+                <td className="border-b border-slate-100 px-3 py-2">
+                  {row.carNumber || "-"}
+                </td>
+                <td className="border-b border-slate-100 px-3 py-2">
+                  {row.carModel || "-"}
                 </td>
                 <td className="border-b border-slate-100 px-3 py-2">
                   {row.claimSide || "-"}
