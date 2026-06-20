@@ -483,6 +483,7 @@ export default function WorkRegisterPage({
   const [workPhotos, setWorkPhotos] = useState<WorkPhoto[]>([]);
   const [selectedPhotoPaths, setSelectedPhotoPaths] = useState<string[]>([]);
   const [pendingWorkPhotos, setPendingWorkPhotos] = useState<PendingWorkPhoto[]>([]);
+  const [saving, setSaving] = useState(false);
   const [photoUploading, setPhotoUploading] = useState(false);
   const [photoOcrReading, setPhotoOcrReading] = useState(false);
   const [photoOcrMessage, setPhotoOcrMessage] = useState("");
@@ -522,6 +523,7 @@ export default function WorkRegisterPage({
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const cameraStreamRef = useRef<MediaStream | null>(null);
   const cameraAutoOpenRef = useRef(false);
+  const saveInProgressRef = useRef(false);
 
   useEffect(() => {
     if (coverageType === "과실") {
@@ -1073,7 +1075,9 @@ async function captureCameraPhoto() {
 }
 
 async function uploadPendingWorkPhotos(targetWorkName = workName) {
-  if (pendingWorkPhotos.length === 0) {
+  const photosToUpload = pendingWorkPhotos;
+
+  if (photosToUpload.length === 0) {
     return 0;
   }
 
@@ -1086,7 +1090,7 @@ async function uploadPendingWorkPhotos(targetWorkName = workName) {
   setPhotoUploading(true);
 
   try {
-    for (const photo of pendingWorkPhotos) {
+    for (const photo of photosToUpload) {
       const uploadFile = await compressImage(photo.file);
       const extension = uploadFile.name.split(".").pop() || "jpg";
       const filePath = `${folder}/${Date.now()}-${Math.random()
@@ -1106,9 +1110,12 @@ async function uploadPendingWorkPhotos(targetWorkName = workName) {
       }
     }
 
-    const uploadedCount = pendingWorkPhotos.length;
-    pendingWorkPhotos.forEach((photo) => URL.revokeObjectURL(photo.previewUrl));
-    setPendingWorkPhotos([]);
+    const uploadedCount = photosToUpload.length;
+    const uploadedPhotoIds = new Set(photosToUpload.map((photo) => photo.id));
+    photosToUpload.forEach((photo) => URL.revokeObjectURL(photo.previewUrl));
+    setPendingWorkPhotos((prev) =>
+      prev.filter((photo) => !uploadedPhotoIds.has(photo.id))
+    );
     await loadWorkPhotos(targetWorkName);
 
     return uploadedCount;
@@ -1537,6 +1544,13 @@ async function getNextWorkName() {
 }
 
 async function handleSave() {
+  if (saveInProgressRef.current) {
+    return false;
+  }
+
+  saveInProgressRef.current = true;
+  setSaving(true);
+
   try {
     const targetWorkName = workName;
     const normalizedCarNumber = carNumber.trim();
@@ -1733,6 +1747,9 @@ async function handleSave() {
     console.error("작업 저장 오류:", error);
     alert("작업 저장 중 오류가 발생했습니다.");
     return false;
+  } finally {
+    saveInProgressRef.current = false;
+    setSaving(false);
   }
 }
  
@@ -1897,7 +1914,9 @@ function handleClearWorkRow(index: number) {
               onClick={() => {
                 void openCamera();
               }}
-              disabled={cameraStarting || photoUploading || photoOcrReading}
+              disabled={
+                cameraStarting || saving || photoUploading || photoOcrReading
+              }
               className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:bg-slate-400"
             >
               {cameraStarting ? "카메라 여는 중..." : "카메라 열기"}
@@ -1909,7 +1928,7 @@ function handleClearWorkRow(index: number) {
                 accept="image/*"
                 multiple
                 className="hidden"
-                disabled={photoUploading || photoOcrReading}
+                disabled={saving || photoUploading || photoOcrReading}
                 onChange={handlePhotoCapture}
               />
             </label>
@@ -1957,7 +1976,9 @@ function handleClearWorkRow(index: number) {
                 onClick={() => {
                   void captureCameraPhoto();
                 }}
-                disabled={!cameraReady || photoOcrReading}
+                disabled={
+                  !cameraReady || saving || photoUploading || photoOcrReading
+                }
                 className="work-camera-button work-camera-button-primary"
               >
                 {cameraReady ? "촬영" : "준비 중"}
@@ -2762,9 +2783,16 @@ function handleClearWorkRow(index: number) {
     onClick={() => {
   void handleSave();
 }}
-    className="rounded-lg bg-blue-600 px-6 py-3 text-sm font-semibold text-white hover:bg-blue-700"
+    disabled={saving}
+    className="rounded-lg bg-blue-600 px-6 py-3 text-sm font-semibold text-white hover:bg-blue-700 disabled:bg-slate-400"
   >
-    {isEditMode ? "수정 후 저장" : "저장"}
+    {saving
+      ? isEditMode
+        ? "수정 중..."
+        : "저장 중..."
+      : isEditMode
+        ? "수정 후 저장"
+        : "저장"}
   </button>
 
   <button
