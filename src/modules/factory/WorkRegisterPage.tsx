@@ -1416,12 +1416,6 @@ function handleOpenSettlementRegister() {
   });
 }
 
-async function handleStartNewWork() {
-  const nextWorkName = await getNextWorkName();
-
-  handleReset(nextWorkName);
-}
-
 function handleReplaceCurrentWork() {
   const targetWorkName = editWorkNameRef.current || workName;
 
@@ -1947,16 +1941,6 @@ function handleClearWorkRow(index: number) {
     className="rounded-lg bg-slate-900 px-5 py-2 text-sm font-semibold text-white hover:bg-slate-800"
   >
     불러오기
-  </button>
-
-  <button
-    type="button"
-    onClick={() => {
-      void handleStartNewWork();
-    }}
-    className="rounded-lg border border-blue-300 bg-white px-5 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50"
-  >
-    새 작업
   </button>
 
   {isEditMode && (
