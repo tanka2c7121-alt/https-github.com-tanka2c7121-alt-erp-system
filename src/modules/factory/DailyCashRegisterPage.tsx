@@ -27,6 +27,7 @@ type FormState = {
 export type DailyCashRow = {
   id: number;
   date: string;
+  created_on?: string | null;
   account: string;
   type: string;
   category: string ;
@@ -97,6 +98,8 @@ export default function DailyCashRegisterPage({
   });
 
   const isEditMode = Boolean(editData);
+  const canEditCurrentRow =
+    !editData || editData.created_on === localDateText();
 
   useEffect(() => {
     const loadCategoryOptions = async () => {
@@ -185,6 +188,11 @@ export default function DailyCashRegisterPage({
   }
 
   async function handleSave() {
+    if (editData && !canEditCurrentRow) {
+      alert("입력한 당일 내역만 수정할 수 있습니다.");
+      return;
+    }
+
     if (!form.date) {
       alert("일자를 입력하세요.");
       return;
@@ -220,15 +228,26 @@ expense:
       memo: form.memo,
     };
 
-    const { error } = editData
-      ? await supabase.from("daily_cash").update(payload).eq("id", editData.id)
+    const saveResult = editData
+      ? await supabase
+          .from("daily_cash")
+          .update(payload)
+          .eq("id", editData.id)
+          .eq("created_on", localDateText())
+          .select("id")
       : await supabase.from("daily_cash").insert({
           ...payload,
           created_on: localDateText(),
         });
+    const { error } = saveResult;
 
     if (error) {
       alert((isEditMode ? "수정 실패: " : "저장 실패: ") + error.message);
+      return;
+    }
+
+    if (editData && (!saveResult.data || saveResult.data.length === 0)) {
+      alert("입력한 당일 내역만 수정할 수 있습니다.");
       return;
     }
 
@@ -372,7 +391,13 @@ expense:
         <button
           type="button"
           onClick={handleSave}
-          className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+          disabled={!canEditCurrentRow}
+          title={
+            canEditCurrentRow
+              ? undefined
+              : "입력한 당일 내역만 수정할 수 있습니다."
+          }
+          className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:bg-slate-400"
         >
           {isEditMode ? "수정저장" : "저장"}
         </button>

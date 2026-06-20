@@ -28,6 +28,8 @@ type DailyCashRow = {
 };
 
 const formatWon = (amount: number) => amount.toLocaleString();
+const isTodayCreatedRow = (row: DailyCashRow) =>
+  row.created_on === localDateText();
 const normalizeAccountName = (value: unknown) => {
   const rawText = String(value ?? "").trim();
   const accountKey = rawText
@@ -138,15 +140,32 @@ export default function DailyCashPage({ onSelectMenu }: DailyCashPageProps) {
   setRows(data ?? []);
 }
 
-  async function handleDelete(id: number) {
+  async function handleDelete(row: DailyCashRow) {
+    if (!isTodayCreatedRow(row)) {
+      alert("입력한 당일 내역만 삭제할 수 있습니다.");
+      return;
+    }
+
     const ok = confirm("이 입출금 내역을 삭제할까요?");
 
     if (!ok) return;
 
-    const { error } = await supabase.from("daily_cash").delete().eq("id", id);
+    const { data, error } = await supabase
+      .from("daily_cash")
+      .delete()
+      .eq("id", row.id)
+      .eq("created_on", localDateText())
+      .select("id");
 
     if (error) {
       alert("삭제 실패: " + error.message);
+      return;
+    }
+
+    if (!data || data.length === 0) {
+      alert("입력한 당일 내역만 삭제할 수 있습니다.");
+      await fetchRows(period);
+      void fetchBalanceRows();
       return;
     }
 
@@ -425,8 +444,11 @@ export default function DailyCashPage({ onSelectMenu }: DailyCashPageProps) {
                   </td>
                 </tr>
               ) : (
-                filteredRows.map((item) => (
-                  <tr key={item.id} className="hover:bg-blue-50">
+                filteredRows.map((item) => {
+                  const canEditRow = isTodayCreatedRow(item);
+
+                  return (
+                    <tr key={item.id} className="hover:bg-blue-50">
                     <td className="border border-slate-300 px-3 py-2">
                       {item.date}
                     </td>
@@ -454,36 +476,50 @@ export default function DailyCashPage({ onSelectMenu }: DailyCashPageProps) {
                     <td className="border border-slate-300 px-3 py-2 text-center">
                       <div className="flex justify-center gap-2">
                         {item.source_type !== "settlement_payment" && (
-                          <button
-                            type="button"
-                            onClick={() =>
-                            onSelectMenu({
-                           id: "factory-settlement-daily-cash-register",
-                            title: "입출금수정",
-                            data: item,
-                             })
-                           }
-                          className="rounded border border-blue-300 px-3 py-1 text-xs font-semibold text-blue-600 hover:bg-blue-50"
-                           >
-                            수정
-                          </button>
-                          )}
-                          {item.source_type !== "settlement_payment" && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                onSelectMenu({
+                                  id: "factory-settlement-daily-cash-register",
+                                  title: "입출금수정",
+                                  data: item,
+                                })
+                              }
+                              disabled={!canEditRow}
+                              title={
+                                canEditRow
+                                  ? undefined
+                                  : "입력한 당일 내역만 수정할 수 있습니다."
+                              }
+                              className="rounded border border-blue-300 px-3 py-1 text-xs font-semibold text-blue-600 hover:bg-blue-50 disabled:border-slate-200 disabled:text-slate-400 disabled:hover:bg-white"
+                            >
+                              수정
+                            </button>
+
                             <button
                               type="button"
                               onClick={() => {
-                                void handleDelete(item.id);
+                                void handleDelete(item);
                               }}
-                              className="rounded border border-red-300 px-3 py-1 text-xs font-semibold text-red-600 hover:bg-red-50"
+                              disabled={!canEditRow}
+                              title={
+                                canEditRow
+                                  ? undefined
+                                  : "입력한 당일 내역만 삭제할 수 있습니다."
+                              }
+                              className="rounded border border-red-300 px-3 py-1 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:border-slate-200 disabled:text-slate-400 disabled:hover:bg-white"
                             >
                               삭제
                             </button>
-                          )}
+                          </>
+                        )}
  
                       </div>
                     </td>
-                  </tr>
-                ))
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
