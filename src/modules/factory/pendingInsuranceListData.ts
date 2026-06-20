@@ -8,6 +8,8 @@ export type SettlementRow = {
   car_number: string | null;
   car_model: string | null;
   insurance_company: string | null;
+  receipt_number?: string | null;
+  manager_name?: string | null;
   progress_status: string | null;
   claim_amount: number | null;
   claim_date: string | null;
@@ -27,6 +29,12 @@ export type WorkOrderRow = {
   coverage_type: string | null;
   insurance_company: string | null;
   other_insurance_company: string | null;
+  receipt_number?: string | null;
+  own_receipt_number?: string | null;
+  other_receipt_number?: string | null;
+  manager_name?: string | null;
+  own_manager_name?: string | null;
+  other_manager_name?: string | null;
   release_date: string | null;
   message?: string | null;
 };
@@ -42,12 +50,22 @@ export type PaymentRow = {
   payment_date: string | null;
 };
 
+export type PendingInsuranceManagementRow = {
+  work_name: string;
+  status: string | null;
+  action_memo: string | null;
+  final_result: string | null;
+  updated_at: string | null;
+};
+
 export type InsuranceListRow = {
   id: string;
   workName: string;
   carNumber: string;
   carModel: string;
   insuranceCompany: string;
+  receiptNumber: string;
+  managerName: string;
   claimSide: string;
   status: "미결" | "완결" | "종결";
   claimDate: string;
@@ -60,11 +78,10 @@ export type InsuranceListRow = {
 
 export type PendingInsuranceFilters = {
   insuranceFilter?: string;
-  selectedYear?: string;
-  selectedMonth?: string;
   startDate?: string;
   endDate?: string;
   searchText?: string;
+  longPendingOnly?: boolean;
 };
 
 export type PendingInsuranceSummary = {
@@ -82,12 +99,15 @@ type ClaimTarget = {
   carNumber: string;
   carModel: string;
   insuranceCompany: string;
+  receiptNumber: string;
+  managerName: string;
   claimSide: string;
   claimDetail: ClaimDetail | null;
   status: InsuranceListRow["status"];
   claimDate: string;
   claimAmount: number;
   paidAmount: number;
+  memo: string;
 };
 
 export type SortKey =
@@ -230,6 +250,8 @@ const toListRows = (targets: ClaimTarget[]) =>
       carNumber: item.carNumber,
       carModel: item.carModel,
       insuranceCompany: item.insuranceCompany,
+      receiptNumber: item.receiptNumber,
+      managerName: item.managerName,
       claimSide:
         item.claimDetail && item.claimSide !== item.claimDetail
           ? `${item.claimSide} / ${item.claimDetail}`
@@ -240,6 +262,7 @@ const toListRows = (targets: ClaimTarget[]) =>
       paidAmount: item.paidAmount,
       receivableAmount: Math.max(0, item.claimAmount - item.paidAmount),
       collectionRate: calculateCollectionRate(item.claimAmount, item.paidAmount),
+      memo: item.memo,
     }));
 
 export async function fetchPendingInsuranceSourceRows() {
@@ -256,6 +279,8 @@ export async function fetchPendingInsuranceSourceRows() {
         "car_number",
         "car_model",
         "insurance_company",
+        "receipt_number",
+        "manager_name",
         "progress_status",
         "claim_amount",
         "claim_date",
@@ -269,7 +294,7 @@ export async function fetchPendingInsuranceSourceRows() {
     ),
     fetchAllRows<WorkOrderRow>(
       "work_orders",
-      "id, work_name, car_number, car_model, category, coverage_type, insurance_company, other_insurance_company, release_date, message"
+      "id, work_name, car_number, car_model, category, coverage_type, insurance_company, other_insurance_company, receipt_number, own_receipt_number, other_receipt_number, manager_name, own_manager_name, other_manager_name, release_date, message"
     ),
     fetchAllRows<PaymentRow>(
       "settlement_payments",
@@ -308,6 +333,8 @@ export async function fetchPendingInsuranceSourceRows() {
         car_model: settlement?.car_model ?? work.car_model ?? "",
         insurance_company:
           settlement?.insurance_company ?? work.insurance_company ?? "",
+        receipt_number: settlement?.receipt_number ?? work.receipt_number ?? "",
+        manager_name: settlement?.manager_name ?? work.manager_name ?? "",
         progress_status: settlement?.progress_status ?? "미결",
         claim_amount: settlement?.claim_amount ?? 0,
         claim_date: settlement?.claim_date ?? "",
@@ -323,6 +350,35 @@ export async function fetchPendingInsuranceSourceRows() {
     settlementRows,
     workOrderRows: works ?? [],
     paymentRows: payments ?? [],
+  };
+}
+
+export async function fetchPendingInsuranceManagementRows() {
+  const { data, error } = await fetchAllRows<PendingInsuranceManagementRow>(
+    "pending_insurance_management",
+    "work_name, status, action_memo, final_result, updated_at"
+  );
+
+  if (error) {
+    if (error.code === "42P01" || String(error.message ?? "").includes("does not exist")) {
+      return {
+        data: [],
+        error: null,
+        missingTable: true,
+      };
+    }
+
+    return {
+      data: [],
+      error,
+      missingTable: false,
+    };
+  }
+
+  return {
+    data,
+    error: null,
+    missingTable: false,
   };
 }
 
@@ -379,6 +435,8 @@ export function buildPendingInsuranceRows({
         workName,
         carNumber: normalizeText(row.car_number),
         carModel: normalizeText(row.car_model),
+        receiptNumber: normalizeText(row.receipt_number),
+        managerName: normalizeText(row.manager_name),
         memo:
           normalizeText(row.memo) ||
           normalizeText(workOrder.message),
@@ -404,6 +462,14 @@ export function buildPendingInsuranceRows({
             ...baseRow,
             id: `${row.id}-own`,
             insuranceCompany: ownCompany,
+            receiptNumber:
+              normalizeText(workOrder?.own_receipt_number) ||
+              normalizeText(workOrder?.receipt_number) ||
+              normalizeText(row.receipt_number),
+            managerName:
+              normalizeText(workOrder?.own_manager_name) ||
+              normalizeText(workOrder?.manager_name) ||
+              normalizeText(row.manager_name),
             claimSide: "자차",
             claimDetail:
               normalizeClaimDetail(ownClaimRow?.payment_detail) ||
@@ -420,6 +486,8 @@ export function buildPendingInsuranceRows({
             ...baseRow,
             id: `${row.id}-other`,
             insuranceCompany: otherCompany,
+            receiptNumber: normalizeText(workOrder?.other_receipt_number),
+            managerName: normalizeText(workOrder?.other_manager_name),
             claimSide: "대물",
             claimDetail:
               normalizeClaimDetail(otherClaimRow?.payment_detail) ||
@@ -506,10 +574,7 @@ export function filterPendingInsuranceRows(
     if (row.status !== "미결") return false;
     if (!row.claimAmount && !row.claimDate) return false;
 
-    if (filters.selectedYear && row.claimDate.slice(0, 4) !== filters.selectedYear) {
-      return false;
-    }
-    if (filters.selectedMonth && row.claimDate.slice(5, 7) !== filters.selectedMonth) {
+    if (filters.longPendingOnly && !isLongPendingRow(row, localDateTextForFilter())) {
       return false;
     }
     if (filters.startDate && (!row.claimDate || row.claimDate < filters.startDate)) {
@@ -526,6 +591,8 @@ export function filterPendingInsuranceRows(
       row.carNumber,
       row.carModel,
       row.insuranceCompany,
+      row.receiptNumber,
+      row.managerName,
       row.claimSide,
       row.claimDate,
     ]
@@ -533,6 +600,15 @@ export function filterPendingInsuranceRows(
       .toLowerCase()
       .includes(keyword);
   });
+}
+
+function localDateTextForFilter() {
+  const date = new Date();
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
 }
 
 export function sortPendingInsuranceRows(

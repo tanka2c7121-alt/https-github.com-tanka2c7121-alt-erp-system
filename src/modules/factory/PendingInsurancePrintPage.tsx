@@ -5,6 +5,8 @@ import type { MenuItem } from "../../data/menuData";
 import { localDateText } from "../../lib/date";
 import {
   buildPendingInsuranceRows,
+  calculateCollectionRate,
+  fetchPendingInsuranceManagementRows,
   fetchPendingInsuranceSourceRows,
   filterPendingInsuranceRows,
   formatRate,
@@ -14,6 +16,7 @@ import {
   sortPendingInsuranceRows,
   summarizePendingInsuranceRows,
   type InsuranceListRow,
+  type PendingInsuranceManagementRow,
   type PendingInsuranceFilters,
   type SortDirection,
   type SortKey,
@@ -33,6 +36,13 @@ export type PendingInsurancePrintData = {
 type PendingInsurancePrintPageProps = {
   data?: PendingInsurancePrintData;
   onSelectMenu: (menu: MenuItem) => void;
+};
+
+type LongPendingCardRow = InsuranceListRow & {
+  detailRows: InsuranceListRow[];
+  managementStatus: string;
+  actionMemo: string;
+  finalResult: string;
 };
 
 const defaultFilters: PendingInsuranceFilters = {};
@@ -72,6 +82,78 @@ const buildInsuranceConfirmPages = (rows: InsuranceListRow[]) => {
   return pages;
 };
 
+const joinUniqueValues = (values: Array<string | null | undefined>) =>
+  Array.from(
+    new Set(values.map((value) => String(value ?? "").trim()).filter(Boolean))
+  ).join(" / ");
+
+const buildPaymentDetailText = (row: InsuranceListRow) =>
+  [
+    `${row.claimSide}${row.insuranceCompany ? `(${row.insuranceCompany})` : ""}`,
+    row.claimDate ? `청구일 ${row.claimDate}` : "",
+    `청구 ${formatWon(row.claimAmount)}원`,
+    `입금 ${formatWon(row.paidAmount)}원`,
+    `미수 ${formatWon(row.receivableAmount)}원`,
+  ]
+    .filter(Boolean)
+    .join("  |  ");
+
+const buildLongPendingCards = (
+  rows: InsuranceListRow[],
+  managementByWorkName: Map<string, PendingInsuranceManagementRow>
+): LongPendingCardRow[] => {
+  const groups = rows.reduce<Map<string, InsuranceListRow[]>>((map, row) => {
+    const groupRows = map.get(row.workName) ?? [];
+    groupRows.push(row);
+    map.set(row.workName, groupRows);
+    return map;
+  }, new Map<string, InsuranceListRow[]>());
+
+  return Array.from(groups.values())
+    .filter((groupRows) =>
+      groupRows.some((row) => isLongPendingRow(row, todayText))
+    )
+    .map((groupRows) => {
+      const first = groupRows[0];
+      const claimAmount = groupRows.reduce((sum, row) => sum + row.claimAmount, 0);
+      const paidAmount = groupRows.reduce((sum, row) => sum + row.paidAmount, 0);
+      const claimDate =
+        groupRows
+          .map((row) => row.claimDate)
+          .filter(Boolean)
+          .sort()[0] ?? "";
+      const management = managementByWorkName.get(first.workName);
+
+      return {
+        ...first,
+        id: `long-${first.workName}`,
+        insuranceCompany: joinUniqueValues(
+          groupRows.map((row) => row.insuranceCompany)
+        ),
+        receiptNumber: joinUniqueValues(groupRows.map((row) => row.receiptNumber)),
+        managerName: joinUniqueValues(groupRows.map((row) => row.managerName)),
+        claimSide: joinUniqueValues(groupRows.map((row) => row.claimSide)),
+        claimDate,
+        claimAmount,
+        paidAmount,
+        receivableAmount: Math.max(0, claimAmount - paidAmount),
+        collectionRate: calculateCollectionRate(claimAmount, paidAmount),
+        memo: joinUniqueValues(groupRows.map((row) => row.memo)),
+        managementStatus: management?.status || "관리중",
+        actionMemo: management?.action_memo || "",
+        finalResult: management?.final_result || "",
+        detailRows: groupRows.sort((a, b) =>
+          a.claimSide.localeCompare(b.claimSide, "ko")
+        ),
+      };
+    })
+    .sort((a, b) => {
+      const dateCompare = a.claimDate.localeCompare(b.claimDate);
+      if (dateCompare !== 0) return dateCompare;
+      return b.receivableAmount - a.receivableAmount;
+    });
+};
+
 export default function PendingInsurancePrintPage({
   data,
   onSelectMenu,
@@ -81,6 +163,9 @@ export default function PendingInsurancePrintPage({
   const sortKey = data?.sortKey ?? "claimDate";
   const sortDirection = data?.sortDirection ?? "desc";
   const [rows, setRows] = useState<InsuranceListRow[]>([]);
+  const [managementRows, setManagementRows] = useState<
+    PendingInsuranceManagementRow[]
+  >([]);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState("");
 
@@ -89,7 +174,10 @@ export default function PendingInsurancePrintPage({
     setLoadError("");
 
     try {
-      const sourceRows = await fetchPendingInsuranceSourceRows();
+      const [sourceRows, managementResult] = await Promise.all([
+        fetchPendingInsuranceSourceRows(),
+        fetchPendingInsuranceManagementRows(),
+      ]);
       const listRows = buildPendingInsuranceRows(sourceRows);
       const filteredRows = filterPendingInsuranceRows(listRows, filters);
       const sortedRows = sortPendingInsuranceRows(
@@ -99,6 +187,11 @@ export default function PendingInsurancePrintPage({
       );
 
       setRows(sortedRows);
+      setManagementRows(managementResult.data);
+
+      if (managementResult.error) {
+        setLoadError("장기미결 관리 조회 실패: " + managementResult.error.message);
+      }
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : "출력 데이터 조회 실패");
     } finally {
@@ -111,16 +204,6 @@ export default function PendingInsurancePrintPage({
   }, [loadRows]);
 
   const printableRows = useMemo(() => {
-    if (printMode === "long-pending-card") {
-      return rows
-        .filter((row) => isLongPendingRow(row, todayText))
-        .sort((a, b) => {
-          const dateCompare = a.claimDate.localeCompare(b.claimDate);
-          if (dateCompare !== 0) return dateCompare;
-          return b.receivableAmount - a.receivableAmount;
-        });
-    }
-
     return [...rows].sort((a, b) => {
       const companyCompare = a.insuranceCompany.localeCompare(
         b.insuranceCompany,
@@ -131,7 +214,20 @@ export default function PendingInsurancePrintPage({
       if (dateCompare !== 0) return dateCompare;
       return a.workName.localeCompare(b.workName, "ko");
     });
-  }, [printMode, rows]);
+  }, [rows]);
+
+  const longPendingCardRows = useMemo(
+    () =>
+      buildLongPendingCards(
+        rows,
+        new Map(
+          managementRows
+            .map((row) => [row.work_name, row] as const)
+            .filter(([workName]) => Boolean(workName))
+        )
+      ),
+    [managementRows, rows]
+  );
 
   const insuranceGroups = useMemo(() => {
     const groups = new Map<string, InsuranceListRow[]>();
@@ -147,8 +243,11 @@ export default function PendingInsurancePrintPage({
   }, [printableRows]);
 
   const summary = useMemo(
-    () => summarizePendingInsuranceRows(printableRows),
-    [printableRows]
+    () =>
+      summarizePendingInsuranceRows(
+        printMode === "long-pending-card" ? longPendingCardRows : printableRows
+      ),
+    [longPendingCardRows, printMode, printableRows]
   );
   const isCardMode = printMode === "long-pending-card";
 
@@ -249,6 +348,41 @@ export default function PendingInsurancePrintPage({
             margin-bottom: 2.5mm !important;
           }
 
+          .long-pending-card-sheet {
+            padding: 4mm !important;
+            overflow: hidden !important;
+          }
+
+          .long-pending-card-sheet table {
+            font-size: 10px !important;
+            line-height: 1.15 !important;
+          }
+
+          .long-pending-card-sheet th,
+          .long-pending-card-sheet td {
+            padding: 3px 4px !important;
+          }
+
+          .long-pending-action-box {
+            min-height: 31mm !important;
+            max-height: 31mm !important;
+            overflow: hidden !important;
+          }
+
+          .long-pending-payment-detail-box {
+            min-height: 16mm !important;
+            max-height: 16mm !important;
+            overflow: hidden !important;
+            font-size: 11px !important;
+            line-height: 1.45 !important;
+          }
+
+          .long-pending-result-box {
+            min-height: 25mm !important;
+            max-height: 25mm !important;
+            overflow: hidden !important;
+          }
+
           .pending-insurance-avoid-break {
             break-inside: avoid !important;
             page-break-inside: avoid !important;
@@ -305,7 +439,10 @@ export default function PendingInsurancePrintPage({
         <div className="pending-insurance-preview">
           <section className="pending-insurance-print mx-auto bg-white shadow-lg">
             {isCardMode ? (
-              <LongPendingCards rows={printableRows} filters={filters} />
+              <LongPendingCards
+                rows={longPendingCardRows}
+                filters={filters}
+              />
             ) : (
               <InsuranceConfirmSheets
                 groups={insuranceGroups}
@@ -405,15 +542,17 @@ function InsuranceConfirmSheets({
 
                 <table className="pending-insurance-table w-full border-collapse text-[11px]">
                   <colgroup>
-                    <col className="w-[28px]" />
-                    <col className="w-[86px]" />
+                    <col className="w-[24px]" />
                     <col className="w-[74px]" />
-                    <col className="w-[92px]" />
-                    <col className="w-[72px]" />
+                    <col className="w-[62px]" />
+                    <col className="w-[78px]" />
+                    <col className="w-[88px]" />
+                    <col className="w-[58px]" />
+                    <col className="w-[58px]" />
+                    <col className="w-[62px]" />
                     <col className="w-[68px]" />
-                    <col className="w-[78px]" />
-                    <col className="w-[78px]" />
-                    <col className="w-[78px]" />
+                    <col className="w-[68px]" />
+                    <col className="w-[68px]" />
                     <col />
                   </colgroup>
                   <thead>
@@ -422,6 +561,8 @@ function InsuranceConfirmSheets({
                       <th className={printCellClass}>작명</th>
                       <th className={printCellClass}>차량번호</th>
                       <th className={printCellClass}>차량명</th>
+                      <th className={printCellClass}>접수번호</th>
+                      <th className={printCellClass}>담당자</th>
                       <th className={printCellClass}>청구상세</th>
                       <th className={printCellClass}>청구일</th>
                       <th className={`${printCellClass} text-right`}>청구금액</th>
@@ -446,6 +587,8 @@ function InsuranceConfirmSheets({
                           <td className={printCellClass}>{row.workName}</td>
                           <td className={printCellClass}>{row.carNumber}</td>
                           <td className={printCellClass}>{row.carModel}</td>
+                          <td className={printCellClass}>{row.receiptNumber || "-"}</td>
+                          <td className={printCellClass}>{row.managerName || "-"}</td>
                           <td className={`${printCellClass} text-center`}>{row.claimSide}</td>
                           <td className={`${printCellClass} text-center`}>{row.claimDate || "-"}</td>
                           <td className={`${printCellClass} text-right`}>{formatWon(row.claimAmount)}</td>
@@ -457,7 +600,7 @@ function InsuranceConfirmSheets({
                     })}
                     {Array.from({ length: emptyRows }, (_, index) => (
                       <tr key={`empty-${index}`} className="pending-insurance-avoid-break">
-                        {Array.from({ length: 10 }, (_, cellIndex) => (
+                        {Array.from({ length: 12 }, (_, cellIndex) => (
                           <td
                             key={cellIndex}
                             className={`${printCellClass} ${cellIndex === 0 ? "text-center" : ""}`}
@@ -494,7 +637,7 @@ function LongPendingCards({
   rows,
   filters,
 }: {
-  rows: InsuranceListRow[];
+  rows: LongPendingCardRow[];
   filters: PendingInsuranceFilters;
 }) {
   if (rows.length === 0) {
@@ -517,7 +660,7 @@ function LongPendingCards({
         return (
           <article
             key={`${row.id}-${index}`}
-            className="pending-insurance-sheet bg-white text-black"
+            className="pending-insurance-sheet long-pending-card-sheet bg-white text-black"
           >
             <PrintHeader
               title="장기미결 관리카드"
@@ -525,61 +668,64 @@ function LongPendingCards({
               filters={filters}
             />
 
-            <div className="mb-3 flex items-center justify-between border-y-2 border-slate-900 py-2">
+            <div className="mb-2 flex items-center justify-between border-y-2 border-slate-900 py-1.5">
               <div>
                 <div className="text-xs font-bold text-slate-600">작명</div>
-                <div className="text-3xl font-black">{row.workName}</div>
+                <div className="text-2xl font-black">{row.workName}</div>
               </div>
               <div className="text-right">
                 <div className="text-xs font-bold text-slate-600">경과일수</div>
-                <div className="text-3xl font-black text-red-700">
+                <div className="text-2xl font-black text-red-700">
                   {elapsedDays === null ? "-" : `${elapsedDays}일`}
                 </div>
               </div>
             </div>
 
-            <table className="mb-4 w-full border-collapse text-sm">
+            <table className="mb-3 w-full border-collapse text-sm">
               <tbody>
                 <CardInfoRow label="차량번호" value={row.carNumber} label2="차량명" value2={row.carModel} />
                 <CardInfoRow label="청구처" value={row.insuranceCompany} label2="청구상세" value2={row.claimSide} />
+                <CardInfoRow label="접수번호" value={row.receiptNumber} label2="담당자" value2={row.managerName} />
                 <CardInfoRow label="청구일" value={row.claimDate || "-"} label2="수금율" value2={formatRate(row.collectionRate)} />
                 <CardInfoRow label="청구금액" value={`${formatWon(row.claimAmount)}원`} label2="입금금액" value2={`${formatWon(row.paidAmount)}원`} />
                 <CardInfoRow label="미수금" value={`${formatWon(row.receivableAmount)}원`} label2="관리기준" value2="90일 초과" strong />
+                <CardInfoRow label="관리상태" value={row.managementStatus} label2="출력일" value2={todayText} />
                 <CardMemoRow value={row.memo} />
               </tbody>
             </table>
 
-            <section className="mb-4">
-              <div className="border border-slate-900 bg-slate-100 px-3 py-2 text-sm font-black">
+            <section className="mb-3">
+              <div className="border border-slate-900 bg-slate-100 px-3 py-1.5 text-sm font-black">
+                입금상세
+              </div>
+              <div className="long-pending-payment-detail-box border-x border-b border-slate-900 px-3 py-2 text-sm leading-relaxed">
+                {row.detailRows.map((detailRow) => (
+                  <div
+                    key={detailRow.id}
+                    className="font-semibold text-slate-900"
+                  >
+                    {buildPaymentDetailText(detailRow)}
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            <section className="mb-3">
+              <div className="border border-slate-900 bg-slate-100 px-3 py-1.5 text-sm font-black">
                 확인 및 조치 내역
               </div>
-              <table className="w-full border-collapse text-sm">
-                <thead>
-                  <tr className="bg-slate-50">
-                    <th className="w-[90px] border border-slate-900 px-2 py-2">확인일</th>
-                    <th className="w-[110px] border border-slate-900 px-2 py-2">담당자</th>
-                    <th className="border border-slate-900 px-2 py-2">조치내용</th>
-                    <th className="w-[100px] border border-slate-900 px-2 py-2">다음확인일</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {Array.from({ length: 8 }, (_, rowIndex) => (
-                    <tr key={rowIndex}>
-                      <td className="h-12 border border-slate-900">&nbsp;</td>
-                      <td className="border border-slate-900">&nbsp;</td>
-                      <td className="border border-slate-900">&nbsp;</td>
-                      <td className="border border-slate-900">&nbsp;</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <div className="long-pending-action-box min-h-24 whitespace-pre-wrap border-x border-b border-slate-900 px-3 py-2 text-sm">
+                {row.actionMemo || "\u00A0"}
+              </div>
             </section>
 
             <section>
-              <div className="border border-slate-900 bg-slate-100 px-3 py-2 text-sm font-black">
+              <div className="border border-slate-900 bg-slate-100 px-3 py-1.5 text-sm font-black">
                 최종 처리 결과
               </div>
-              <div className="h-24 border-x border-b border-slate-900">&nbsp;</div>
+              <div className="long-pending-result-box min-h-20 whitespace-pre-wrap border-x border-b border-slate-900 px-3 py-2 text-sm">
+                {row.finalResult || "\u00A0"}
+              </div>
             </section>
           </article>
         );
@@ -629,9 +775,9 @@ function PrintHeader({
 
       <div className="mt-3 grid grid-cols-4 border border-slate-900 text-[11px]">
         <HeaderInfo label="청구처" value={company ?? filters.insuranceFilter ?? "전체"} />
-        <HeaderInfo label="년도/월" value={`${filters.selectedYear || "전체"} / ${filters.selectedMonth || "전체"}`} />
         <HeaderInfo label="기간" value={`${filters.startDate || "전체"} ~ ${filters.endDate || "전체"}`} />
         <HeaderInfo label="검색" value={filters.searchText || "-"} />
+        <HeaderInfo label="구분" value={filters.longPendingOnly ? "장기미결건" : "전체"} />
       </div>
     </header>
   );
