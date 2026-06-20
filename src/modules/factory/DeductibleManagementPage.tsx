@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MenuItem } from "../../data/menuData";
 import { localDateText } from "../../lib/date";
 import { fetchAllRows } from "../../lib/fetchAllRows";
@@ -118,6 +118,7 @@ export default function DeductibleManagementPage({
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [currentPage, setCurrentPage] = useState(1);
   const [savingWorkName, setSavingWorkName] = useState<string | null>(null);
+  const savingWorkNamesRef = useRef<Set<string>>(new Set());
 
   const loadItems = useCallback(async () => {
     const { data: workOrders, error: workError } = await fetchAllRows<WorkOrderRow>(
@@ -328,6 +329,10 @@ export default function DeductibleManagementPage({
   };
 
   const handleSaveDeductible = async (item: DeductibleItem) => {
+    if (savingWorkNamesRef.current.has(item.workName)) {
+      return;
+    }
+
     const input = inputs[item.workName];
     const amount = toNumber(input?.amount ?? "");
 
@@ -346,6 +351,7 @@ export default function DeductibleManagementPage({
       return;
     }
 
+    savingWorkNamesRef.current.add(item.workName);
     setSavingWorkName(item.workName);
 
     const paymentPayload = {
@@ -369,10 +375,18 @@ export default function DeductibleManagementPage({
       .insert(paymentPayload);
 
     if (paymentError) {
+      savingWorkNamesRef.current.delete(item.workName);
       setSavingWorkName(null);
       alert("면책금 입금내역 저장 실패: " + paymentError.message);
       return;
     }
+
+    await supabase
+      .from("daily_cash")
+      .delete()
+      .eq("source_type", "settlement_payment")
+      .eq("source_work_name", item.workName)
+      .eq("category", "면책금");
 
     const { error: dailyCashError } = await supabase.from("daily_cash").insert({
       date: input.date,
@@ -388,6 +402,7 @@ export default function DeductibleManagementPage({
       source_work_name: item.workName,
     });
 
+    savingWorkNamesRef.current.delete(item.workName);
     setSavingWorkName(null);
 
     if (dailyCashError) {

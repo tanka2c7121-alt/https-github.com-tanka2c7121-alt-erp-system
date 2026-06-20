@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MenuItem } from "../../data/menuData";
 import { localDateText } from "../../lib/date";
 import { fetchAllRows } from "../../lib/fetchAllRows";
@@ -33,6 +33,7 @@ export default function SettlementMainPage({
   const [showReceivableDebug, setShowReceivableDebug] = useState(false);
   const [receivablePaymentDates, setReceivablePaymentDates] = useState<Record<string, string>>({});
   const [savingReceivableId, setSavingReceivableId] = useState<number | null>(null);
+  const savingReceivableIdsRef = useRef<Set<number>>(new Set());
 
 const fetchReceivableRows = useCallback(async () => {
   const pageSize = 1000;
@@ -283,6 +284,10 @@ const receivableSourceCount = paymentRows.filter(
 ).length;
 
 const handleReceivableDateSave = async (row: any) => {
+  if (savingReceivableIdsRef.current.has(row.id)) {
+    return;
+  }
+
   const paymentDate = receivablePaymentDates[String(row.id)] ?? "";
 
   if (!paymentDate) {
@@ -290,6 +295,7 @@ const handleReceivableDateSave = async (row: any) => {
     return;
   }
 
+  savingReceivableIdsRef.current.add(row.id);
   setSavingReceivableId(row.id);
 
   const { error: paymentError } = await supabase
@@ -301,10 +307,18 @@ const handleReceivableDateSave = async (row: any) => {
     .eq("id", row.id);
 
   if (paymentError) {
+    savingReceivableIdsRef.current.delete(row.id);
     setSavingReceivableId(null);
     alert("입금일자 저장 실패: " + paymentError.message);
     return;
   }
+
+  await supabase
+    .from("daily_cash")
+    .delete()
+    .eq("source_type", "settlement_payment")
+    .eq("source_work_name", row.work_name ?? "")
+    .eq("content", `${row.payment_type ?? ""} / ${row.payment_detail ?? ""} / ${row.work_name ?? ""}`);
 
   const { error: cashError } = await supabase.from("daily_cash").insert({
     date: paymentDate,
@@ -320,6 +334,7 @@ const handleReceivableDateSave = async (row: any) => {
     source_work_name: row.work_name ?? "",
   });
 
+  savingReceivableIdsRef.current.delete(row.id);
   setSavingReceivableId(null);
 
   if (cashError) {

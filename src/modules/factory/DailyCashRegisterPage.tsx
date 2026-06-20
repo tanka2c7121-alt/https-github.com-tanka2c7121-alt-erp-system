@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { localDateText } from "../../lib/date";
 import { supabase } from "../../lib/supabase";
 
@@ -96,6 +96,8 @@ export default function DailyCashRegisterPage({
     amount: "",
     memo: "",
   });
+  const [saving, setSaving] = useState(false);
+  const saveInProgressRef = useRef(false);
 
   const isEditMode = Boolean(editData);
   const canEditCurrentRow =
@@ -188,6 +190,14 @@ export default function DailyCashRegisterPage({
   }
 
   async function handleSave() {
+    if (saveInProgressRef.current) {
+      return;
+    }
+
+    saveInProgressRef.current = true;
+    setSaving(true);
+
+    try {
     if (editData && !canEditCurrentRow) {
       alert("입력한 당일 내역만 수정할 수 있습니다.");
       return;
@@ -253,6 +263,10 @@ expense:
 
     alert(isEditMode ? "수정되었습니다." : "저장되었습니다.");
     handleReset();
+    } finally {
+      saveInProgressRef.current = false;
+      setSaving(false);
+    }
   }
 
   return (
@@ -391,7 +405,7 @@ expense:
         <button
           type="button"
           onClick={handleSave}
-          disabled={!canEditCurrentRow}
+          disabled={!canEditCurrentRow || saving}
           title={
             canEditCurrentRow
               ? undefined
@@ -399,7 +413,7 @@ expense:
           }
           className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:bg-slate-400"
         >
-          {isEditMode ? "수정저장" : "저장"}
+          {saving ? (isEditMode ? "수정 중..." : "저장 중...") : isEditMode ? "수정저장" : "저장"}
         </button>
       </div>
     </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { localDateText } from "../../lib/date";
 import { supabase } from "../../lib/supabase";
@@ -164,6 +164,8 @@ export default function PartsCostManagementPage({
   const [memoInputs, setMemoInputs] = useState<Record<string, string>>({});
   const [methodInputs, setMethodInputs] = useState<Record<string, string>>({});
   const [printPortalRoot, setPrintPortalRoot] = useState<HTMLElement | null>(null);
+  const saveEntryInProgressRef = useRef(false);
+  const processingSuppliersRef = useRef<Set<string>>(new Set());
 
   const selectedUsageMonth = `${selectedYear}-${selectedMonth}`;
   const paymentDueDate = getNextMonthEndDate(selectedUsageMonth);
@@ -474,6 +476,10 @@ export default function PartsCostManagementPage({
   };
 
   const saveEntry = async () => {
+    if (saveEntryInProgressRef.current) {
+      return;
+    }
+
     const amount = parseAmount(form.amount);
 
     if (!form.useDate || !form.supplierName.trim() || amount <= 0) {
@@ -486,6 +492,7 @@ export default function PartsCostManagementPage({
       return;
     }
 
+    saveEntryInProgressRef.current = true;
     setSaving(true);
     const { error } = await supabase.from("part_cost_entries").insert({
       use_date: form.useDate,
@@ -497,6 +504,7 @@ export default function PartsCostManagementPage({
       created_by: user.user_id,
       created_name: user.user_name,
     });
+    saveEntryInProgressRef.current = false;
     setSaving(false);
 
     if (error) {
@@ -652,9 +660,17 @@ export default function PartsCostManagementPage({
   };
 
   const completePayment = async (summary: SupplierSummary) => {
+    if (processingSuppliersRef.current.has(summary.supplierName)) {
+      return;
+    }
+
+    processingSuppliersRef.current.add(summary.supplierName);
     const synced = await syncPaymentToDailyCash(summary);
 
-    if (!synced) return;
+    if (!synced) {
+      processingSuppliersRef.current.delete(summary.supplierName);
+      return;
+    }
 
     await upsertSettlement(summary, {
       status: "결제완료",
@@ -664,6 +680,7 @@ export default function PartsCostManagementPage({
         methodInputs[summary.supplierName] || summary.paymentMethod || "국민은행",
       paid_at: localDateText(),
     });
+    processingSuppliersRef.current.delete(summary.supplierName);
   };
 
   return (

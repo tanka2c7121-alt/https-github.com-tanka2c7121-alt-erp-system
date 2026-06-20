@@ -142,39 +142,6 @@ const hasStoredPaymentInputValue = (item: any) =>
   Number(item.claim_amount ?? 0) > 0 ||
   Boolean(item.payment_date);
 
-const getDailyCashPaymentKey = (row: PaymentRow) =>
-  [
-    row.paymentType,
-    row.paymentDetail,
-    toNumber(row.amount || row.claimAmount),
-    row.date,
-    row.method,
-    row.approvalNumber,
-    row.merchantNumber,
-    row.cardNumber,
-  ].join("|");
-
-const getDailyCashEntryKey = (row: Pick<PaymentRow, "paymentType" | "paymentDetail" | "amount" | "claimAmount" | "date" | "method">) =>
-  [
-    row.paymentType,
-    row.paymentDetail,
-    toNumber(row.amount || row.claimAmount),
-    row.date,
-    row.method,
-  ].join("|");
-
-const getStoredDailyCashEntryKey = (row: any) => {
-  const [paymentType = "", paymentDetail = ""] = String(row.content ?? "").split(" / ");
-
-  return [
-    paymentType,
-    paymentDetail,
-    Number(row.income ?? 0),
-    row.date ?? "",
-    row.account ?? "",
-  ].join("|");
-};
-
 const getDailyCashEligiblePaymentRows = (rows: PaymentRow[]) =>
   rows.filter(
     (row) =>
@@ -183,13 +150,6 @@ const getDailyCashEligiblePaymentRows = (rows: PaymentRow[]) =>
       row.method &&
       !isPartnerSupportPaymentRow(row)
   );
-
-const getPaymentRowCountMap = (rows: PaymentRow[]) =>
-  rows.reduce<Map<string, number>>((map, row) => {
-    const key = getDailyCashPaymentKey(row);
-    map.set(key, (map.get(key) ?? 0) + 1);
-    return map;
-  }, new Map());
 
 export default function SettlementRegisterPage({
   initialWorkName,
@@ -214,8 +174,7 @@ export default function SettlementRegisterPage({
     "unlock" | "serviceChargeOverride"
   >("unlock");
   const [adminPassword, setAdminPassword] = useState("");
-  const loadedDailyCashPaymentCountsRef = useRef<Map<string, number>>(new Map());
-  const loadedDailyCashEntryKeysRef = useRef<string[]>([]);
+  const saveInProgressRef = useRef(false);
   const [form, setForm] = useState({
     workName: "",
     carNumber: "",
@@ -472,10 +431,6 @@ export default function SettlementRegisterPage({
           })
         : defaultPaymentRows();
 
-    loadedDailyCashPaymentCountsRef.current = getPaymentRowCountMap(loadedPaymentRows);
-    loadedDailyCashEntryKeysRef.current = getDailyCashEligiblePaymentRows(loadedPaymentRows).map(
-      getDailyCashEntryKey
-    );
     setPaymentRows(normalizePaymentRowsForWorkOrder(loadedPaymentRows));
 
     const loadedClaimRows =
@@ -627,37 +582,6 @@ export default function SettlementRegisterPage({
 
   const saveDailyCashRows = async (targetForm = form) => {
     const today = localDateText();
-    const { data: existingCashRows, error: existingCashError } =
-      await supabase
-        .from("daily_cash")
-        .select("id, date, created_on, account, content, income")
-        .eq("source_type", "settlement_payment")
-        .eq("source_work_name", targetForm.workName);
-
-    if (existingCashError) return existingCashError;
-
-    const existingRowsByKey = (existingCashRows ?? []).reduce<Map<string, any[]>>(
-      (map, row) => {
-        const key = getStoredDailyCashEntryKey(row);
-        map.set(key, [...(map.get(key) ?? []), row]);
-        return map;
-      },
-      new Map<string, any[]>()
-    );
-
-    const takeExistingRow = (key: string) => {
-      const rows = existingRowsByKey.get(key) ?? [];
-      const row = rows.shift();
-
-      if (rows.length > 0) {
-        existingRowsByKey.set(key, rows);
-      } else {
-        existingRowsByKey.delete(key);
-      }
-
-      return row;
-    };
-
     const toDailyCashPayload = (row: PaymentRow) => ({
         date: row.date,
         created_on: today,
@@ -672,62 +596,16 @@ export default function SettlementRegisterPage({
         source_work_name: targetForm.workName,
     });
 
-    const desiredRows = getDailyCashEligiblePaymentRows(paymentRows);
-    const updateTasks: PromiseLike<{ error: any }>[] = [];
-    const insertRows: Array<ReturnType<typeof toDailyCashPayload>> = [];
+    const { error: deleteError } = await supabase
+      .from("daily_cash")
+      .delete()
+      .eq("source_type", "settlement_payment")
+      .eq("source_work_name", targetForm.workName)
+      .eq("category", "차량정산");
 
-    desiredRows.forEach((row, index) => {
-      const key = getDailyCashEntryKey(row);
-      const unchangedExistingRow = takeExistingRow(key);
+    if (deleteError) return deleteError;
 
-      if (unchangedExistingRow) {
-        return;
-      }
-
-      const previousKey = loadedDailyCashEntryKeysRef.current[index];
-      const previousExistingRow = previousKey ? takeExistingRow(previousKey) : null;
-      const payload = toDailyCashPayload(row);
-
-      if (previousExistingRow?.id) {
-        updateTasks.push(
-          supabase
-            .from("daily_cash")
-            .update({
-              date: payload.date,
-              account: payload.account,
-              type: payload.type,
-              category: payload.category,
-              content: payload.content,
-              income: payload.income,
-              expense: payload.expense,
-              memo: payload.memo,
-              source_type: payload.source_type,
-              source_work_name: payload.source_work_name,
-            })
-            .eq("id", previousExistingRow.id)
-        );
-        return;
-      }
-
-      insertRows.push(payload);
-    });
-
-    const remainingRows = Array.from(existingRowsByKey.values()).flat();
-    const loadedKeys = new Set(loadedDailyCashEntryKeysRef.current);
-    const deleteIds = remainingRows
-      .filter((row) => loadedKeys.has(getStoredDailyCashEntryKey(row)))
-      .map((row) => row.id)
-      .filter(Boolean);
-
-    for (const task of updateTasks) {
-      const { error } = await task;
-      if (error) return error;
-    }
-
-    if (deleteIds.length > 0) {
-      const { error } = await supabase.from("daily_cash").delete().in("id", deleteIds);
-      if (error) return error;
-    }
+    const insertRows = getDailyCashEligiblePaymentRows(paymentRows).map(toDailyCashPayload);
 
     if (insertRows.length === 0) return null;
 
@@ -803,17 +681,25 @@ export default function SettlementRegisterPage({
     printAfterSave?: boolean;
     skipCompleteConfirm?: boolean;
   } = {}) => {
+    if (saveInProgressRef.current) {
+      return;
+    }
+
+    saveInProgressRef.current = true;
+
     const saveForm = nextProgressStatus
       ? { ...form, progressStatus: nextProgressStatus }
       : form;
 
     if (!saveForm.workName) {
       alert("작명을 입력하세요.");
+      saveInProgressRef.current = false;
       return;
     }
 
     if (isLocked && !canEditExpenseWhileCompleted) {
       alert("완결 또는 종결 처리된 정산입니다. 관리자 잠금해제 후 수정할 수 있습니다.");
+      saveInProgressRef.current = false;
       return;
     }
 
@@ -824,17 +710,24 @@ export default function SettlementRegisterPage({
 
     if (isNewCompletion && !skipCompleteConfirm && !completionWarningAccepted) {
       const confirmed = window.confirm("완결로 바꾸면 되돌릴 수 없습니다.");
-      if (!confirmed) return;
+      if (!confirmed) {
+        saveInProgressRef.current = false;
+        return;
+      }
     }
 
     if (isNewClosing && !canCloseSettlement) {
       alert("종결은 관리자와 총괄관리만 처리할 수 있습니다.");
+      saveInProgressRef.current = false;
       return;
     }
 
     if (isNewClosing && !closingWarningAccepted) {
       const confirmed = window.confirm("종결 처리하시겠습니까?");
-      if (!confirmed) return;
+      if (!confirmed) {
+        saveInProgressRef.current = false;
+        return;
+      }
     }
 
     const claimTotal = claimRows.reduce(
@@ -855,6 +748,7 @@ export default function SettlementRegisterPage({
       (claimTotal <= 0 || !hasDatedPaymentAmount)
     ) {
       alert("완결/종결은 청구금액, 입금일, 입금금액이 모두 있어야 저장할 수 있습니다.");
+      saveInProgressRef.current = false;
       return;
     }
 
@@ -904,6 +798,7 @@ export default function SettlementRegisterPage({
       });
 
     if (settlementError) {
+      saveInProgressRef.current = false;
       setSaving(false);
       alert("정산 저장 실패: " + settlementError.message);
       return;
@@ -915,6 +810,7 @@ export default function SettlementRegisterPage({
       .eq("work_name", saveForm.workName);
 
     if (workOrderMemoError) {
+      saveInProgressRef.current = false;
       setSaving(false);
       alert("전달내용 저장 실패: " + workOrderMemoError.message);
       return;
@@ -922,6 +818,7 @@ export default function SettlementRegisterPage({
 
     const claimError = await saveClaimRows(saveForm);
     if (claimError) {
+      saveInProgressRef.current = false;
       setSaving(false);
       alert("청구정보 저장 실패: " + claimError.message);
       return;
@@ -929,6 +826,7 @@ export default function SettlementRegisterPage({
 
     const paymentError = await savePaymentRows(saveForm);
     if (paymentError) {
+      saveInProgressRef.current = false;
       setSaving(false);
       alert("입금내역 저장 실패: " + paymentError.message);
       return;
@@ -936,6 +834,7 @@ export default function SettlementRegisterPage({
 
     const dailyCashError = await saveDailyCashRows(saveForm);
     if (dailyCashError) {
+      saveInProgressRef.current = false;
       setSaving(false);
       alert("일일입출금 연동 저장 실패: " + dailyCashError.message);
       return;
@@ -943,6 +842,7 @@ export default function SettlementRegisterPage({
 
     const expenseError = await saveExpenseRows(saveForm);
     if (expenseError) {
+      saveInProgressRef.current = false;
       setSaving(false);
       alert("지출내역 저장 실패: " + expenseError.message);
       return;
@@ -955,6 +855,7 @@ export default function SettlementRegisterPage({
     setAdminUnlocked(false);
 
     if (printAfterSave || isNewCompletion) {
+      saveInProgressRef.current = false;
       onSelectMenu({
         id: "factory-settlement-complete-print",
         title: "완결출력",
@@ -964,6 +865,7 @@ export default function SettlementRegisterPage({
     }
 
     alert(isEditMode ? "수정되었습니다." : "저장되었습니다.");
+    saveInProgressRef.current = false;
   };
 
   const handleProgressStatusChange = (value: string) => {

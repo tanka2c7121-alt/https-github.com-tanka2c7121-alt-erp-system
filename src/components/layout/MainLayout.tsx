@@ -24,6 +24,9 @@ import DailyCashRegisterPage from "../../modules/factory/DailyCashRegisterPage";
 import SettlementMainPage from "../../modules/factory/SettlementMainPage";
 import PendingSettlementPage from "../../modules/factory/PendingSettlementPage";
 import PendingInsuranceListPage from "../../modules/factory/PendingInsuranceListPage";
+import PendingInsurancePrintPage, {
+  type PendingInsurancePrintData,
+} from "../../modules/factory/PendingInsurancePrintPage";
 import ClosedSettlementManagementPage from "../../modules/factory/ClosedSettlementManagementPage";
 import DeductibleManagementPage from "../../modules/factory/DeductibleManagementPage";
 import PartsCostManagementPage from "../../modules/factory/PartsCostManagementPage";
@@ -67,6 +70,10 @@ type PageData = {
   expenseRequest?: any;
   attendanceRequest?: any;
   incidentReport?: any;
+  printMode?: PendingInsurancePrintData["printMode"];
+  filters?: PendingInsurancePrintData["filters"];
+  sortKey?: PendingInsurancePrintData["sortKey"];
+  sortDirection?: PendingInsurancePrintData["sortDirection"];
 };
 
 const initialMenu: MenuItem = {
@@ -565,6 +572,14 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
     }
     if (menu.id === "factory-settlement-pending-insurance") {
       return <PendingInsuranceListPage onSelectMenu={handleSelectMenu} />;
+    }
+    if (menu.id === "factory-settlement-pending-insurance-print") {
+      return (
+        <PendingInsurancePrintPage
+          data={pageData as PendingInsurancePrintData}
+          onSelectMenu={handleSelectMenu}
+        />
+      );
     }
     if (
       menu.id === "factory-settlement-complete-management" ||
