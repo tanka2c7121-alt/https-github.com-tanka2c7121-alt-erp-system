@@ -6,7 +6,13 @@ import { localDateText } from "../../lib/date";
 import { fetchAllRows } from "../../lib/fetchAllRows";
 
 
-type RiskView = "unclaimed" | "pending" | "receivable" | "longPending" | "lowPaymentRate";
+type RiskView =
+  | "unclaimed"
+  | "pending"
+  | "receivable"
+  | "longPending"
+  | "longReceivable"
+  | "lowPaymentRate";
 
 type ClaimDetail = "보험" | "캐피탈" | "일반" | "바디케어";
 
@@ -386,9 +392,15 @@ export default function PendingSettlementPage({
     });
 
   const unclaimedRows = riskRows.filter((row) => row.status === "미청구");
-  const receivableRows = riskRows.filter((row) => row.status === "미수");
+  const allReceivableRows = riskRows.filter((row) => row.status === "미수");
+  const receivableRows = allReceivableRows.filter(
+    (row) => (row.elapsedDays ?? 0) <= pendingCutoffDays
+  );
   const pendingRows = riskRows.filter((row) => row.status === "미결");
   const longPendingRows = riskRows.filter((row) => row.status === "장기미결");
+  const longReceivableRows = allReceivableRows.filter(
+    (row) => (row.elapsedDays ?? 0) > pendingCutoffDays
+  );
   const lowPaymentRateRows = riskRows.filter(
     (row) =>
       row.status === "완결" &&
@@ -407,7 +419,9 @@ export default function PendingSettlementPage({
       : activeRiskView === "receivable"
       ? receivableRows
       : activeRiskView === "longPending"
-        ? longPendingRows
+      ? longPendingRows
+      : activeRiskView === "longReceivable"
+        ? longReceivableRows
         : lowPaymentRateRows;
 
   const activeTitle =
@@ -418,7 +432,9 @@ export default function PendingSettlementPage({
       : activeRiskView === "receivable"
       ? "미수건"
       : activeRiskView === "longPending"
-        ? "장기미결건"
+      ? "장기미결건"
+      : activeRiskView === "longReceivable"
+        ? "장기미수건"
         : "결제율 95% 미만";
 
   return (
@@ -426,7 +442,7 @@ export default function PendingSettlementPage({
       <div>
         <h3 className="text-2xl font-bold">미결관리</h3>
         <p className="text-sm text-slate-600">
-          출고된 미결 차량을 미청구, 미결, 미수, 장기미결, 결제율 95% 미만으로 나누어 확인합니다.
+          출고된 미결 차량을 미청구, 미결, 미수, 장기미결, 장기미수, 결제율 95% 미만으로 나누어 확인합니다.
         </p>
         <p className="mt-1 text-xs font-semibold text-slate-500">
           원본: 차량정산 {sourceCounts.settlements.toLocaleString()}건 / 입금{" "}
@@ -439,7 +455,7 @@ export default function PendingSettlementPage({
         )}
       </div>
 
-      <section className="grid grid-cols-2 gap-1.5 md:grid-cols-5 md:gap-3">
+      <section className="grid grid-cols-2 gap-1.5 md:grid-cols-3 md:gap-3 xl:grid-cols-6">
         <RiskCard
           title="미청구"
           count={unclaimedRows.length}
@@ -471,6 +487,14 @@ export default function PendingSettlementPage({
           tone="red"
           active={activeRiskView === "longPending"}
           onClick={() => setActiveRiskView("longPending")}
+        />
+        <RiskCard
+          title="장기미수건"
+          count={longReceivableRows.length}
+          amount={longReceivableRows.reduce((sum, row) => sum + row.receivableAmount, 0)}
+          tone="red"
+          active={activeRiskView === "longReceivable"}
+          onClick={() => setActiveRiskView("longReceivable")}
         />
         <RiskCard
           title="결제율 95% 미만"

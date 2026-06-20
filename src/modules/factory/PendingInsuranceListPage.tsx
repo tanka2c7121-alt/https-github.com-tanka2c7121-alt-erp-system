@@ -68,8 +68,21 @@ export default function PendingInsuranceListPage({
     x: number;
     y: number;
   } | null>(null);
+  const [managementModalSize, setManagementModalSize] = useState<{
+    width: number;
+    height: number;
+  } | null>(null);
   const modalDragOffsetRef = useRef({ x: 0, y: 0 });
   const modalDraggingRef = useRef(false);
+  const modalResizeStartRef = useRef({
+    width: 0,
+    height: 0,
+    centerX: 0,
+    centerY: 0,
+    pointerX: 0,
+    pointerY: 0,
+  });
+  const modalResizingRef = useRef(false);
 
   const filters = useMemo<PendingInsuranceFilters>(
     () => ({
@@ -127,6 +140,10 @@ export default function PendingInsuranceListPage({
     setManagementModalPosition({
       x: offsetLeft + width / 2,
       y: offsetTop + height / 2,
+    });
+    setManagementModalSize({
+      width: Math.min(1024, Math.max(720, width - 32)),
+      height: Math.min(740, Math.max(520, height - 48)),
     });
   }, [editingWorkName]);
 
@@ -253,7 +270,7 @@ export default function PendingInsuranceListPage({
   };
 
   const startModalDrag = (event: PointerEvent<HTMLElement>) => {
-    if (!managementModalPosition) return;
+    if (!managementModalPosition || modalResizingRef.current) return;
 
     modalDraggingRef.current = true;
     modalDragOffsetRef.current = {
@@ -264,7 +281,7 @@ export default function PendingInsuranceListPage({
   };
 
   const moveModalDrag = (event: PointerEvent<HTMLElement>) => {
-    if (!modalDraggingRef.current) return;
+    if (!modalDraggingRef.current || modalResizingRef.current) return;
 
     const margin = 24;
     const nextX = event.clientX - modalDragOffsetRef.current.x;
@@ -278,6 +295,59 @@ export default function PendingInsuranceListPage({
 
   const stopModalDrag = (event: PointerEvent<HTMLElement>) => {
     modalDraggingRef.current = false;
+
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  };
+
+  const startModalResize = (event: PointerEvent<HTMLElement>) => {
+    if (!managementModalPosition || !managementModalSize) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+    modalResizingRef.current = true;
+    modalResizeStartRef.current = {
+      width: managementModalSize.width,
+      height: managementModalSize.height,
+      centerX: managementModalPosition.x,
+      centerY: managementModalPosition.y,
+      pointerX: event.clientX,
+      pointerY: event.clientY,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const moveModalResize = (event: PointerEvent<HTMLElement>) => {
+    if (!modalResizingRef.current) return;
+
+    const start = modalResizeStartRef.current;
+    const maxWidth = Math.max(720, window.innerWidth - 32);
+    const maxHeight = Math.max(520, window.innerHeight - 32);
+    const width = Math.min(
+      Math.max(start.width + event.clientX - start.pointerX, 720),
+      maxWidth
+    );
+    const height = Math.min(
+      Math.max(start.height + event.clientY - start.pointerY, 520),
+      maxHeight
+    );
+
+    setManagementModalSize({ width, height });
+    setManagementModalPosition({
+      x: Math.min(
+        Math.max(start.centerX + (width - start.width) / 2, 24),
+        window.innerWidth - 24
+      ),
+      y: Math.min(
+        Math.max(start.centerY + (height - start.height) / 2, 24),
+        window.innerHeight - 24
+      ),
+    });
+  };
+
+  const stopModalResize = (event: PointerEvent<HTMLElement>) => {
+    modalResizingRef.current = false;
 
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
@@ -439,7 +509,7 @@ export default function PendingInsuranceListPage({
       {editingWorkName && (
         <div className="fixed inset-0 z-50 bg-slate-900/40">
           <section
-            className="absolute max-h-[calc(100vh-3rem)] w-[min(48rem,calc(100vw-2rem))] overflow-y-auto rounded-xl bg-white p-5 shadow-2xl"
+            className="absolute overflow-y-auto rounded-xl bg-white p-5 pb-8 shadow-2xl"
             style={{
               left: managementModalPosition
                 ? `${managementModalPosition.x}px`
@@ -447,6 +517,14 @@ export default function PendingInsuranceListPage({
               top: managementModalPosition
                 ? `${managementModalPosition.y}px`
                 : "50vh",
+              width: managementModalSize
+                ? `${managementModalSize.width}px`
+                : "min(64rem, calc(100vw - 2rem))",
+              height: managementModalSize
+                ? `${managementModalSize.height}px`
+                : "min(46rem, calc(100vh - 3rem))",
+              maxWidth: "calc(100vw - 2rem)",
+              maxHeight: "calc(100vh - 2rem)",
               transform: "translate(-50%, -50%)",
             }}
           >
@@ -502,31 +580,31 @@ export default function PendingInsuranceListPage({
                 <table className="w-full border-collapse text-sm">
                   <thead>
                     <tr className="bg-white text-slate-700">
-                      <th className="border-b border-slate-200 px-3 py-2 text-left">
+                      <th className="w-20 border-b border-slate-200 px-3 py-2 text-left">
                         구분
                       </th>
-                      <th className="border-b border-slate-200 px-3 py-2 text-left">
+                      <th className="min-w-40 border-b border-slate-200 px-3 py-2 text-left">
                         청구처
                       </th>
-                      <th className="border-b border-slate-200 px-3 py-2 text-left">
+                      <th className="min-w-32 border-b border-slate-200 px-3 py-2 text-left">
                         접수번호
                       </th>
-                      <th className="border-b border-slate-200 px-3 py-2 text-center">
+                      <th className="w-24 border-b border-slate-200 px-3 py-2 text-center">
                         담당자
                       </th>
-                      <th className="border-b border-slate-200 px-3 py-2 text-center">
+                      <th className="w-28 border-b border-slate-200 px-3 py-2 text-center">
                         청구일
                       </th>
-                      <th className="border-b border-slate-200 px-3 py-2 text-right">
+                      <th className="w-28 border-b border-slate-200 px-3 py-2 text-right">
                         청구금액
                       </th>
-                      <th className="border-b border-slate-200 px-3 py-2 text-right">
+                      <th className="w-28 border-b border-slate-200 px-3 py-2 text-right">
                         입금금액
                       </th>
-                      <th className="border-b border-slate-200 px-3 py-2 text-right">
+                      <th className="w-28 border-b border-slate-200 px-3 py-2 text-right">
                         미수금
                       </th>
-                      <th className="border-b border-slate-200 px-3 py-2 text-right">
+                      <th className="w-24 border-b border-slate-200 px-3 py-2 text-right">
                         수금율
                       </th>
                     </tr>
@@ -534,31 +612,31 @@ export default function PendingInsuranceListPage({
                   <tbody>
                     {editingRows.map((row, index) => (
                       <tr key={`${row.id}-${index}`} className="hover:bg-slate-50">
-                        <td className="border-b border-slate-100 px-3 py-2 font-bold text-slate-800">
+                        <td className="whitespace-nowrap border-b border-slate-100 px-3 py-2 font-bold text-slate-800">
                           {row.claimSide}
                         </td>
-                        <td className="border-b border-slate-100 px-3 py-2">
+                        <td className="whitespace-nowrap border-b border-slate-100 px-3 py-2">
                           {row.insuranceCompany}
                         </td>
-                        <td className="border-b border-slate-100 px-3 py-2">
+                        <td className="whitespace-nowrap border-b border-slate-100 px-3 py-2">
                           {row.receiptNumber || "-"}
                         </td>
-                        <td className="border-b border-slate-100 px-3 py-2 text-center">
+                        <td className="whitespace-nowrap border-b border-slate-100 px-3 py-2 text-center">
                           {row.managerName || "-"}
                         </td>
-                        <td className="border-b border-slate-100 px-3 py-2 text-center">
+                        <td className="whitespace-nowrap border-b border-slate-100 px-3 py-2 text-center">
                           {row.claimDate || "-"}
                         </td>
-                        <td className="border-b border-slate-100 px-3 py-2 text-right">
+                        <td className="whitespace-nowrap border-b border-slate-100 px-3 py-2 text-right">
                           {formatWon(row.claimAmount)}
                         </td>
-                        <td className="border-b border-slate-100 px-3 py-2 text-right text-blue-600">
+                        <td className="whitespace-nowrap border-b border-slate-100 px-3 py-2 text-right text-blue-600">
                           {formatWon(row.paidAmount)}
                         </td>
-                        <td className="border-b border-slate-100 px-3 py-2 text-right font-bold text-red-600">
+                        <td className="whitespace-nowrap border-b border-slate-100 px-3 py-2 text-right font-bold text-red-600">
                           {formatWon(row.receivableAmount)}
                         </td>
-                        <td className="border-b border-slate-100 px-3 py-2 text-right font-semibold text-slate-700">
+                        <td className="whitespace-nowrap border-b border-slate-100 px-3 py-2 text-right font-semibold text-slate-700">
                           {formatRate(row.collectionRate)}
                         </td>
                       </tr>
@@ -646,6 +724,20 @@ export default function PendingInsuranceListPage({
                 {savingManagement ? "저장중" : "저장"}
               </button>
             </div>
+            <button
+              type="button"
+              aria-label="팝업 크기 조절"
+              title="팝업 크기 조절"
+              onPointerDown={startModalResize}
+              onPointerMove={moveModalResize}
+              onPointerUp={stopModalResize}
+              onPointerCancel={stopModalResize}
+              className="absolute bottom-1 right-1 h-7 w-7 cursor-nwse-resize rounded-br-xl text-slate-400 hover:text-slate-700"
+            >
+              <span className="absolute bottom-1 right-1 text-lg leading-none">
+                ◢
+              </span>
+            </button>
           </section>
         </div>
       )}
