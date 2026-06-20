@@ -484,6 +484,7 @@ export default function WorkRegisterPage({
   const [message, setMessage] = useState("");
   const [isEditMode, setIsEditMode] = useState(false);
   const [releaseDate, setReleaseDate] = useState("");
+  const [settlementProgressStatus, setSettlementProgressStatus] = useState("미결");
   const [workPhotos, setWorkPhotos] = useState<WorkPhoto[]>([]);
   const [selectedPhotoPaths, setSelectedPhotoPaths] = useState<string[]>([]);
   const [pendingWorkPhotos, setPendingWorkPhotos] = useState<PendingWorkPhoto[]>([]);
@@ -524,6 +525,7 @@ export default function WorkRegisterPage({
   const selectedWorkPhotos = workPhotos.filter((photo) =>
     selectedPhotoPaths.includes(photo.path)
   );
+  const isWorkFinalized = settlementProgressStatus === "종결";
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const cameraStreamRef = useRef<MediaStream | null>(null);
   const cameraAutoOpenRef = useRef(false);
@@ -906,6 +908,11 @@ async function loadWorkPhotos(targetWorkName = workName) {
 }
 
 async function addPendingPhotoFiles(files: File[]) {
+  if (isWorkFinalized) {
+    alert("종결 처리된 작업은 사진을 추가할 수 없습니다.");
+    return;
+  }
+
   setPhotoOcrReading(true);
   setPhotoOcrMessage("");
 
@@ -961,6 +968,12 @@ async function addPendingPhotoFiles(files: File[]) {
 }
 
 async function handlePhotoCapture(event: ChangeEvent<HTMLInputElement>) {
+  if (isWorkFinalized) {
+    alert("종결 처리된 작업은 사진을 추가할 수 없습니다.");
+    event.target.value = "";
+    return;
+  }
+
   const files = Array.from(event.target.files ?? []);
   event.target.value = "";
 
@@ -1032,6 +1045,11 @@ function closeCamera() {
 }
 
 async function captureCameraPhoto() {
+  if (isWorkFinalized) {
+    alert("종결 처리된 작업은 사진을 추가할 수 없습니다.");
+    return;
+  }
+
   const video = videoRef.current;
 
   if (
@@ -1131,6 +1149,11 @@ async function uploadPendingWorkPhotos(targetWorkName = workName) {
 }
 
 function handleDeletePendingPhoto(photoId: string) {
+  if (isWorkFinalized) {
+    alert("종결 처리된 작업은 사진을 삭제할 수 없습니다.");
+    return;
+  }
+
   setPendingWorkPhotos((prev) => {
     const target = prev.find((photo) => photo.id === photoId);
 
@@ -1299,6 +1322,11 @@ async function downloadSelectedPhotosToFolder() {
 }
 
 async function deleteSelectedPhotos() {
+  if (isWorkFinalized) {
+    alert("종결 처리된 작업은 사진을 삭제할 수 없습니다.");
+    return;
+  }
+
   if (selectedWorkPhotos.length === 0) {
     alert("삭제할 사진을 선택하세요.");
     return;
@@ -1372,6 +1400,7 @@ async function deleteSelectedPhotos() {
       work: "",
     }))
   );
+  setSettlementProgressStatus("미결");
   editWorkNameRef.current = "";
   replacePhotoPathsRef.current = [];
   setIsEditMode(false);
@@ -1379,6 +1408,17 @@ async function deleteSelectedPhotos() {
 async function handlePrint() {
   try {
     const currentWorkName = workName;
+
+    if (isWorkFinalized) {
+      onSelectMenu({
+        id: "factory-work-print",
+        title: "출력모드",
+        data: {
+          workName: currentWorkName,
+        },
+      });
+      return;
+    }
 
     const saved = await handleSave();
 
@@ -1417,6 +1457,11 @@ function handleOpenSettlementRegister() {
 }
 
 function handleReplaceCurrentWork() {
+  if (isWorkFinalized) {
+    alert("종결 처리된 작업은 대체 입력할 수 없습니다.");
+    return;
+  }
+
   const targetWorkName = editWorkNameRef.current || workName;
 
   if (!targetWorkName) {
@@ -1473,6 +1518,12 @@ async function handleLoadWorkOrder(
     alert("해당 작명을 찾을 수 없습니다.");
     return;
   }
+
+  const { data: settlement } = await supabase
+    .from("repair_settlements")
+    .select("progress_status")
+    .eq("work_name", targetWorkName)
+    .maybeSingle();
 
   const { data: details, error: detailError } = await supabase
     .from("work_details")
@@ -1541,6 +1592,7 @@ async function handleLoadWorkOrder(
   });
 
   setWorkRows(loadedRows);
+  setSettlementProgressStatus(settlement?.progress_status ?? "미결");
   setWorkName(targetWorkName);
   editWorkNameRef.current = targetWorkName;
   replacePhotoPathsRef.current = [];
@@ -1579,6 +1631,11 @@ async function getNextWorkName() {
 }
 
 async function handleSave() {
+  if (isWorkFinalized) {
+    alert("종결 처리된 작업은 수정할 수 없습니다.");
+    return false;
+  }
+
   if (saveInProgressRef.current) {
     return false;
   }
@@ -1889,6 +1946,8 @@ const activeCompanyOptions =
   key: "side" | "part" | "work",
   value: string
 ) {
+  if (isWorkFinalized) return;
+
   setWorkRows((prev) =>
     prev.map((row, rowIndex) =>
       rowIndex === index
@@ -1902,6 +1961,8 @@ const activeCompanyOptions =
 }
 
 function handleClearWorkRow(index: number) {
+  if (isWorkFinalized) return;
+
   setWorkRows((prev) =>
     prev.map((row, rowIndex) =>
       rowIndex === index
@@ -1947,7 +2008,9 @@ function handleClearWorkRow(index: number) {
     <button
       type="button"
       onClick={handleReplaceCurrentWork}
-      className="rounded-lg border border-amber-300 bg-amber-50 px-5 py-2 text-sm font-semibold text-amber-800 hover:bg-amber-100"
+      disabled={isWorkFinalized}
+      title={isWorkFinalized ? "종결 처리된 작업은 대체 입력할 수 없습니다." : undefined}
+      className="rounded-lg border border-amber-300 bg-amber-50 px-5 py-2 text-sm font-semibold text-amber-800 hover:bg-amber-100 disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
     >
       대체 입력
     </button>
@@ -1961,6 +2024,12 @@ function handleClearWorkRow(index: number) {
     정산등록
   </button>
 </div>
+
+      {isWorkFinalized && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+          종결 처리된 작업입니다. 조회만 가능하며 작업등록 수정은 할 수 없습니다.
+        </div>
+      )}
 
       <section className="rounded-xl border border-slate-200 bg-white p-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -1981,20 +2050,30 @@ function handleClearWorkRow(index: number) {
                 void openCamera();
               }}
               disabled={
-                cameraStarting || saving || photoUploading || photoOcrReading
+                isWorkFinalized ||
+                cameraStarting ||
+                saving ||
+                photoUploading ||
+                photoOcrReading
               }
               className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:bg-slate-400"
             >
               {cameraStarting ? "카메라 여는 중..." : "카메라 열기"}
             </button>
-            <label className="inline-flex cursor-pointer items-center justify-center rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+            <label
+              className={`inline-flex items-center justify-center rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold hover:bg-slate-50 ${
+                isWorkFinalized
+                  ? "cursor-not-allowed text-slate-400"
+                  : "cursor-pointer text-slate-700"
+              }`}
+            >
               사진 업로드
               <input
                 type="file"
                 accept="image/*"
                 multiple
                 className="hidden"
-                disabled={saving || photoUploading || photoOcrReading}
+                disabled={isWorkFinalized || saving || photoUploading || photoOcrReading}
                 onChange={handlePhotoCapture}
               />
             </label>
@@ -2043,7 +2122,11 @@ function handleClearWorkRow(index: number) {
                   void captureCameraPhoto();
                 }}
                 disabled={
-                  !cameraReady || saving || photoUploading || photoOcrReading
+                  !cameraReady ||
+                  isWorkFinalized ||
+                  saving ||
+                  photoUploading ||
+                  photoOcrReading
                 }
                 className="work-camera-button work-camera-button-primary"
               >
@@ -2110,7 +2193,8 @@ function handleClearWorkRow(index: number) {
                         <button
                           type="button"
                           onClick={() => handleDeletePendingPhoto(photo.id)}
-                          className="w-full border-t border-blue-100 bg-white px-2 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50"
+                          disabled={isWorkFinalized}
+                          className="w-full border-t border-blue-100 bg-white px-2 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:text-slate-400 disabled:hover:bg-white"
                         >
                           빼기
                         </button>
@@ -2133,14 +2217,16 @@ function handleClearWorkRow(index: number) {
                 <button
                   type="button"
                   onClick={selectAllPhotos}
-                  className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                  disabled={isWorkFinalized}
+                  className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:text-slate-400 disabled:hover:bg-white"
                 >
                   전체선택
                 </button>
                 <button
                   type="button"
                   onClick={clearPhotoSelection}
-                  className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                  disabled={isWorkFinalized}
+                  className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:text-slate-400 disabled:hover:bg-white"
                 >
                   선택해제
                 </button>
@@ -2158,7 +2244,8 @@ function handleClearWorkRow(index: number) {
                   onClick={() => {
                     void deleteSelectedPhotos();
                   }}
-                  className="rounded-lg border border-red-300 bg-white px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50"
+                  disabled={isWorkFinalized}
+                  className="rounded-lg border border-red-300 bg-white px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:border-slate-200 disabled:text-slate-400 disabled:hover:bg-white"
                 >
                   선택 삭제
                 </button>
@@ -2183,6 +2270,7 @@ function handleClearWorkRow(index: number) {
                     checked={selectedPhotoPaths.includes(photo.path)}
                     onChange={() => togglePhotoSelection(photo)}
                     onClick={(event) => event.stopPropagation()}
+                    disabled={isWorkFinalized}
                     className="h-4 w-4 accent-blue-600"
                   />
                 </span>
@@ -2282,6 +2370,10 @@ function handleClearWorkRow(index: number) {
       )}
 
       
+      <fieldset
+        disabled={isWorkFinalized}
+        className="space-y-6 disabled:cursor-not-allowed disabled:opacity-75"
+      >
       <section className="rounded-xl border border-cyan-200 border-l-4 border-l-cyan-500 bg-cyan-50/40 p-4 shadow-sm">
         <h4 className="mb-4 rounded-lg bg-cyan-100 px-3 py-2 text-base font-bold text-cyan-950">
           차량 기본정보
@@ -2842,6 +2934,7 @@ function handleClearWorkRow(index: number) {
           </table>
         </div>
       </section>
+      </fieldset>
 
       <div className="flex justify-end gap-2">
   <button
@@ -2849,13 +2942,15 @@ function handleClearWorkRow(index: number) {
     onClick={() => {
   void handleSave();
 }}
-    disabled={saving}
+    disabled={saving || isWorkFinalized}
     className="rounded-lg bg-blue-600 px-6 py-3 text-sm font-semibold text-white hover:bg-blue-700 disabled:bg-slate-400"
   >
     {saving
       ? isEditMode
         ? "수정 중..."
         : "저장 중..."
+      : isWorkFinalized
+        ? "종결 잠김"
       : isEditMode
         ? "수정 후 저장"
         : "저장"}
