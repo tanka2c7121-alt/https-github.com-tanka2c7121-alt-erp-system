@@ -508,8 +508,6 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
           isAdmin={isAdmin}
           user={user}
           userName={user.user_name}
-          quickActionMenus={[defaultCameraQuickAction, ...quickActionMenus]}
-          onSelectMenu={handleSelectMenu}
         />
       );
     }
@@ -527,13 +525,13 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
           userRole={userRole}
           departmentFilter={
             menu.id === "employee-admin"
-              ? "관리"
+              ? "관리부"
               : menu.id === "employee-body"
-                ? "자금"
+                ? "판금부"
                 : menu.id === "employee-paint"
-                  ? "현장"
-                  : menu.id === "employee-repair"
-                    ? "정비"
+                  ? "도장부"
+                : menu.id === "employee-repair"
+                    ? "정비부"
                     : undefined
           }
           onOpenManage={() =>
@@ -768,6 +766,7 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
         user={user}
         onLogout={onLogout}
         notifications={notifications}
+        quickActions={[defaultCameraQuickAction, ...quickActionMenus]}
         onSelectMenu={handleSelectMenu}
       />
 

@@ -14,6 +14,7 @@ type Props = {
   user: any;
   onLogout: () => void;
   notifications?: NotificationItem[];
+  quickActions?: MenuItem[];
   onSelectMenu?: (menu: MenuItem) => void;
 };
 
@@ -21,14 +22,16 @@ export default function Topbar({
   user,
   onLogout,
   notifications = [],
+  quickActions = [],
   onSelectMenu,
 }: Props) {
-  const [isOpen, setIsOpen] = useState(false);
+  const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const activeNotifications = notifications.filter((item) => item.count > 0);
   const totalCount = activeNotifications.reduce(
     (sum, item) => sum + item.count,
     0
   );
+  const visibleQuickActions = quickActions.slice(0, 8);
 
   return (
     <header className="relative z-50 flex min-h-16 items-center justify-between gap-3 border-b border-white/70 bg-white/75 px-3 py-3 shadow-sm shadow-slate-200/70 backdrop-blur-xl md:h-16 md:px-6 md:py-0">
@@ -41,7 +44,39 @@ export default function Topbar({
         </p>
       </div>
 
-      <div className="flex shrink-0 items-center gap-2 md:gap-4">
+      <div className="flex min-w-0 shrink-0 items-center gap-2 md:gap-4">
+        {quickActions.length > 0 && (
+          <div className="hidden min-w-0 max-w-[34vw] items-center gap-2 rounded-full border border-blue-200 bg-blue-50/90 px-2 py-1 shadow-sm ring-1 ring-white/70 lg:flex">
+            <span className="shrink-0 px-1 text-[10px] font-black uppercase tracking-wide text-blue-700">
+              빠른작업
+            </span>
+            <div className="flex min-w-0 gap-1 overflow-x-auto">
+              {visibleQuickActions.map((action, index) => (
+                <button
+                  key={`${action.id}-${index}`}
+                  type="button"
+                  onClick={() =>
+                    onSelectMenu?.({
+                      id: action.id,
+                      title: action.title,
+                      data: action.data,
+                    })
+                  }
+                  className="h-8 shrink-0 rounded-full border border-blue-200 bg-white px-3 text-xs font-bold text-blue-700 shadow-sm hover:border-blue-400 hover:bg-blue-100"
+                  title={action.data?.openCamera ? "카메라열기" : action.title}
+                >
+                  {action.data?.openCamera ? "카메라" : action.title}
+                </button>
+              ))}
+              {quickActions.length > visibleQuickActions.length && (
+                <span className="flex h-8 shrink-0 items-center rounded-full bg-blue-100 px-2 text-xs font-bold text-blue-700">
+                  +{quickActions.length - visibleQuickActions.length}
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+
         <GlobalVehicleSearch onSelectMenu={onSelectMenu} />
 
         <div className="hidden text-sm text-slate-600 sm:block">
@@ -52,8 +87,10 @@ export default function Topbar({
           <div className="relative">
             <button
               type="button"
-              onClick={() => setIsOpen((value) => !value)}
-              className="relative rounded-full border border-slate-200 bg-white/80 px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm hover:bg-white md:text-sm"
+              onClick={() => {
+                setIsNotificationOpen((value) => !value);
+              }}
+              className="relative rounded-full border border-amber-200 bg-amber-50/90 px-3 py-2 text-xs font-semibold text-amber-800 shadow-sm hover:bg-amber-100 md:text-sm"
             >
               알림
               {totalCount > 0 && (
@@ -63,13 +100,13 @@ export default function Topbar({
               )}
             </button>
 
-            {isOpen && (
+            {isNotificationOpen && (
               <div className="fixed right-3 top-[64px] z-[1000] w-[min(20rem,calc(100vw-1.5rem))] rounded-2xl border border-slate-200 bg-white p-3 text-sm shadow-2xl shadow-slate-300/60 md:right-6">
                 <div className="mb-2 flex items-center justify-between gap-2">
                   <div className="font-bold text-slate-900">알림</div>
                   <button
                     type="button"
-                    onClick={() => setIsOpen(false)}
+                    onClick={() => setIsNotificationOpen(false)}
                     className="rounded px-2 py-1 text-xs font-semibold text-slate-500 hover:bg-slate-100"
                   >
                     닫기
@@ -88,7 +125,7 @@ export default function Topbar({
                         type="button"
                         onClick={() => {
                           onSelectMenu?.(item.menu);
-                          setIsOpen(false);
+                          setIsNotificationOpen(false);
                         }}
                         className="flex w-full items-center justify-between rounded-lg border border-slate-100 p-3 text-left hover:bg-blue-50"
                       >
@@ -115,7 +152,7 @@ export default function Topbar({
         <button
           type="button"
           onClick={onLogout}
-          className="rounded-full bg-slate-900 px-3 py-2 text-xs font-semibold text-white shadow-sm hover:bg-slate-700 md:px-4 md:text-sm"
+          className="rounded-full bg-slate-900 px-3 py-2 text-xs font-semibold text-white shadow-sm ring-1 ring-slate-700/30 hover:bg-slate-700 md:px-4 md:text-sm"
         >
           로그아웃
         </button>

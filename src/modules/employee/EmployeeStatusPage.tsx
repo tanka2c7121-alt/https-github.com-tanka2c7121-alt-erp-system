@@ -90,9 +90,11 @@ export default function EmployeeStatusPage({
       });
   }, [departmentFilter, employees, searchText]);
 
-  const activeCount = visibleEmployees.filter((item) => item.is_active).length;
-  const pendingCount = visibleEmployees.filter((item) => !item.is_active).length;
-  const adminCount = visibleEmployees.filter((item) => item.role === "ADMIN").length;
+  const activeCount = visibleEmployees.filter((item) => item.is_active === true).length;
+  const pendingCount = visibleEmployees.filter((item) => item.is_active === false).length;
+  const managerCount = visibleEmployees.filter((item) =>
+    ["ADMIN", "CHIEF", "LEADER"].includes(item.role ?? "")
+  ).length;
   const staffCount = visibleEmployees.filter((item) => item.role === "STAFF").length;
 
   const departmentSummary = departments.map((department) => {
@@ -103,8 +105,8 @@ export default function EmployeeStatusPage({
     return {
       department,
       total: departmentEmployees.length,
-      active: departmentEmployees.filter((employee) => employee.is_active).length,
-      pending: departmentEmployees.filter((employee) => !employee.is_active).length,
+      active: departmentEmployees.filter((employee) => employee.is_active === true).length,
+      pending: departmentEmployees.filter((employee) => employee.is_active === false).length,
       employees: departmentEmployees,
     };
   });
@@ -138,7 +140,7 @@ export default function EmployeeStatusPage({
         <SummaryCard title="전체 직원" value={visibleEmployees.length} tone="blue" />
         <SummaryCard title="사용중" value={activeCount} tone="green" />
         <SummaryCard title="승인대기" value={pendingCount} tone="orange" />
-        <SummaryCard title="관리자 / 직원" value={`${adminCount} / ${staffCount}`} tone="slate" />
+        <SummaryCard title="관리권한 / 직원" value={`${managerCount} / ${staffCount}`} tone="slate" />
       </section>
 
       {isStaffMode && (
