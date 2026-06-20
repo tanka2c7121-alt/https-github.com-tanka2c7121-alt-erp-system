@@ -15,6 +15,7 @@ export type SettlementRow = {
   other_claim_amount: number | null;
   own_claim_date: string | null;
   other_claim_date: string | null;
+  memo?: string | null;
 };
 
 export type WorkOrderRow = {
@@ -27,6 +28,7 @@ export type WorkOrderRow = {
   insurance_company: string | null;
   other_insurance_company: string | null;
   release_date: string | null;
+  message?: string | null;
 };
 
 export type PaymentRow = {
@@ -53,6 +55,7 @@ export type InsuranceListRow = {
   paidAmount: number;
   receivableAmount: number;
   collectionRate: number | null;
+  memo: string;
 };
 
 export type PendingInsuranceFilters = {
@@ -260,12 +263,13 @@ export async function fetchPendingInsuranceSourceRows() {
         "other_claim_amount",
         "own_claim_date",
         "other_claim_date",
+        "memo",
       ].join(", "),
       (query) => query.order("id", { ascending: false })
     ),
     fetchAllRows<WorkOrderRow>(
       "work_orders",
-      "id, work_name, car_number, car_model, category, coverage_type, insurance_company, other_insurance_company, release_date"
+      "id, work_name, car_number, car_model, category, coverage_type, insurance_company, other_insurance_company, release_date, message"
     ),
     fetchAllRows<PaymentRow>(
       "settlement_payments",
@@ -311,6 +315,7 @@ export async function fetchPendingInsuranceSourceRows() {
         other_claim_amount: settlement?.other_claim_amount ?? 0,
         own_claim_date: settlement?.own_claim_date ?? "",
         other_claim_date: settlement?.other_claim_date ?? "",
+        memo: settlement?.memo ?? work.message ?? "",
       };
     });
 
@@ -374,6 +379,9 @@ export function buildPendingInsuranceRows({
         workName,
         carNumber: normalizeText(row.car_number),
         carModel: normalizeText(row.car_model),
+        memo:
+          normalizeText(row.memo) ||
+          normalizeText(workOrder.message),
         status,
       };
 

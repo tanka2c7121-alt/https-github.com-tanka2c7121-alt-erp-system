@@ -47,16 +47,29 @@ const sheetMinHeight = {
   card: "270mm",
   list: "186mm",
 };
-const insuranceConfirmRowsPerPage = 20;
+const insuranceConfirmFirstPageRows = 20;
+const insuranceConfirmFirstPageMaxRows = 25;
+const insuranceConfirmNextPageRows = 28;
 
-const chunkRows = <T,>(rows: T[], size: number) => {
-  const pages: T[][] = [];
+const buildInsuranceConfirmPages = (rows: InsuranceListRow[]) => {
+  const firstPageRows = Math.min(
+    Math.max(rows.length, insuranceConfirmFirstPageRows),
+    insuranceConfirmFirstPageMaxRows
+  );
 
-  for (let index = 0; index < rows.length; index += size) {
-    pages.push(rows.slice(index, index + size));
+  if (rows.length <= firstPageRows) {
+    return [rows];
   }
 
-  return pages.length > 0 ? pages : [[]];
+  const pages = [rows.slice(0, firstPageRows)];
+  let cursor = firstPageRows;
+
+  while (cursor < rows.length) {
+    pages.push(rows.slice(cursor, cursor + insuranceConfirmNextPageRows));
+    cursor += insuranceConfirmNextPageRows;
+  }
+
+  return pages;
 };
 
 export default function PendingInsurancePrintPage({
@@ -142,10 +155,41 @@ export default function PendingInsurancePrintPage({
   return (
     <div className="min-h-screen bg-slate-200 p-4 text-slate-900 print:bg-white print:p-0">
       <style>{`
+        .pending-insurance-preview {
+          max-height: calc(100vh - 120px);
+          overflow: auto;
+          padding: 0 12px 24px;
+        }
+
+        .pending-insurance-preview .pending-insurance-print {
+          width: max-content;
+          max-width: none;
+          transform: scale(0.88);
+          transform-origin: top center;
+        }
+
+        .pending-insurance-preview .pending-insurance-sheet {
+          width: ${isCardMode ? sheetWidth.card : sheetWidth.list};
+          min-height: ${isCardMode ? sheetMinHeight.card : sheetMinHeight.list};
+          padding: ${isCardMode ? "5mm" : "3.5mm"};
+          margin: 0 auto 16px;
+          box-shadow: 0 18px 40px rgba(15, 23, 42, 0.18);
+        }
+
         @media print {
           @page {
             size: A4 ${isCardMode ? "portrait" : "landscape"};
             margin: 9mm;
+          }
+
+          .pending-insurance-preview {
+            max-height: none !important;
+            overflow: visible !important;
+            padding: 0 !important;
+          }
+
+          .pending-insurance-preview .pending-insurance-print {
+            transform: none !important;
           }
 
           body * {
@@ -182,8 +226,8 @@ export default function PendingInsurancePrintPage({
 
           .pending-insurance-table {
             table-layout: fixed !important;
-            font-size: 8px !important;
-            line-height: 1.1 !important;
+            font-size: 9px !important;
+            line-height: 1.2 !important;
           }
 
           .pending-insurance-table thead {
@@ -192,7 +236,7 @@ export default function PendingInsurancePrintPage({
 
           .pending-insurance-table th,
           .pending-insurance-table td {
-            padding: 2px 1.5px !important;
+            padding: 3px 2px !important;
             overflow-wrap: anywhere !important;
           }
 
@@ -258,17 +302,19 @@ export default function PendingInsurancePrintPage({
           출력 데이터를 불러오는 중입니다.
         </div>
       ) : (
-        <section className="pending-insurance-print mx-auto bg-white shadow-lg">
-          {isCardMode ? (
-            <LongPendingCards rows={printableRows} filters={filters} />
-          ) : (
-            <InsuranceConfirmSheets
-              groups={insuranceGroups}
-              summary={summary}
-              filters={filters}
-            />
-          )}
-        </section>
+        <div className="pending-insurance-preview">
+          <section className="pending-insurance-print mx-auto bg-white shadow-lg">
+            {isCardMode ? (
+              <LongPendingCards rows={printableRows} filters={filters} />
+            ) : (
+              <InsuranceConfirmSheets
+                groups={insuranceGroups}
+                summary={summary}
+                filters={filters}
+              />
+            )}
+          </section>
+        </div>
       )}
     </div>
   );
@@ -299,35 +345,63 @@ function InsuranceConfirmSheets({
     <>
       {groups.map(([company, rows]) => {
         const groupSummary = summarizePendingInsuranceRows(rows);
-        const pages = chunkRows(rows, insuranceConfirmRowsPerPage);
+        const pages = buildInsuranceConfirmPages(rows);
+        const firstPageRows = Math.min(
+          Math.max(rows.length, insuranceConfirmFirstPageRows),
+          insuranceConfirmFirstPageMaxRows
+        );
 
         return (
           pages.map((pageRows, pageIndex) => {
             const emptyRows = Math.max(
               0,
-              insuranceConfirmRowsPerPage - pageRows.length
+              (pageIndex === 0
+                ? firstPageRows
+                : insuranceConfirmNextPageRows) - pageRows.length
             );
             const isLastPage = pageIndex === pages.length - 1;
+            const isFirstPage = pageIndex === 0;
 
             return (
               <article
                 key={`${company}-${pageIndex}`}
                 className="pending-insurance-sheet flex flex-col bg-white text-black"
               >
-                <PrintHeader
-                  title="미결 청구건 확인 요청서"
-                  subtitle={`${company} 청구건의 입금 및 처리 여부 확인 부탁드립니다. (${pageIndex + 1}/${pages.length})`}
-                  filters={filters}
-                  company={company}
-                />
+                {isFirstPage ? (
+                  <>
+                    <PrintHeader
+                      title="미결 청구건 확인 요청서"
+                      subtitle={`${company} 청구건의 입금 및 처리 여부 확인 부탁드립니다.`}
+                      filters={filters}
+                      company={company}
+                      pageText={`${pageIndex + 1}/${pages.length}`}
+                    />
 
-                <div className="mb-3 grid grid-cols-5 border border-slate-900 text-center text-[11px]">
-                  <SummaryBox label="건수" value={`${groupSummary.count}건`} />
-                  <SummaryBox label="청구금액" value={`${formatWon(groupSummary.claimAmount)}원`} />
-                  <SummaryBox label="입금금액" value={`${formatWon(groupSummary.paidAmount)}원`} />
-                  <SummaryBox label="미수금" value={`${formatWon(groupSummary.receivableAmount)}원`} />
-                  <SummaryBox label="전체 미수금" value={`${formatWon(summary.receivableAmount)}원`} />
-                </div>
+                    <div className="mb-3 grid grid-cols-5 border border-slate-900 text-center text-[11px]">
+                      <SummaryBox label="건수" value={`${groupSummary.count}건`} />
+                      <SummaryBox label="청구금액" value={`${formatWon(groupSummary.claimAmount)}원`} />
+                      <SummaryBox label="입금금액" value={`${formatWon(groupSummary.paidAmount)}원`} />
+                      <SummaryBox label="미수금" value={`${formatWon(groupSummary.receivableAmount)}원`} />
+                      <SummaryBox label="전체 미수금" value={`${formatWon(summary.receivableAmount)}원`} />
+                    </div>
+                  </>
+                ) : (
+                  <div className="mb-2 flex items-end justify-between border-b-2 border-slate-900 pb-2">
+                    <div>
+                      <h2 className="text-lg font-black">미결 청구건 확인 요청서</h2>
+                      <p className="text-xs font-semibold text-slate-700">
+                        {company} 계속
+                      </p>
+                    </div>
+                    <div className="text-right text-[11px] font-semibold text-slate-700">
+                      <div className="mb-1 text-sm font-black text-slate-900">
+                        {pageIndex + 1}/{pages.length}
+                      </div>
+                      <div>기준일: {todayText}</div>
+                      <div>출력일: {todayText}</div>
+                    </div>
+                  </div>
+                )}
 
                 <table className="pending-insurance-table w-full border-collapse text-[11px]">
                   <colgroup>
@@ -359,7 +433,12 @@ function InsuranceConfirmSheets({
                   <tbody>
                     {pageRows.map((row, index) => {
                       const rowNumber =
-                        pageIndex * insuranceConfirmRowsPerPage + index + 1;
+                        pageIndex === 0
+                          ? index + 1
+                          : firstPageRows +
+                            (pageIndex - 1) * insuranceConfirmNextPageRows +
+                            index +
+                            1;
 
                       return (
                         <tr key={`${row.id}-${rowNumber}`} className="pending-insurance-avoid-break">
@@ -466,6 +545,7 @@ function LongPendingCards({
                 <CardInfoRow label="청구일" value={row.claimDate || "-"} label2="수금율" value2={formatRate(row.collectionRate)} />
                 <CardInfoRow label="청구금액" value={`${formatWon(row.claimAmount)}원`} label2="입금금액" value2={`${formatWon(row.paidAmount)}원`} />
                 <CardInfoRow label="미수금" value={`${formatWon(row.receivableAmount)}원`} label2="관리기준" value2="90일 초과" strong />
+                <CardMemoRow value={row.memo} />
               </tbody>
             </table>
 
@@ -513,11 +593,13 @@ function PrintHeader({
   subtitle,
   filters,
   company,
+  pageText,
 }: {
   title: string;
   subtitle: string;
   filters: PendingInsuranceFilters;
   company?: string;
+  pageText?: string;
 }) {
   return (
     <header className="mb-4">
@@ -526,14 +608,21 @@ function PrintHeader({
           <h1 className="text-2xl font-black tracking-wide">{title}</h1>
           <p className="mt-1 text-sm font-semibold text-slate-700">{subtitle}</p>
         </div>
-        <div className="min-w-[190px] border border-slate-900 text-[11px]">
-          <div className="grid grid-cols-[70px_1fr] border-b border-slate-900">
-            <div className="bg-slate-100 px-2 py-1 font-bold">기준일</div>
-            <div className="px-2 py-1">{todayText}</div>
-          </div>
-          <div className="grid grid-cols-[70px_1fr]">
-            <div className="bg-slate-100 px-2 py-1 font-bold">출력일</div>
-            <div className="px-2 py-1">{todayText}</div>
+        <div className="min-w-[190px] text-[11px]">
+          {pageText && (
+            <div className="mb-1 text-right text-sm font-black text-slate-900">
+              {pageText}
+            </div>
+          )}
+          <div className="border border-slate-900">
+            <div className="grid grid-cols-[70px_1fr] border-b border-slate-900">
+              <div className="bg-slate-100 px-2 py-1 font-bold">기준일</div>
+              <div className="px-2 py-1">{todayText}</div>
+            </div>
+            <div className="grid grid-cols-[70px_1fr]">
+              <div className="bg-slate-100 px-2 py-1 font-bold">출력일</div>
+              <div className="px-2 py-1">{todayText}</div>
+            </div>
           </div>
         </div>
       </div>
@@ -594,6 +683,19 @@ function CardInfoRow({
       </th>
       <td className={`border border-slate-900 px-3 py-2 ${strong ? "font-black" : ""}`}>
         {value2 || "\u00A0"}
+      </td>
+    </tr>
+  );
+}
+
+function CardMemoRow({ value }: { value: string }) {
+  return (
+    <tr>
+      <th className="w-28 border border-slate-900 bg-slate-100 px-3 py-2 text-left">
+        비고
+      </th>
+      <td className="h-16 border border-slate-900 px-3 py-2 align-top" colSpan={3}>
+        {value || "\u00A0"}
       </td>
     </tr>
   );
