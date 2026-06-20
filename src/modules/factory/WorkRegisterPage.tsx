@@ -394,6 +394,7 @@ function Field({
   value,
   onChange,
   options,
+  disabled = false,
 }: {
   label: string;
   placeholder?: string;
@@ -403,15 +404,17 @@ function Field({
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
   ) => void;
   options?: string[];
+  disabled?: boolean;
 }) {
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-4">
       <label className={labelClass}>{label}</label>
       {options ? (
   <select
-  className={`${getInputStateClass(String(value ?? ""))} ${inputClass}`}
+  className={`${getInputStateClass(String(value ?? ""))} ${inputClass} disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500`}
     value={value}
     onChange={onChange}
+    disabled={disabled}
   >
     <option value="">선택</option>
 
@@ -424,10 +427,11 @@ function Field({
 ) : (
   <input
     type={type}
-    className={`${getInputStateClass(String(value ?? ""))} ${inputClass}`}
+    className={`${getInputStateClass(String(value ?? ""))} ${inputClass} disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500`}
     placeholder={placeholder}
     value={value}
     onChange={onChange}
+    disabled={disabled}
   />
 )}
     </div>
@@ -524,6 +528,8 @@ export default function WorkRegisterPage({
   const cameraStreamRef = useRef<MediaStream | null>(null);
   const cameraAutoOpenRef = useRef(false);
   const saveInProgressRef = useRef(false);
+  const editWorkNameRef = useRef("");
+  const replacePhotoPathsRef = useRef<string[]>([]);
 
   useEffect(() => {
     if (coverageType === "과실") {
@@ -746,15 +752,15 @@ useEffect(() => {
 }, [initialWorkName, workName]);
 
 useEffect(() => {
-  if (!workName) {
+  if (!workName || !isEditMode) {
     setWorkPhotos([]);
     return;
   }
 
   void loadWorkPhotos(workName);
-// workName changes are the trigger; loadWorkPhotos is a hoisted helper that reads the target name argument.
+// workName/edit mode changes are the trigger; loadWorkPhotos is a hoisted helper that reads the target name argument.
 // eslint-disable-next-line react-hooks/exhaustive-deps
-}, [workName]);
+}, [workName, isEditMode]);
 
 useEffect(() => {
   return () => {
@@ -1366,6 +1372,8 @@ async function deleteSelectedPhotos() {
       work: "",
     }))
   );
+  editWorkNameRef.current = "";
+  replacePhotoPathsRef.current = [];
   setIsEditMode(false);
 }
 async function handlePrint() {
@@ -1406,6 +1414,36 @@ function handleOpenSettlementRegister() {
       workName: targetWorkName,
     },
   });
+}
+
+async function handleStartNewWork() {
+  const nextWorkName = await getNextWorkName();
+
+  handleReset(nextWorkName);
+}
+
+function handleReplaceCurrentWork() {
+  const targetWorkName = editWorkNameRef.current || workName;
+
+  if (!targetWorkName) {
+    alert("대체 입력할 작명이 없습니다.");
+    return;
+  }
+
+  if (
+    !confirm(
+      "현재 작명의 기존 입력값과 저장 사진을 비우고 다른 차량으로 다시 입력할까요? 저장을 눌러야 최종 반영됩니다."
+    )
+  ) {
+    return;
+  }
+
+  const photoPaths = workPhotos.map((photo) => photo.path);
+
+  handleReset(targetWorkName);
+  replacePhotoPathsRef.current = photoPaths;
+  editWorkNameRef.current = targetWorkName;
+  setIsEditMode(true);
 }
 
 function formatWorkName(value: string) {
@@ -1509,6 +1547,9 @@ async function handleLoadWorkOrder(
   });
 
   setWorkRows(loadedRows);
+  setWorkName(targetWorkName);
+  editWorkNameRef.current = targetWorkName;
+  replacePhotoPathsRef.current = [];
   setIsEditMode(true);
 
   if (showAlert) {
@@ -1554,6 +1595,12 @@ async function handleSave() {
   try {
     const targetWorkName = workName;
     const normalizedCarNumber = carNumber.trim();
+
+    if (isEditMode && editWorkNameRef.current && targetWorkName !== editWorkNameRef.current) {
+      alert("작명은 수정할 수 없습니다. 새 차량은 새 작업 버튼으로 새 작명을 발행한 뒤 입력하세요.");
+      return false;
+    }
+
     const missingFields = [
       ["작명", workName],
       ["제조사", carMaker],
@@ -1729,7 +1776,21 @@ async function handleSave() {
       }
     }
 
+    if (shouldUpdate && replacePhotoPathsRef.current.length > 0) {
+      const { error: replacePhotoError } = await supabase.storage
+        .from(workPhotoBucket)
+        .remove(replacePhotoPathsRef.current);
+
+      if (replacePhotoError) {
+        alert("기존 사진 삭제 실패: " + replacePhotoError.message);
+        return false;
+      }
+
+      replacePhotoPathsRef.current = [];
+    }
+
     const uploadedPhotoCount = await uploadPendingWorkPhotos(targetWorkName);
+    editWorkNameRef.current = targetWorkName;
     setIsEditMode(true);
 
     alert(
@@ -1873,6 +1934,7 @@ function handleClearWorkRow(index: number) {
       label="작명"
       placeholder="2026-05-001"
       value={workName}
+      disabled={isEditMode}
       onChange={(e) =>
         setWorkName(formatWorkName(e.target.value))
       }
@@ -1886,6 +1948,26 @@ function handleClearWorkRow(index: number) {
   >
     불러오기
   </button>
+
+  <button
+    type="button"
+    onClick={() => {
+      void handleStartNewWork();
+    }}
+    className="rounded-lg border border-blue-300 bg-white px-5 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50"
+  >
+    새 작업
+  </button>
+
+  {isEditMode && (
+    <button
+      type="button"
+      onClick={handleReplaceCurrentWork}
+      className="rounded-lg border border-amber-300 bg-amber-50 px-5 py-2 text-sm font-semibold text-amber-800 hover:bg-amber-100"
+    >
+      대체 입력
+    </button>
+  )}
 
   <button
     type="button"
