@@ -143,6 +143,8 @@ const getVehicleKey = (order: Pick<WorkOrder, "work_name" | "car_number" | "car_
 
   return carNumber || [order.work_name, carModel].filter(Boolean).join("|");
 };
+const isWorkNameInMonth = (workName: string | null | undefined, monthText: string) =>
+  Boolean(workName && workName.startsWith(`${monthText}-`));
 const buildMonthDays = (monthText: string) => {
   const [year, month] = monthText.split("-").map(Number);
   const firstDate = new Date(year, month - 1, 1);
@@ -305,6 +307,9 @@ export default function HomeDashboardPage({
     const thisMonthInboundVehicleCount = new Set(
       thisMonthInbound.map(getVehicleKey).filter(Boolean)
     ).size;
+    const thisMonthRoIssuedCount = workOrders.filter((item) =>
+      isWorkNameInMonth(item.work_name, thisMonth)
+    ).length;
     const todayOutbound = workOrders.filter((item) => item.release_date === today);
     const thisMonthOutbound = workOrders.filter((item) =>
       isDateInMonth(item.release_date, thisMonth)
@@ -408,6 +413,7 @@ export default function HomeDashboardPage({
       todayInbound,
       thisMonthInbound,
       thisMonthInboundVehicleCount,
+      thisMonthRoIssuedCount,
       todayOutbound,
       thisMonthOutbound,
       calendarMonth: visibleScheduleMonth,
@@ -687,7 +693,7 @@ export default function HomeDashboardPage({
         <SummaryCard title="오늘 출고" value={dashboard.todayOutbound.length} tone="indigo" />
         <SummaryCard
           title="해당월입고/RO발행건수"
-          value={`${dashboard.thisMonthInboundVehicleCount}/${dashboard.thisMonthInbound.length}`}
+          value={`${dashboard.thisMonthInboundVehicleCount}/${dashboard.thisMonthRoIssuedCount}`}
           tone="orange"
         />
         <SummaryCard title="이번 달 출고" value={dashboard.thisMonthOutbound.length} tone="slate" />

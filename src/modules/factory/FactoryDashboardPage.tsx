@@ -125,6 +125,9 @@ export default function FactoryDashboardPage({
     const thisMonthInboundVehicleCount = new Set(
       thisMonthInbound.map(getVehicleKey).filter(Boolean)
     ).size;
+    const thisMonthRoIssuedCount = workOrders.filter((item) =>
+      item.work_name?.startsWith(thisMonth)
+    ).length;
     const todayOutbound = workOrders.filter((item) => item.release_date === today);
     const thisMonthOutbound = workOrders.filter((item) =>
       item.release_date?.startsWith(thisMonth)
@@ -154,6 +157,7 @@ export default function FactoryDashboardPage({
       todayInbound,
       thisMonthInbound,
       thisMonthInboundVehicleCount,
+      thisMonthRoIssuedCount,
       todayOutbound,
       thisMonthOutbound,
       delayedOrders,
@@ -210,7 +214,7 @@ export default function FactoryDashboardPage({
         <SummaryCard title="이번 달 출고" value={dashboard.thisMonthOutbound.length} tone="indigo" />
         <SummaryCard
           title="해당월입고/RO발행건수"
-          value={`${dashboard.thisMonthInboundVehicleCount}/${dashboard.thisMonthInbound.length}`}
+          value={`${dashboard.thisMonthInboundVehicleCount}/${dashboard.thisMonthRoIssuedCount}`}
           tone="orange"
         />
       </section>
