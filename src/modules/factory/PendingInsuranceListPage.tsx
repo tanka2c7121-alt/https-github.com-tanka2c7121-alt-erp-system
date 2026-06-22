@@ -591,11 +591,11 @@ export default function PendingInsuranceListPage({
                   }
                   className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs font-normal text-slate-900"
                 >
-                  <option value="愿由ъ쨷">愿由ъ쨷</option>
-                  <option value="?뺤씤?붿껌">?뺤씤?붿껌</option>
-                  <option value="?낃툑?덉젙">?낃툑?덉젙</option>
-                  <option value="蹂대쪟">蹂대쪟</option>
-                  <option value="泥섎━?꾨즺">泥섎━?꾨즺</option>
+                  {managementStatusOptions.map((status) => (
+                    <option key={status} value={status}>
+                      {status}
+                    </option>
+                  ))}
                 </select>
               </label>
               <button

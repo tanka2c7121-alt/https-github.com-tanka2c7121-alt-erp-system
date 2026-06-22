@@ -586,7 +586,7 @@ export default function SettlementRegisterPage({
         account: row.method,
         type: "수입",
         category: "차량정산",
-        content: `${row.paymentType} / ${row.paymentDetail} / ${targetForm.carNumber}`,
+        content: `${row.paymentType} / ${row.paymentDetail} / ${targetForm.workName}`,
         income: toNumber(row.amount),
         expense: 0,
         memo: targetForm.workName,

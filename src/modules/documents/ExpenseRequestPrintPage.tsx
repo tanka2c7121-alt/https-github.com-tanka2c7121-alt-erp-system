@@ -168,6 +168,17 @@ export default function ExpenseRequestPrintPage({
 
     const sourceName = `expense-request-${expenseRequest.id}`;
 
+    const { error: cleanupCashError } = await supabase
+      .from("daily_cash")
+      .delete()
+      .eq("source_type", "expense_request")
+      .eq("source_work_name", sourceName);
+
+    if (cleanupCashError) {
+      alert("기존 일일입출금 정리 실패: " + cleanupCashError.message);
+      return;
+    }
+
     const { error: cashError } = isPartnerSupportExpense(expenseRequest)
       ? { error: null }
       : await supabase.from("daily_cash").insert({

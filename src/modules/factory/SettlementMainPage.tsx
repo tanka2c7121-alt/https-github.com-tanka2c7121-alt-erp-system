@@ -313,12 +313,19 @@ const handleReceivableDateSave = async (row: any) => {
     return;
   }
 
-  await supabase
+  const { error: deleteCashError } = await supabase
     .from("daily_cash")
     .delete()
     .eq("source_type", "settlement_payment")
     .eq("source_work_name", row.work_name ?? "")
     .eq("content", `${row.payment_type ?? ""} / ${row.payment_detail ?? ""} / ${row.work_name ?? ""}`);
+
+  if (deleteCashError) {
+    savingReceivableIdsRef.current.delete(row.id);
+    setSavingReceivableId(null);
+    alert("기존 입출금 연동 내역 정리 실패: " + deleteCashError.message);
+    return;
+  }
 
   const { error: cashError } = await supabase.from("daily_cash").insert({
     date: paymentDate,
