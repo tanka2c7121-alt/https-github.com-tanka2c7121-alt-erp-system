@@ -850,12 +850,40 @@ function getWorkPhotoFolder(targetWorkName = workName) {
   return targetWorkName.trim().replace(/[^0-9A-Za-z가-힣_-]/g, "_");
 }
 
+function shouldUseNasPhotoStorage() {
+  if (typeof window === "undefined") return false;
+
+  const hostname = window.location.hostname;
+
+  return hostname === "192.168.1.103" || hostname.endsWith(".local");
+}
+
 async function loadWorkPhotos(targetWorkName = workName) {
   const folder = getWorkPhotoFolder(targetWorkName);
 
   if (!folder) {
     setWorkPhotos([]);
     return;
+  }
+
+  if (shouldUseNasPhotoStorage()) {
+    try {
+      const response = await fetch(`/api/work-photos?folder=${encodeURIComponent(folder)}`);
+
+      if (!response.ok) {
+        throw new Error(await response.text());
+      }
+
+      const result = (await response.json()) as { photos?: WorkPhoto[] };
+
+      setWorkPhotos(result.photos ?? []);
+      setSelectedPhotoPaths([]);
+      return;
+    } catch (error) {
+      console.error("NAS 작업사진 조회 오류:", error);
+      setWorkPhotos([]);
+      return;
+    }
   }
 
   const { data, error } = await supabase.storage
@@ -1114,23 +1142,42 @@ async function uploadPendingWorkPhotos(targetWorkName = workName) {
   setPhotoUploading(true);
 
   try {
-    for (const photo of photosToUpload) {
-      const uploadFile = await compressImage(photo.file);
-      const extension = uploadFile.name.split(".").pop() || "jpg";
-      const filePath = `${folder}/${Date.now()}-${Math.random()
-        .toString(36)
-        .slice(2, 8)}.${extension}`;
+    if (shouldUseNasPhotoStorage()) {
+      const formData = new FormData();
+      formData.append("folder", folder);
 
-      const { error } = await supabase.storage
-        .from(workPhotoBucket)
-        .upload(filePath, uploadFile, {
-          cacheControl: "3600",
-          contentType: uploadFile.type || "image/jpeg",
-          upsert: false,
-        });
+      for (const photo of photosToUpload) {
+        const uploadFile = await compressImage(photo.file);
+        formData.append("files", uploadFile, uploadFile.name);
+      }
 
-      if (error) {
-        throw new Error(error.message);
+      const response = await fetch("/api/work-photos", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error(await response.text());
+      }
+    } else {
+      for (const photo of photosToUpload) {
+        const uploadFile = await compressImage(photo.file);
+        const extension = uploadFile.name.split(".").pop() || "jpg";
+        const filePath = `${folder}/${Date.now()}-${Math.random()
+          .toString(36)
+          .slice(2, 8)}.${extension}`;
+
+        const { error } = await supabase.storage
+          .from(workPhotoBucket)
+          .upload(filePath, uploadFile, {
+            cacheControl: "3600",
+            contentType: uploadFile.type || "image/jpeg",
+            upsert: false,
+          });
+
+        if (error) {
+          throw new Error(error.message);
+        }
       }
     }
 
@@ -1337,15 +1384,33 @@ async function deleteSelectedPhotos() {
   }
 
   const paths = selectedWorkPhotos.map((photo) => photo.path);
-  const { error } = await supabase.storage.from(workPhotoBucket).remove(paths);
+  const errorMessage = await deleteWorkPhotos(paths);
 
-  if (error) {
-    alert("사진 삭제 실패: " + error.message);
+  if (errorMessage) {
+    alert("사진 삭제 실패: " + errorMessage);
     return;
   }
 
   setWorkPhotos((prev) => prev.filter((photo) => !paths.includes(photo.path)));
   setSelectedPhotoPaths([]);
+}
+
+async function deleteWorkPhotos(paths: string[]) {
+  if (paths.length === 0) return "";
+
+  if (shouldUseNasPhotoStorage()) {
+    const response = await fetch("/api/work-photos", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ paths }),
+    });
+
+    return response.ok ? "" : await response.text();
+  }
+
+  const { error } = await supabase.storage.from(workPhotoBucket).remove(paths);
+
+  return error?.message ?? "";
 }
 
  function handleReset(nextWorkName = "") {
@@ -1828,12 +1893,10 @@ async function handleSave() {
     }
 
     if (shouldUpdate && replacePhotoPathsRef.current.length > 0) {
-      const { error: replacePhotoError } = await supabase.storage
-        .from(workPhotoBucket)
-        .remove(replacePhotoPathsRef.current);
+      const replacePhotoError = await deleteWorkPhotos(replacePhotoPathsRef.current);
 
       if (replacePhotoError) {
-        alert("기존 사진 삭제 실패: " + replacePhotoError.message);
+        alert("기존 사진 삭제 실패: " + replacePhotoError);
         return false;
       }
 
@@ -1857,7 +1920,18 @@ async function handleSave() {
     return true;
   } catch (error) {
     console.error("작업 저장 오류:", error);
-    alert("작업 저장 중 오류가 발생했습니다.");
+    const errorMessage =
+      error instanceof Error
+        ? error.message
+        : typeof error === "string"
+          ? error
+          : JSON.stringify(error);
+
+    alert(
+      `작업 저장 중 오류가 발생했습니다.${
+        errorMessage ? `\n\n${errorMessage}` : ""
+      }`
+    );
     return false;
   } finally {
     saveInProgressRef.current = false;
@@ -2298,7 +2372,7 @@ function handleClearWorkRow(index: number) {
           }}
         >
           <div
-            className="absolute flex min-h-0 flex-col overflow-hidden rounded-xl bg-white shadow-2xl"
+            className="absolute flex min-h-0 flex-col overflow-hidden rounded-xl border border-white/70 bg-white shadow-2xl"
             style={{
               left: photoViewerFrame.left,
               top: photoViewerFrame.top,
@@ -2307,7 +2381,7 @@ function handleClearWorkRow(index: number) {
             }}
           >
             <div
-              className="flex cursor-move flex-wrap items-center justify-between gap-2 border-b border-slate-200 p-3"
+              className="flex cursor-move flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-slate-50 p-3"
               onPointerDown={startPhotoViewerMove}
             >
               <div className="min-w-0">
@@ -2326,7 +2400,7 @@ function handleClearWorkRow(index: number) {
                   type="button"
                   onPointerDown={(event) => event.stopPropagation()}
                   onClick={() => movePhotoViewer(-1)}
-                  className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                  className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
                 >
                   이전
                 </button>
@@ -2334,7 +2408,7 @@ function handleClearWorkRow(index: number) {
                   type="button"
                   onPointerDown={(event) => event.stopPropagation()}
                   onClick={() => movePhotoViewer(1)}
-                  className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                  className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
                 >
                   다음
                 </button>
@@ -2361,9 +2435,9 @@ function handleClearWorkRow(index: number) {
               type="button"
               aria-label="사진 보기 창 크기 조절"
               onPointerDown={startPhotoViewerResize}
-              className="absolute bottom-0 right-0 h-7 w-7 cursor-nwse-resize rounded-tl-lg bg-slate-900/80 text-xs font-bold text-white hover:bg-slate-900"
+              className="group absolute bottom-2 right-2 h-7 w-7 cursor-nwse-resize rounded-br-xl opacity-80 transition hover:opacity-100"
             >
-              ↘
+              <span className="absolute bottom-0 right-0 h-5 w-5 overflow-hidden rounded-br-xl border-b-[3px] border-r-[3px] border-slate-300 text-transparent shadow-[2px_2px_3px_rgba(15,23,42,0.12)] transition group-hover:border-slate-500" />
             </button>
           </div>
         </div>

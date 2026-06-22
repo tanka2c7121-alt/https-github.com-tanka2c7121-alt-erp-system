@@ -60,6 +60,15 @@ const daysInMonth = (monthText: string) => {
   return new Date(year, month, 0).getDate();
 };
 
+const getVehicleKey = (
+  order: Pick<WorkOrder, "work_name" | "car_number" | "car_model">
+) => {
+  const carNumber = String(order.car_number ?? "").trim();
+  const carModel = String(order.car_model ?? "").trim();
+
+  return carNumber || [order.work_name, carModel].filter(Boolean).join("|");
+};
+
 export default function FactoryDashboardPage({
   onSelectMenu,
 }: FactoryDashboardPageProps) {
@@ -113,6 +122,9 @@ export default function FactoryDashboardPage({
     const thisMonthInbound = workOrders.filter((item) =>
       item.inbound_date?.startsWith(thisMonth)
     );
+    const thisMonthInboundVehicleCount = new Set(
+      thisMonthInbound.map(getVehicleKey).filter(Boolean)
+    ).size;
     const todayOutbound = workOrders.filter((item) => item.release_date === today);
     const thisMonthOutbound = workOrders.filter((item) =>
       item.release_date?.startsWith(thisMonth)
@@ -141,6 +153,7 @@ export default function FactoryDashboardPage({
       activeOrders,
       todayInbound,
       thisMonthInbound,
+      thisMonthInboundVehicleCount,
       todayOutbound,
       thisMonthOutbound,
       delayedOrders,
@@ -195,7 +208,11 @@ export default function FactoryDashboardPage({
         <SummaryCard title="오늘 출고" value={dashboard.todayOutbound.length} tone="green" />
         <SummaryCard title="출고 지연" value={dashboard.delayedOrders.length} tone="red" />
         <SummaryCard title="이번 달 출고" value={dashboard.thisMonthOutbound.length} tone="indigo" />
-        <SummaryCard title="해당월 입고" value={dashboard.thisMonthInbound.length} tone="orange" />
+        <SummaryCard
+          title="해당월입고/RO발행건수"
+          value={`${dashboard.thisMonthInboundVehicleCount}/${dashboard.thisMonthInbound.length}`}
+          tone="orange"
+        />
       </section>
 
       {loading ? (
@@ -321,7 +338,7 @@ function SummaryCard({
   tone,
 }: {
   title: string;
-  value: number;
+  value: number | string;
   tone: "blue" | "green" | "red" | "orange" | "indigo" | "slate";
 }) {
   const toneClass = {
@@ -339,7 +356,7 @@ function SummaryCard({
         {title}
       </p>
       <p className="mt-1 text-lg font-bold md:mt-3 md:text-3xl">
-        {value.toLocaleString()}
+        {typeof value === "number" ? value.toLocaleString() : value}
       </p>
     </div>
   );

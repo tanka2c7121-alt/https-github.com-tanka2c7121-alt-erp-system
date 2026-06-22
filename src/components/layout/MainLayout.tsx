@@ -776,16 +776,17 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
   }
 
   return (
-    <div className="flex h-screen w-full flex-col overflow-x-hidden bg-transparent">
-      <Topbar
-        user={user}
-        onLogout={onLogout}
-        notifications={notifications}
-        quickActions={[defaultCameraQuickAction, ...quickActionMenus]}
-        onSelectMenu={handleSelectMenu}
-      />
+    <div className="erp-desktop">
+      <div className="erp-window-shell flex w-full flex-col overflow-hidden">
+        <Topbar
+          user={user}
+          onLogout={onLogout}
+          notifications={notifications}
+          quickActions={[defaultCameraQuickAction, ...quickActionMenus]}
+          onSelectMenu={handleSelectMenu}
+        />
 
-      <div className="flex min-w-0 flex-1 overflow-hidden">
+      <div className="erp-window-main flex min-w-0 flex-1 overflow-hidden">
         <div
           className={[
             "group/sidebar relative hidden h-full shrink-0 overflow-hidden transition-[width] duration-200 ease-out md:block",
@@ -818,7 +819,7 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
           </div>
         </div>
 
-        <main className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto p-2 md:p-6">
+        <main className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto p-2 md:p-5">
           <div className="mb-2 overflow-hidden rounded-xl border border-blue-100 bg-blue-50/75 shadow-lg shadow-slate-300/30 backdrop-blur-xl md:hidden">
             <div className="flex items-center justify-between gap-2 border-b border-blue-100/80 bg-white/80 px-2 py-2">
               <div className="min-w-0">
@@ -873,20 +874,21 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
             </div>
           </div>
 
-          <section className="min-h-[500px] min-w-0 overflow-x-hidden rounded-xl border border-white/70 bg-white/80 p-2 shadow-xl shadow-slate-300/35 backdrop-blur-xl md:rounded-[22px] md:p-6 md:shadow-2xl">
-            <div className="mb-3 overflow-hidden rounded-xl border border-slate-300/80 bg-slate-100 shadow-sm ring-1 ring-white/70 md:mb-4">
-              <div className="flex min-h-11 items-center justify-between gap-2 border-b border-slate-300/70 bg-slate-200/85 px-2 py-2 md:min-h-12 md:gap-3 md:px-3">
+          <section className="erp-content-window min-h-[500px] min-w-0 overflow-x-hidden border border-white/70 p-2 backdrop-blur-xl md:p-5">
+            <div className="mb-3 overflow-hidden rounded-2xl border border-slate-300/70 bg-slate-100/90 shadow-sm ring-1 ring-white/80 md:mb-4">
+              <div className="bg-slate-800/90 text-white">
+                <div className="flex min-h-11 items-center justify-between gap-2 px-2 py-2 md:min-h-12 md:gap-3 md:px-3">
                 <div className="flex min-w-0 items-center gap-3">
                   <div className="flex shrink-0 items-center gap-1 md:gap-1.5" aria-hidden="true">
-                    <span className="h-2.5 w-2.5 rounded-full bg-red-400 shadow-inner md:h-3 md:w-3" />
-                    <span className="h-2.5 w-2.5 rounded-full bg-yellow-400 shadow-inner md:h-3 md:w-3" />
-                    <span className="h-2.5 w-2.5 rounded-full bg-green-400 shadow-inner md:h-3 md:w-3" />
+                    <span className="h-2.5 w-2.5 rounded-full bg-red-400 shadow-[0_0_0_1px_rgba(255,255,255,0.24)_inset] md:h-3 md:w-3" />
+                    <span className="h-2.5 w-2.5 rounded-full bg-yellow-300 shadow-[0_0_0_1px_rgba(255,255,255,0.24)_inset] md:h-3 md:w-3" />
+                    <span className="h-2.5 w-2.5 rounded-full bg-green-400 shadow-[0_0_0_1px_rgba(255,255,255,0.24)_inset] md:h-3 md:w-3" />
                   </div>
                   <div className="min-w-0">
-                    <div className="text-[10px] font-black uppercase tracking-wide text-slate-500">
+                    <div className="text-[10px] font-black uppercase tracking-wide text-slate-300">
                       현재 창
                     </div>
-                    <div className="truncate text-sm font-bold text-slate-800">
+                    <div className="truncate text-sm font-bold text-white">
                       {selectedMenu.title}
                     </div>
                   </div>
@@ -894,18 +896,14 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
 
                 <div className="flex shrink-0 items-center gap-1.5 md:gap-2">
                   {canFavoriteCurrentMenu && (
-                    <label className="inline-flex h-8 cursor-pointer items-center justify-center rounded-full border border-slate-200 bg-white/80 px-2.5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-white md:h-9 md:px-3">
+                    <label className="inline-flex h-8 cursor-pointer items-center justify-center rounded-full border border-white/15 bg-white/10 px-2.5 text-sm font-semibold text-white shadow-sm hover:bg-white/20 md:h-9 md:px-3">
                       <input
                         type="checkbox"
                         checked={isCurrentMenuFavorited}
                         onChange={toggleCurrentQuickAction}
                         className="sr-only"
                       />
-                      <span
-                        className={
-                          isCurrentMenuFavorited ? "text-yellow-500" : "text-slate-400"
-                        }
-                      >
+                      <span className={isCurrentMenuFavorited ? "text-yellow-300" : "text-slate-300"}>
                         {isCurrentMenuFavorited ? "★" : "☆"}
                       </span>
                       <span className="ml-1 hidden sm:inline">빠른작업</span>
@@ -915,7 +913,7 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
                     <button
                       type="button"
                       onClick={handleRefreshMenu}
-                      className="h-8 shrink-0 rounded-full border border-blue-200 bg-blue-50/90 px-2.5 text-xs font-bold text-blue-700 shadow-sm hover:bg-blue-100 sm:px-4 sm:text-sm md:h-9"
+                      className="h-8 shrink-0 rounded-full border border-white/15 bg-white/10 px-2.5 text-xs font-bold text-white shadow-sm hover:bg-white/20 sm:px-4 sm:text-sm md:h-9"
                     >
                       새로고침
                     </button>
@@ -924,22 +922,31 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
                     <button
                       type="button"
                       onClick={handleCloseMenu}
-                      className="h-8 shrink-0 rounded-full border border-slate-200 bg-white/85 px-2.5 text-xs font-bold text-slate-700 shadow-sm hover:bg-white sm:px-4 sm:text-sm md:h-9"
+                      className="h-8 shrink-0 rounded-full border border-white/15 bg-white/10 px-2.5 text-xs font-bold text-white shadow-sm hover:bg-white/20 sm:px-4 sm:text-sm md:h-9"
                     >
                       창닫기
                     </button>
                   )}
                 </div>
               </div>
+
               {openWindowMenus.length > 0 && (
-                <div className="border-t border-slate-300/80 bg-slate-50/95">
-                  <div className="flex items-center gap-2 px-2 pt-1.5 md:px-3">
-                    <div className="shrink-0 text-[10px] font-black uppercase tracking-wide text-slate-500">
-                      열린 창
-                    </div>
-                    <div className="h-px flex-1 bg-slate-200" />
-                  </div>
-                <div className="flex gap-1.5 overflow-x-auto px-2 pb-2 pt-1.5 md:gap-2 md:px-3 md:py-2 md:pt-1.5">
+                <div className="flex items-end gap-1 overflow-x-auto px-2 pt-1 md:px-3">
+                  <button
+                    type="button"
+                    onClick={() => handleSelectMenu(initialMenu)}
+                    className={[
+                      "relative -mb-px flex h-7 shrink-0 items-center gap-1.5 rounded-t-lg px-2.5 text-left text-[11px] font-bold transition md:h-8 md:px-3",
+                      selectedMenu.id === "dashboard"
+                        ? "z-10 bg-slate-100 text-slate-950 shadow-lg shadow-slate-950/20"
+                        : "bg-white/8 text-slate-300 hover:bg-white/14 hover:text-white",
+                    ].join(" ")}
+                    title="업무홈"
+                  >
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                    <span className="max-w-24 truncate md:max-w-32">업무홈</span>
+                  </button>
+
                   {openWindowMenus.map((menu) => {
                     const menuKey = menuCacheKey(menu);
                     const isActive = menuKey === menuCacheKey(selectedMenu);
@@ -948,16 +955,16 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
                       <div
                         key={menuKey}
                         className={[
-                          "flex h-8 shrink-0 items-center overflow-hidden rounded-full border text-xs font-bold shadow-sm md:h-9",
+                          "relative -mb-px flex h-7 shrink-0 items-center overflow-hidden rounded-t-lg text-[11px] font-bold transition md:h-8",
                           isActive
-                            ? "border-blue-400 bg-blue-600 text-white"
-                            : "border-slate-300 bg-white text-slate-600 hover:border-blue-200 hover:bg-blue-50",
+                            ? "z-10 bg-slate-100 text-slate-950 shadow-lg shadow-slate-950/20"
+                            : "bg-white/8 text-slate-300 hover:bg-white/14 hover:text-white",
                         ].join(" ")}
                       >
                         <button
                           type="button"
                           onClick={() => handleSelectMenu(menu)}
-                          className="h-full max-w-32 truncate px-2.5 text-left md:max-w-44 md:px-3"
+                          className="h-full max-w-36 truncate px-2.5 text-left md:max-w-52 md:px-3"
                           title={menu.title}
                         >
                           {menu.title}
@@ -968,8 +975,8 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
                           className={[
                             "h-full border-l px-2 text-sm leading-none",
                             isActive
-                              ? "border-blue-400 text-white/85 hover:bg-blue-700"
-                              : "border-slate-200 text-slate-400 hover:bg-slate-100 hover:text-slate-600",
+                              ? "border-slate-300 text-slate-500 hover:bg-slate-200 hover:text-slate-900"
+                              : "border-white/10 text-slate-400 hover:bg-white/10 hover:text-white",
                           ].join(" ")}
                           aria-label={`${menu.title} 닫기`}
                         >
@@ -979,8 +986,8 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
                     );
                   })}
                 </div>
-                </div>
               )}
+              </div>
             </div>
 
             {isCacheableMenu(selectedMenu) ? (
@@ -1004,7 +1011,8 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
         </main>
       </div>
 
-      <Statusbar user={user} />
+        <Statusbar user={user} />
+      </div>
     </div>
   );
 }

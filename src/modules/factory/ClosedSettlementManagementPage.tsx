@@ -43,6 +43,7 @@ type PaymentRow = {
   id: number;
   work_name: string | null;
   payment_type: string | null;
+  payment_detail: string | null;
   payment_amount: number | null;
 };
 
@@ -74,6 +75,11 @@ const toAmountNumber = (value: unknown) =>
   Number(String(value ?? 0).replaceAll(",", "")) || 0;
 const calculateRate = (claimAmount: number, paidAmount: number) =>
   claimAmount > 0 ? (paidAmount / claimAmount) * 100 : null;
+const isInsuranceOrCapitalDetail = (value: unknown) => {
+  const text = normalizeText(value);
+
+  return text.includes("보험") || text.includes("캐피탈");
+};
 const currentDateText = localDateText();
 const currentYear = currentDateText.slice(0, 4);
 const currentMonth = currentDateText.slice(5, 7);
@@ -119,7 +125,7 @@ export default function ClosedSettlementManagementPage({
       ),
       fetchAllRows<PaymentRow>(
         "settlement_payments",
-        "id, work_name, payment_type, payment_amount"
+        "id, work_name, payment_type, payment_detail, payment_amount"
       ),
       fetchAllRows<WorkOrderRow>(
         "work_orders",
@@ -154,7 +160,12 @@ export default function ClosedSettlementManagementPage({
         const workName = normalizeText(row.work_name);
         const paymentType = normalizeText(row.payment_type);
 
-        if (!workName || paymentType === "청구" || paymentType === "면책금") {
+        if (
+          !workName ||
+          paymentType === "청구" ||
+          paymentType === "면책금" ||
+          !isInsuranceOrCapitalDetail(row.payment_detail)
+        ) {
           return map;
         }
 

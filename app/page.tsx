@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import MainLayout from "../src/components/layout/MainLayout";
 import LoginPage from "../src/components/login/LoginPage";
+import DeploymentBanner from "../src/components/system/DeploymentBanner";
 import { supabaseAuthPassword } from "../src/lib/authPassword";
 import {
   initialPasswordFromPhone,
@@ -83,25 +84,38 @@ export default function Home() {
   }, [user]);
 
   if (!user) {
-    return <LoginPage onLogin={(loginUser) => setUser(loginUser)} />;
+    return (
+      <>
+        <DeploymentBanner />
+        <LoginPage onLogin={(loginUser) => setUser(loginUser)} />
+      </>
+    );
   }
 
   if (needsPasswordChange) {
     return (
-      <PasswordChangePage
-        user={user}
-        onComplete={(newPassword) =>
-          setUser({
-            ...user,
-            password: newPassword,
-          })
-        }
-        onLogout={handleLogout}
-      />
+      <>
+        <DeploymentBanner />
+        <PasswordChangePage
+          user={user}
+          onComplete={(newPassword) =>
+            setUser({
+              ...user,
+              password: newPassword,
+            })
+          }
+          onLogout={handleLogout}
+        />
+      </>
     );
   }
 
-  return <MainLayout user={user} onLogout={handleLogout} />;
+  return (
+    <>
+      <DeploymentBanner />
+      <MainLayout user={user} onLogout={handleLogout} />
+    </>
+  );
 }
 
 function PasswordChangePage({

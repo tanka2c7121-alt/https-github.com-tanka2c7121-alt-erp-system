@@ -34,20 +34,27 @@ export default function Topbar({
   const visibleQuickActions = quickActions.slice(0, 8);
 
   return (
-    <header className="relative z-50 flex min-h-16 items-center justify-between gap-3 border-b border-white/70 bg-white/75 px-3 py-3 shadow-sm shadow-slate-200/70 backdrop-blur-xl md:h-16 md:px-6 md:py-0">
-      <div className="min-w-0">
-        <h1 className="truncate text-base font-bold text-slate-900 md:text-xl">
+    <header className="relative z-50 flex min-h-16 items-center justify-between gap-3 border-b border-white/10 bg-slate-950/72 px-3 py-3 text-white shadow-sm shadow-slate-950/20 backdrop-blur-2xl md:h-16 md:px-6 md:py-0">
+      <div className="flex min-w-0 items-center gap-3">
+        <div className="hidden shrink-0 items-center gap-1.5 md:flex" aria-hidden="true">
+          <span className="h-3 w-3 rounded-full bg-red-400 shadow-[0_0_0_1px_rgba(255,255,255,0.24)_inset]" />
+          <span className="h-3 w-3 rounded-full bg-yellow-300 shadow-[0_0_0_1px_rgba(255,255,255,0.24)_inset]" />
+          <span className="h-3 w-3 rounded-full bg-green-400 shadow-[0_0_0_1px_rgba(255,255,255,0.24)_inset]" />
+        </div>
+        <div className="min-w-0">
+        <h1 className="truncate text-base font-bold text-white md:text-xl">
           신흥현대서비스 ERP
         </h1>
-        <p className="hidden text-xs text-slate-500 sm:block">
+        <p className="hidden text-xs text-slate-300 sm:block">
           Shinhung Hyundai Service Management System
         </p>
+        </div>
       </div>
 
       <div className="flex min-w-0 shrink-0 items-center gap-2 md:gap-4">
         {quickActions.length > 0 && (
-          <div className="hidden min-w-0 max-w-[34vw] items-center gap-2 rounded-full border border-blue-200 bg-blue-50/90 px-2 py-1 shadow-sm ring-1 ring-white/70 lg:flex">
-            <span className="shrink-0 px-1 text-[10px] font-black uppercase tracking-wide text-blue-700">
+          <div className="hidden min-w-0 max-w-[34vw] items-center gap-2 rounded-full border border-white/10 bg-white/10 px-2 py-1 shadow-sm ring-1 ring-white/10 lg:flex">
+            <span className="shrink-0 px-1 text-[10px] font-black uppercase tracking-wide text-slate-200">
               빠른작업
             </span>
             <div className="flex min-w-0 gap-1 overflow-x-auto">
@@ -62,14 +69,14 @@ export default function Topbar({
                       data: action.data,
                     })
                   }
-                  className="h-8 shrink-0 rounded-full border border-blue-200 bg-white px-3 text-xs font-bold text-blue-700 shadow-sm hover:border-blue-400 hover:bg-blue-100"
+                  className="h-8 shrink-0 rounded-full border border-white/10 bg-white/90 px-3 text-xs font-bold text-slate-800 shadow-sm hover:bg-white"
                   title={action.data?.openCamera ? "카메라열기" : action.title}
                 >
                   {action.data?.openCamera ? "카메라" : action.title}
                 </button>
               ))}
               {quickActions.length > visibleQuickActions.length && (
-                <span className="flex h-8 shrink-0 items-center rounded-full bg-blue-100 px-2 text-xs font-bold text-blue-700">
+                <span className="flex h-8 shrink-0 items-center rounded-full bg-white/15 px-2 text-xs font-bold text-white">
                   +{quickActions.length - visibleQuickActions.length}
                 </span>
               )}
@@ -79,7 +86,7 @@ export default function Topbar({
 
         <GlobalVehicleSearch onSelectMenu={onSelectMenu} />
 
-        <div className="hidden text-sm text-slate-600 sm:block">
+        <div className="hidden text-sm text-slate-300 sm:block">
           {roleLabel(user?.role)} 모드
         </div>
 
@@ -90,7 +97,7 @@ export default function Topbar({
               onClick={() => {
                 setIsNotificationOpen((value) => !value);
               }}
-              className="relative rounded-full border border-amber-200 bg-amber-50/90 px-3 py-2 text-xs font-semibold text-amber-800 shadow-sm hover:bg-amber-100 md:text-sm"
+              className="relative rounded-full border border-amber-300/30 bg-amber-300/16 px-3 py-2 text-xs font-semibold text-amber-100 shadow-sm hover:bg-amber-300/24 md:text-sm"
             >
               알림
               {totalCount > 0 && (
@@ -152,7 +159,7 @@ export default function Topbar({
         <button
           type="button"
           onClick={onLogout}
-          className="rounded-full bg-slate-900 px-3 py-2 text-xs font-semibold text-white shadow-sm ring-1 ring-slate-700/30 hover:bg-slate-700 md:px-4 md:text-sm"
+          className="rounded-full bg-white px-3 py-2 text-xs font-semibold text-slate-950 shadow-sm ring-1 ring-white/30 hover:bg-slate-100 md:px-4 md:text-sm"
         >
           로그아웃
         </button>

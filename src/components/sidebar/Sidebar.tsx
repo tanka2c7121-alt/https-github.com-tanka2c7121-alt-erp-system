@@ -89,10 +89,10 @@ export default function Sidebar({
               onSelectMenu(item);
             }}
             className={[
-              "w-full flex items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-medium transition",
+              "w-full flex items-center justify-between rounded-xl px-3 py-2 text-left text-sm font-medium transition",
               isSelected
-                ? "bg-blue-500 text-white shadow-sm"
-                : "text-slate-700 hover:bg-white/70",
+                ? "bg-slate-900 text-white shadow-sm"
+                : "text-slate-700 hover:bg-white/75",
             ].join(" ")}
             style={{ paddingLeft: `${12 + depth * 18}px` }}
           >
@@ -111,7 +111,7 @@ export default function Sidebar({
   };
 
   return (
-    <aside className="h-full w-64 overflow-y-auto border-r border-white/70 bg-white/60 py-4 pl-10 pr-4 text-slate-900 shadow-xl shadow-slate-300/30 backdrop-blur-2xl">
+    <aside className="h-full w-64 overflow-y-auto border-r border-white/60 bg-slate-100/70 py-4 pl-10 pr-4 text-slate-900 shadow-xl shadow-slate-500/10 backdrop-blur-2xl">
       <div className="mb-6">
         <button
           type="button"

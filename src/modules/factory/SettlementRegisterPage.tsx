@@ -145,7 +145,7 @@ const hasStoredPaymentInputValue = (item: any) =>
 const getDailyCashEligiblePaymentRows = (rows: PaymentRow[]) =>
   rows.filter(
     (row) =>
-      row.amount &&
+      toNumber(row.amount) > 0 &&
       row.date &&
       row.method &&
       !isPartnerSupportPaymentRow(row)
@@ -412,13 +412,11 @@ export default function SettlementRegisterPage({
         ? paymentItemsForInput.map((item: any) => {
             const paymentAmount = Number(item.payment_amount ?? 0);
             const claimAmount = Number(item.claim_amount ?? 0);
-            const displayAmount = paymentAmount || claimAmount;
-
             return {
               paymentType: item.payment_type ?? "",
               paymentDetail: item.payment_detail ?? "",
               claimAmount: claimAmount ? claimAmount.toLocaleString() : "",
-              amount: displayAmount ? displayAmount.toLocaleString() : "",
+              amount: paymentAmount ? paymentAmount.toLocaleString() : "",
               date: item.payment_date ?? "",
               method: item.payment_method ?? "",
               approvalNumber: item.approval_number ?? "",
@@ -512,7 +510,7 @@ export default function SettlementRegisterPage({
     const rows = paymentRows
       .filter(hasPaymentInputValue)
       .map((row) => {
-        const inputAmount = toNumber(row.amount) || toNumber(row.claimAmount);
+        const inputAmount = toNumber(row.amount);
         const claimAmount =
           toNumber(row.claimAmount) || (row.invoiceIssued ? inputAmount : 0);
 
@@ -1316,7 +1314,7 @@ export default function SettlementRegisterPage({
 
       {adminPasswordOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
-          <div className="w-full max-w-sm rounded-xl bg-white p-5 shadow-2xl">
+          <div className="w-full max-w-sm rounded-xl border border-white/70 bg-white p-5 shadow-2xl">
             <h4 className="text-lg font-bold text-slate-900">관리자 잠금해제</h4>
             <p className="mt-1 text-sm text-slate-600">
               관리자 비밀번호를 입력하세요.

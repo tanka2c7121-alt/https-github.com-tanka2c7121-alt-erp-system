@@ -35,7 +35,17 @@ import {
 } from "./pendingInsuranceListData";
 
 const todayText = localDateText();
+const managementStatusOptions = [
+  "\uAD00\uB9AC\uC911",
+  "\uD655\uC778\uC694\uCCAD",
+  "\uC785\uAE08\uC608\uC815",
+  "\uBCF4\uB958",
+  "\uCC98\uB9AC\uC644\uB8CC",
+];
+const cleanManagementDefaultStatus = managementStatusOptions[0];
 const managementDefaultStatus = "관리중";
+
+void managementDefaultStatus;
 
 export default function PendingInsuranceListPage({
   onSelectMenu,
@@ -59,7 +69,7 @@ export default function PendingInsuranceListPage({
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [editingWorkName, setEditingWorkName] = useState("");
   const [managementForm, setManagementForm] = useState({
-    status: managementDefaultStatus,
+    status: cleanManagementDefaultStatus,
     actionMemo: "",
     finalResult: "",
   });
@@ -221,7 +231,7 @@ export default function PendingInsuranceListPage({
 
     setEditingWorkName(row.workName);
     setManagementForm({
-      status: management?.status || managementDefaultStatus,
+      status: management?.status || cleanManagementDefaultStatus,
       actionMemo: management?.action_memo || "",
       finalResult: management?.final_result || "",
     });
@@ -245,7 +255,7 @@ export default function PendingInsuranceListPage({
     const savedAt = new Date().toISOString();
     const payload = {
       work_name: editingWorkName,
-      status: managementForm.status.trim() || managementDefaultStatus,
+      status: managementForm.status.trim() || cleanManagementDefaultStatus,
       action_memo: managementForm.actionMemo.trim() || null,
       final_result: managementForm.finalResult.trim() || null,
       updated_at: savedAt,
@@ -509,7 +519,7 @@ export default function PendingInsuranceListPage({
       {editingWorkName && (
         <div className="fixed inset-0 z-50 bg-slate-900/40">
           <section
-            className="absolute overflow-y-auto rounded-xl bg-white p-5 pb-8 shadow-2xl"
+            className="absolute overflow-hidden rounded-xl bg-white p-4 pb-7 shadow-2xl"
             style={{
               left: managementModalPosition
                 ? `${managementModalPosition.x}px`
@@ -522,39 +532,83 @@ export default function PendingInsuranceListPage({
                 : "min(64rem, calc(100vw - 2rem))",
               height: managementModalSize
                 ? `${managementModalSize.height}px`
-                : "min(46rem, calc(100vh - 3rem))",
+                : "min(42rem, calc(100vh - 3rem))",
               maxWidth: "calc(100vw - 2rem)",
               maxHeight: "calc(100vh - 2rem)",
               transform: "translate(-50%, -50%)",
             }}
           >
             <div
-              className="mb-4 flex cursor-move select-none touch-none items-start justify-between gap-4 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2"
+              className="mb-3 flex cursor-move select-none touch-none items-start justify-between gap-4 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2"
               onPointerDown={startModalDrag}
               onPointerMove={moveModalDrag}
               onPointerUp={stopModalDrag}
               onPointerCancel={stopModalDrag}
             >
               <div>
-                <h4 className="text-xl font-black text-slate-900">
+                <h4 className="text-lg font-black text-slate-900">
                   장기미결 관리 입력
                 </h4>
-                <p className="mt-1 text-sm font-semibold text-slate-600">
+                <p className="mt-0.5 text-xs font-semibold text-slate-600">
                   {editingWorkName} / {editingRows[0]?.carNumber ?? "-"} /{" "}
                   {editingRows[0]?.carModel ?? "-"}
                 </p>
               </div>
+              <label
+                className="ml-auto flex items-center gap-2 text-xs font-bold text-slate-700"
+                onPointerDown={(event) => event.stopPropagation()}
+              >
+                <span>{"\uAD00\uB9AC\uC0C1\uD0DC"}</span>
+                <select
+                  value={managementForm.status}
+                  onChange={(event) =>
+                    setManagementForm((prev) => ({
+                      ...prev,
+                      status: event.target.value,
+                    }))
+                  }
+                  className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs font-normal text-slate-900"
+                >
+                  {managementStatusOptions.map((status) => (
+                    <option key={status} value={status}>
+                      {status}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label
+                className="hidden"
+                onPointerDown={(event) => event.stopPropagation()}
+              >
+                <span>관리상태</span>
+                <select
+                  value={managementForm.status}
+                  onChange={(event) =>
+                    setManagementForm((prev) => ({
+                      ...prev,
+                      status: event.target.value,
+                    }))
+                  }
+                  className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs font-normal text-slate-900"
+                >
+                  <option value="愿由ъ쨷">愿由ъ쨷</option>
+                  <option value="?뺤씤?붿껌">?뺤씤?붿껌</option>
+                  <option value="?낃툑?덉젙">?낃툑?덉젙</option>
+                  <option value="蹂대쪟">蹂대쪟</option>
+                  <option value="泥섎━?꾨즺">泥섎━?꾨즺</option>
+                </select>
+              </label>
               <button
                 type="button"
                 onPointerDown={(event) => event.stopPropagation()}
                 onClick={closeManagementEditor}
-                className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50"
+                className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50"
               >
                 닫기
               </button>
             </div>
 
-            <div className="mb-4 grid grid-cols-3 gap-3">
+            <div className="mb-3 grid grid-cols-3 gap-2">
               <SummaryCard
                 label="청구금액"
                 value={`₩ ${formatWon(editingSummary.claimAmount)}`}
@@ -572,39 +626,39 @@ export default function PendingInsuranceListPage({
               />
             </div>
 
-            <section className="mb-4 overflow-hidden rounded-lg border border-slate-200">
-              <div className="border-b border-slate-200 bg-slate-50 px-3 py-2 text-sm font-black text-slate-800">
+            <section className="mb-3 overflow-hidden rounded-lg border border-slate-200">
+              <div className="border-b border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-black text-slate-800">
                 청구정보 / 입금내역
               </div>
               <div className="overflow-x-auto">
-                <table className="w-full border-collapse text-sm">
+                <table className="w-full border-collapse text-xs">
                   <thead>
                     <tr className="bg-white text-slate-700">
-                      <th className="w-20 border-b border-slate-200 px-3 py-2 text-left">
+                      <th className="w-20 border-b border-slate-200 px-2 py-1.5 text-left">
                         구분
                       </th>
-                      <th className="min-w-40 border-b border-slate-200 px-3 py-2 text-left">
+                      <th className="min-w-40 border-b border-slate-200 px-2 py-1.5 text-left">
                         청구처
                       </th>
-                      <th className="min-w-32 border-b border-slate-200 px-3 py-2 text-left">
+                      <th className="min-w-32 border-b border-slate-200 px-2 py-1.5 text-left">
                         접수번호
                       </th>
-                      <th className="w-24 border-b border-slate-200 px-3 py-2 text-center">
+                      <th className="w-24 border-b border-slate-200 px-2 py-1.5 text-center">
                         담당자
                       </th>
-                      <th className="w-28 border-b border-slate-200 px-3 py-2 text-center">
+                      <th className="w-28 border-b border-slate-200 px-2 py-1.5 text-center">
                         청구일
                       </th>
-                      <th className="w-28 border-b border-slate-200 px-3 py-2 text-right">
+                      <th className="w-28 border-b border-slate-200 px-2 py-1.5 text-right">
                         청구금액
                       </th>
-                      <th className="w-28 border-b border-slate-200 px-3 py-2 text-right">
+                      <th className="w-28 border-b border-slate-200 px-2 py-1.5 text-right">
                         입금금액
                       </th>
-                      <th className="w-28 border-b border-slate-200 px-3 py-2 text-right">
+                      <th className="w-28 border-b border-slate-200 px-2 py-1.5 text-right">
                         미수금
                       </th>
-                      <th className="w-24 border-b border-slate-200 px-3 py-2 text-right">
+                      <th className="w-24 border-b border-slate-200 px-2 py-1.5 text-right">
                         수금율
                       </th>
                     </tr>
@@ -612,31 +666,31 @@ export default function PendingInsuranceListPage({
                   <tbody>
                     {editingRows.map((row, index) => (
                       <tr key={`${row.id}-${index}`} className="hover:bg-slate-50">
-                        <td className="whitespace-nowrap border-b border-slate-100 px-3 py-2 font-bold text-slate-800">
+                        <td className="whitespace-nowrap border-b border-slate-100 px-2 py-1.5 font-bold text-slate-800">
                           {row.claimSide}
                         </td>
-                        <td className="whitespace-nowrap border-b border-slate-100 px-3 py-2">
+                        <td className="whitespace-nowrap border-b border-slate-100 px-2 py-1.5">
                           {row.insuranceCompany}
                         </td>
-                        <td className="whitespace-nowrap border-b border-slate-100 px-3 py-2">
+                        <td className="whitespace-nowrap border-b border-slate-100 px-2 py-1.5">
                           {row.receiptNumber || "-"}
                         </td>
-                        <td className="whitespace-nowrap border-b border-slate-100 px-3 py-2 text-center">
+                        <td className="whitespace-nowrap border-b border-slate-100 px-2 py-1.5 text-center">
                           {row.managerName || "-"}
                         </td>
-                        <td className="whitespace-nowrap border-b border-slate-100 px-3 py-2 text-center">
+                        <td className="whitespace-nowrap border-b border-slate-100 px-2 py-1.5 text-center">
                           {row.claimDate || "-"}
                         </td>
-                        <td className="whitespace-nowrap border-b border-slate-100 px-3 py-2 text-right">
+                        <td className="whitespace-nowrap border-b border-slate-100 px-2 py-1.5 text-right">
                           {formatWon(row.claimAmount)}
                         </td>
-                        <td className="whitespace-nowrap border-b border-slate-100 px-3 py-2 text-right text-blue-600">
+                        <td className="whitespace-nowrap border-b border-slate-100 px-2 py-1.5 text-right text-blue-600">
                           {formatWon(row.paidAmount)}
                         </td>
-                        <td className="whitespace-nowrap border-b border-slate-100 px-3 py-2 text-right font-bold text-red-600">
+                        <td className="whitespace-nowrap border-b border-slate-100 px-2 py-1.5 text-right font-bold text-red-600">
                           {formatWon(row.receivableAmount)}
                         </td>
-                        <td className="whitespace-nowrap border-b border-slate-100 px-3 py-2 text-right font-semibold text-slate-700">
+                        <td className="whitespace-nowrap border-b border-slate-100 px-2 py-1.5 text-right font-semibold text-slate-700">
                           {formatRate(row.collectionRate)}
                         </td>
                       </tr>
@@ -646,17 +700,18 @@ export default function PendingInsuranceListPage({
               </div>
             </section>
 
-            <section className="mb-4 overflow-hidden rounded-lg border border-slate-200">
-              <div className="border-b border-slate-200 bg-slate-50 px-3 py-2 text-sm font-black text-slate-800">
+            <section className="mb-3 overflow-hidden rounded-lg border border-slate-200">
+              <div className="border-b border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-black text-slate-800">
                 비고
               </div>
-              <div className="min-h-16 whitespace-pre-wrap px-3 py-2 text-sm text-slate-800">
+              <div className="max-h-24 min-h-20 overflow-hidden whitespace-pre-wrap px-3 py-2 text-xs text-slate-800">
                 {editingRows.find((row) => row.memo)?.memo || "등록된 비고가 없습니다."}
               </div>
             </section>
 
-            <div className="grid grid-cols-1 gap-4">
-              <label className="flex flex-col gap-1 text-sm font-bold text-slate-700">
+            <div className="grid grid-cols-1 gap-2">
+              <div className="grid grid-cols-1 gap-2">
+              <label className="hidden flex-col gap-1 text-xs font-bold text-slate-700">
                 관리상태
                 <select
                   value={managementForm.status}
@@ -676,7 +731,7 @@ export default function PendingInsuranceListPage({
                 </select>
               </label>
 
-              <label className="flex flex-col gap-1 text-sm font-bold text-slate-700">
+              <label className="block overflow-hidden rounded-lg border border-slate-200 bg-slate-50 px-3 pt-1.5 text-xs font-black text-slate-800">
                 확인 및 조치내용
                 <textarea
                   value={managementForm.actionMemo}
@@ -686,12 +741,12 @@ export default function PendingInsuranceListPage({
                       actionMemo: event.target.value,
                     }))
                   }
-                  className="h-28 resize-none rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal text-slate-900"
+                  className="-mx-3 mt-1 h-24 w-[calc(100%+1.5rem)] resize-none border-0 border-t border-slate-200 bg-white px-3 py-2 text-sm font-normal text-slate-900 outline-none"
                   placeholder="확인일, 담당자, 통화내용, 재청구 여부 등을 입력"
                 />
               </label>
 
-              <label className="flex flex-col gap-1 text-sm font-bold text-slate-700">
+              <label className="block overflow-hidden rounded-lg border border-slate-200 bg-slate-50 px-3 pt-1.5 text-xs font-black text-slate-800">
                 최종 처리 결과
                 <textarea
                   value={managementForm.finalResult}
@@ -701,13 +756,14 @@ export default function PendingInsuranceListPage({
                       finalResult: event.target.value,
                     }))
                   }
-                  className="h-24 resize-none rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal text-slate-900"
+                  className="-mx-3 mt-1 h-20 w-[calc(100%+1.5rem)] resize-none border-0 border-t border-slate-200 bg-white px-3 py-2 text-sm font-normal text-slate-900 outline-none"
                   placeholder="최종 입금, 보류, 종결 사유 등을 입력"
                 />
               </label>
+              </div>
             </div>
 
-            <div className="mt-5 flex justify-end gap-2">
+            <div className="mt-2 flex justify-end gap-2 pr-7">
               <button
                 type="button"
                 onClick={closeManagementEditor}
@@ -732,9 +788,9 @@ export default function PendingInsuranceListPage({
               onPointerMove={moveModalResize}
               onPointerUp={stopModalResize}
               onPointerCancel={stopModalResize}
-              className="absolute bottom-1 right-1 h-7 w-7 cursor-nwse-resize rounded-br-xl text-slate-400 hover:text-slate-700"
+              className="group absolute bottom-2 right-2 h-7 w-7 cursor-nwse-resize rounded-br-xl opacity-80 transition hover:opacity-100"
             >
-              <span className="absolute bottom-1 right-1 text-lg leading-none">
+              <span className="absolute bottom-0 right-0 h-5 w-5 overflow-hidden rounded-br-xl border-b-[3px] border-r-[3px] border-slate-300 text-transparent shadow-[2px_2px_3px_rgba(15,23,42,0.12)] transition group-hover:border-slate-500">
                 ◢
               </span>
             </button>
@@ -835,9 +891,9 @@ function SummaryCard({
   }[tone];
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-      <p className="text-sm font-semibold text-slate-600">{label}</p>
-      <p className={`mt-2 text-2xl font-bold ${toneClass}`}>{value}</p>
+    <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm">
+      <p className="text-xs font-semibold text-slate-600">{label}</p>
+      <p className={`mt-1 text-xl font-bold ${toneClass}`}>{value}</p>
     </div>
   );
 }

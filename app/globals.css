@@ -16,10 +16,39 @@ body {
   box-sizing: border-box;
 }
 
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background: rgba(100, 116, 139, 0.38);
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(71, 85, 105, 0.56);
+  background-clip: padding-box;
+}
+
 body {
   background:
-    radial-gradient(circle at top left, rgba(255, 255, 255, 0.9), transparent 34rem),
-    linear-gradient(135deg, #f5f5f7 0%, #eef1f6 45%, #e8edf5 100%);
+    radial-gradient(circle at 13% 16%, rgba(224, 73, 72, 0.36), transparent 18rem),
+    radial-gradient(circle at 88% 9%, rgba(250, 185, 34, 0.42), transparent 20rem),
+    radial-gradient(circle at 84% 86%, rgba(21, 122, 166, 0.28), transparent 18rem),
+    linear-gradient(135deg, #141923 0%, #28313d 42%, #111827 100%);
   color: #171717;
   font-family:
     -apple-system,
@@ -33,6 +62,90 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+}
+
+.erp-desktop {
+  position: relative;
+  min-height: 100svh;
+  overflow: hidden;
+  padding: 12px;
+}
+
+.erp-desktop::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(120deg, rgba(255, 255, 255, 0.12), transparent 42%),
+    rgba(4, 8, 15, 0.18);
+  backdrop-filter: blur(16px) saturate(1.12);
+}
+
+.erp-window-shell {
+  position: relative;
+  z-index: 1;
+  height: calc(100svh - 24px);
+  min-height: 620px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 28px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(244, 247, 251, 0.8)),
+    rgba(248, 250, 252, 0.84);
+  box-shadow:
+    0 34px 90px rgba(0, 0, 0, 0.34),
+    inset 0 1px 0 rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(28px) saturate(1.16);
+}
+
+.erp-window-shell::after {
+  content: "";
+  position: absolute;
+  right: 11px;
+  bottom: 11px;
+  z-index: 60;
+  width: 27px;
+  height: 27px;
+  pointer-events: none;
+  border-right: 4px solid rgba(255, 255, 255, 0.92);
+  border-bottom: 4px solid rgba(255, 255, 255, 0.92);
+  border-radius: 0 0 18px 0;
+  filter: drop-shadow(0 2px 4px rgba(15, 23, 42, 0.28));
+}
+
+.erp-window-main {
+  background:
+    linear-gradient(180deg, rgba(241, 245, 249, 0.66), rgba(226, 232, 240, 0.72)),
+    rgba(241, 245, 249, 0.7);
+}
+
+.erp-content-window {
+  position: relative;
+  border-radius: 20px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(248, 250, 252, 0.86)),
+    rgba(255, 255, 255, 0.84);
+  box-shadow:
+    0 20px 48px rgba(15, 23, 42, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+@media (max-width: 767px) {
+  .erp-desktop {
+    padding: 0;
+  }
+
+  .erp-window-shell {
+    height: 100svh;
+    min-height: 100svh;
+    border-width: 0;
+    border-radius: 0;
+  }
+
+  .erp-window-shell::after {
+    display: none;
+  }
 }
 
 button,

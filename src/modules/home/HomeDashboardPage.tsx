@@ -770,8 +770,8 @@ function NoticePopup({
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4">
-      <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
-        <div className="mb-4 flex items-start justify-between gap-3">
+      <div className="w-full max-w-lg overflow-hidden rounded-2xl border border-white/70 bg-white shadow-2xl">
+        <div className="flex items-start justify-between gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3">
           <div>
             <p className="text-xs font-bold text-blue-600">업무 공지</p>
             <h3 className="mt-1 text-xl font-bold text-slate-900">
@@ -781,25 +781,25 @@ function NoticePopup({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg border border-slate-300 px-3 py-1 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+            className="rounded-lg border border-slate-300 bg-white px-3 py-1 text-sm font-semibold text-slate-600 hover:bg-slate-50"
           >
             닫기
           </button>
         </div>
-        <div className="max-h-[50vh] whitespace-pre-wrap overflow-y-auto rounded-xl bg-slate-50 p-4 text-sm leading-6 text-slate-700">
+        <div className="m-4 max-h-[50vh] whitespace-pre-wrap overflow-y-auto rounded-xl border border-slate-200 bg-white p-4 text-sm leading-6 text-slate-700">
           {notice.content}
         </div>
         <button
           type="button"
           onClick={onCloseToday}
-          className="mt-5 w-full rounded-lg border border-slate-300 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+          className="mx-4 mb-3 w-[calc(100%-2rem)] rounded-lg border border-slate-300 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
         >
           오늘 그만보기
         </button>
         <button
           type="button"
           onClick={onClose}
-          className="mt-5 w-full rounded-lg bg-blue-600 py-3 text-sm font-semibold text-white hover:bg-blue-700"
+          className="mx-4 mb-4 w-[calc(100%-2rem)] rounded-lg bg-blue-600 py-3 text-sm font-semibold text-white hover:bg-blue-700"
         >
           확인
         </button>
@@ -843,9 +843,9 @@ function NoticeManager({
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4">
-      <div className="grid max-h-[90vh] w-full max-w-5xl grid-cols-1 gap-4 overflow-hidden rounded-2xl bg-white p-5 shadow-2xl md:grid-cols-[360px_1fr]">
+      <div className="grid max-h-[90vh] w-full max-w-5xl grid-cols-1 gap-4 overflow-hidden rounded-2xl border border-white/70 bg-white p-5 shadow-2xl md:grid-cols-[360px_1fr]">
         <section className="min-h-0 rounded-xl border border-slate-200">
-          <div className="flex items-center justify-between border-b border-slate-200 p-3">
+          <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 p-3">
             <h3 className="font-bold text-slate-900">공지 목록</h3>
             <button
               type="button"
@@ -1408,9 +1408,9 @@ function SchedulePopup({
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4">
-      <div className="grid max-h-[90vh] w-full max-w-4xl grid-cols-1 gap-4 overflow-hidden rounded-2xl bg-white p-5 shadow-2xl md:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="grid max-h-[90vh] w-full max-w-4xl grid-cols-1 gap-4 overflow-hidden rounded-2xl border border-white/70 bg-white p-5 shadow-2xl md:grid-cols-[minmax(0,1fr)_320px]">
         <section className="min-h-0">
-          <div className="mb-4 flex items-start justify-between gap-3">
+          <div className="mb-4 flex items-start justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
             <div>
               <p className="text-xs font-bold text-blue-600">주요일정</p>
               <h3 className="mt-1 text-xl font-bold text-slate-900">
@@ -1420,7 +1420,7 @@ function SchedulePopup({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg border border-slate-300 px-3 py-1 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+              className="rounded-lg border border-slate-300 bg-white px-3 py-1 text-sm font-semibold text-slate-600 hover:bg-slate-50"
             >
               닫기
             </button>
@@ -1436,20 +1436,20 @@ function SchedulePopup({
           </div>
         </section>
 
-        <section className="rounded-xl border border-blue-100 bg-blue-50 p-3">
+        <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
           <h4 className="mb-3 text-sm font-bold text-slate-900">일정 입력</h4>
-          <div className="space-y-2">
+          <div className="space-y-2 p-3">
             <input
               value={scheduleTitle}
               onChange={(event) => onScheduleTitleChange(event.target.value)}
               placeholder="일정 제목"
-              className="w-full rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500"
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500"
             />
             <textarea
               value={scheduleMemo}
               onChange={(event) => onScheduleMemoChange(event.target.value)}
               placeholder="간단 메모"
-              className="min-h-28 w-full resize-none rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500"
+              className="min-h-28 w-full resize-none rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500"
             />
             <button
               type="button"

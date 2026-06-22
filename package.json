@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "check:korean": "node tools/check-korean-text.mjs"
+    "check:korean": "node tools/check-korean-text.mjs",
+    "export:nas-db": "node tools/export-supabase-public-to-sql.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.106.0",

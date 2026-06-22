@@ -269,7 +269,7 @@ export default function GlobalVehicleSearch({
 
       {isOpen && (
         <div className="fixed inset-0 z-[1200] bg-slate-950/35 px-3 py-4 backdrop-blur-sm md:px-6 md:py-8">
-          <div className="mx-auto flex max-h-[calc(100vh-2rem)] w-full max-w-5xl flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl md:max-h-[calc(100vh-4rem)]">
+          <div className="mx-auto flex max-h-[calc(100vh-2rem)] w-full max-w-5xl flex-col overflow-hidden rounded-xl border border-white/70 bg-white shadow-2xl md:max-h-[calc(100vh-4rem)]">
             <div className="border-b border-slate-200 bg-slate-50 px-4 py-3">
               <div className="flex items-center justify-between gap-3">
                 <div>
@@ -281,7 +281,7 @@ export default function GlobalVehicleSearch({
                 <button
                   type="button"
                   onClick={() => setIsOpen(false)}
-                  className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-white"
+                  className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
                 >
                   닫기
                 </button>
