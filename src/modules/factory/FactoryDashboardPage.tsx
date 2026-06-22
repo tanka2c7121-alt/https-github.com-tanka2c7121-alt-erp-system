@@ -69,6 +69,21 @@ const getVehicleKey = (
   return carNumber || [order.work_name, carModel].filter(Boolean).join("|");
 };
 
+const getRoIssuedNumber = (orders: WorkOrder[], monthText: string) => {
+  const prefix = `${monthText}-`;
+
+  return orders.reduce((max, order) => {
+    const workName = String(order.work_name ?? "");
+
+    if (!workName.startsWith(prefix)) return max;
+
+    const numberText = workName.slice(prefix.length);
+    const number = /^\d+$/.test(numberText) ? Number(numberText) : 0;
+
+    return number > max ? number : max;
+  }, 0);
+};
+
 export default function FactoryDashboardPage({
   onSelectMenu,
 }: FactoryDashboardPageProps) {
@@ -125,9 +140,7 @@ export default function FactoryDashboardPage({
     const thisMonthInboundVehicleCount = new Set(
       thisMonthInbound.map(getVehicleKey).filter(Boolean)
     ).size;
-    const thisMonthRoIssuedCount = workOrders.filter((item) =>
-      item.work_name?.startsWith(thisMonth)
-    ).length;
+    const thisMonthRoIssuedCount = getRoIssuedNumber(workOrders, thisMonth);
     const todayOutbound = workOrders.filter((item) => item.release_date === today);
     const thisMonthOutbound = workOrders.filter((item) =>
       item.release_date?.startsWith(thisMonth)

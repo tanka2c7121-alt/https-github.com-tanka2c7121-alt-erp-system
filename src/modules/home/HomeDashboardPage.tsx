@@ -143,8 +143,20 @@ const getVehicleKey = (order: Pick<WorkOrder, "work_name" | "car_number" | "car_
 
   return carNumber || [order.work_name, carModel].filter(Boolean).join("|");
 };
-const isWorkNameInMonth = (workName: string | null | undefined, monthText: string) =>
-  Boolean(workName && workName.startsWith(`${monthText}-`));
+const getRoIssuedNumber = (orders: WorkOrder[], monthText: string) => {
+  const prefix = `${monthText}-`;
+
+  return orders.reduce((max, order) => {
+    const workName = String(order.work_name ?? "");
+
+    if (!workName.startsWith(prefix)) return max;
+
+    const numberText = workName.slice(prefix.length);
+    const number = /^\d+$/.test(numberText) ? Number(numberText) : 0;
+
+    return number > max ? number : max;
+  }, 0);
+};
 const buildMonthDays = (monthText: string) => {
   const [year, month] = monthText.split("-").map(Number);
   const firstDate = new Date(year, month - 1, 1);
@@ -307,9 +319,7 @@ export default function HomeDashboardPage({
     const thisMonthInboundVehicleCount = new Set(
       thisMonthInbound.map(getVehicleKey).filter(Boolean)
     ).size;
-    const thisMonthRoIssuedCount = workOrders.filter((item) =>
-      isWorkNameInMonth(item.work_name, thisMonth)
-    ).length;
+    const thisMonthRoIssuedCount = getRoIssuedNumber(workOrders, thisMonth);
     const todayOutbound = workOrders.filter((item) => item.release_date === today);
     const thisMonthOutbound = workOrders.filter((item) =>
       isDateInMonth(item.release_date, thisMonth)
