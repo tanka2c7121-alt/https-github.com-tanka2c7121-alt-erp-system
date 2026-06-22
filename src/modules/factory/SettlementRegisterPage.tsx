@@ -18,6 +18,8 @@ type SettlementRegisterPageProps = {
 };
 
 type PaymentRow = {
+  id?: number;
+  originalContent?: string;
   paymentType: string;
   paymentDetail: string;
   claimAmount: string;
@@ -77,6 +79,8 @@ const getProgressStatusClass = (value?: string) => {
 };
 
 const emptyPaymentRow = (): PaymentRow => ({
+  id: undefined,
+  originalContent: undefined,
   paymentType: "",
   paymentDetail: "",
   claimAmount: "",
@@ -150,6 +154,9 @@ const getDailyCashEligiblePaymentRows = (rows: PaymentRow[]) =>
       row.method &&
       !isPartnerSupportPaymentRow(row)
   );
+
+const getDailyCashContent = (row: PaymentRow, workName: string) =>
+  `${row.paymentType} / ${row.paymentDetail} / ${workName}`;
 
 export default function SettlementRegisterPage({
   initialWorkName,
@@ -425,6 +432,10 @@ export default function SettlementRegisterPage({
               invoiceIssued: item.invoice_issued ?? false,
               claimDate: item.claim_date ?? "",
               paymentStatus: item.payment_status ?? "청구",
+              id: item.id,
+              originalContent: `${item.payment_type ?? ""} / ${
+                item.payment_detail ?? ""
+              } / ${targetWorkName}`,
             };
           })
         : defaultPaymentRows();
@@ -586,7 +597,7 @@ export default function SettlementRegisterPage({
         account: row.method,
         type: "수입",
         category: "차량정산",
-        content: `${row.paymentType} / ${row.paymentDetail} / ${targetForm.workName}`,
+        content: getDailyCashContent(row, targetForm.workName),
         income: toNumber(row.amount),
         expense: 0,
         memo: targetForm.workName,
@@ -594,16 +605,66 @@ export default function SettlementRegisterPage({
         source_work_name: targetForm.workName,
     });
 
+    const { data: todayCashRows, error: todayCashError } = await supabase
+      .from("daily_cash")
+      .select("content")
+      .eq("source_type", "settlement_payment")
+      .eq("source_work_name", targetForm.workName)
+      .eq("category", "차량정산")
+      .eq("created_on", today);
+
+    if (todayCashError) return todayCashError;
+
+    const todayCashContents = new Set(
+      (todayCashRows ?? []).map((row: any) => String(row.content ?? ""))
+    );
+    const eligibleRows = getDailyCashEligiblePaymentRows(paymentRows);
+    const rowsToSync = eligibleRows.filter((row) => {
+      const currentContent = getDailyCashContent(row, targetForm.workName);
+
+      return (
+        !row.id ||
+        todayCashContents.has(currentContent) ||
+        (row.originalContent ? todayCashContents.has(row.originalContent) : false)
+      );
+    });
+    const skippedExistingRows = eligibleRows.filter((row) => {
+      const currentContent = getDailyCashContent(row, targetForm.workName);
+
+      return (
+        row.id &&
+        !todayCashContents.has(currentContent) &&
+        !(row.originalContent && todayCashContents.has(row.originalContent))
+      );
+    });
+
+    if (todayCashContents.size > 0) {
+      const confirmed = window.confirm(
+        "오늘 일일입출금에 이미 반영된 차량정산 금액이 있습니다. 기존 오늘 반영분을 삭제하고 현재 입력값으로 다시 반영할까요?"
+      );
+
+      if (!confirmed) {
+        return new Error("사용자가 일일입출금 재반영을 취소했습니다.");
+      }
+    }
+
+    if (skippedExistingRows.length > 0 && rowsToSync.length > 0) {
+      alert(
+        "기존에 입력되어 있던 입금내역은 금일 일일입출금에 다시 반영하지 않습니다. 오늘 새로 추가했거나 오늘 이미 반영된 행만 연동합니다."
+      );
+    }
+
     const { error: deleteError } = await supabase
       .from("daily_cash")
       .delete()
       .eq("source_type", "settlement_payment")
       .eq("source_work_name", targetForm.workName)
-      .eq("category", "차량정산");
+      .eq("category", "차량정산")
+      .eq("created_on", today);
 
     if (deleteError) return deleteError;
 
-    const insertRows = getDailyCashEligiblePaymentRows(paymentRows).map(toDailyCashPayload);
+    const insertRows = rowsToSync.map(toDailyCashPayload);
 
     if (insertRows.length === 0) return null;
 

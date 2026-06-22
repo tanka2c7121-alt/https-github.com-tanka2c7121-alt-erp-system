@@ -167,12 +167,47 @@ export default function ExpenseRequestPrintPage({
     }
 
     const sourceName = `expense-request-${expenseRequest.id}`;
+    const today = localDateText();
+
+    const { data: existingCashRows, error: existingCashError } = await supabase
+      .from("daily_cash")
+      .select("id, created_on")
+      .eq("source_type", "expense_request")
+      .eq("source_work_name", sourceName);
+
+    if (existingCashError) {
+      alert("기존 일일입출금 확인 실패: " + existingCashError.message);
+      return;
+    }
+
+    const hasPastCashRows = (existingCashRows ?? []).some(
+      (cashRow: any) => cashRow.created_on !== today
+    );
+    const hasTodayCashRows = (existingCashRows ?? []).some(
+      (cashRow: any) => cashRow.created_on === today
+    );
+
+    if (hasPastCashRows) {
+      alert(
+        "이미 이전 입력일에 일일입출금으로 반영된 지출결의서입니다. 금일 일일입출금에 다시 반영하지 않습니다."
+      );
+      return;
+    }
+
+    if (hasTodayCashRows) {
+      const confirmed = confirm(
+        "오늘 일일입출금에 이미 반영된 지출결의서입니다. 기존 오늘 반영분을 삭제하고 다시 반영할까요?"
+      );
+
+      if (!confirmed) return;
+    }
 
     const { error: cleanupCashError } = await supabase
       .from("daily_cash")
       .delete()
       .eq("source_type", "expense_request")
-      .eq("source_work_name", sourceName);
+      .eq("source_work_name", sourceName)
+      .eq("created_on", today);
 
     if (cleanupCashError) {
       alert("기존 일일입출금 정리 실패: " + cleanupCashError.message);
@@ -183,7 +218,7 @@ export default function ExpenseRequestPrintPage({
       ? { error: null }
       : await supabase.from("daily_cash").insert({
       date: expenseRequest.request_date,
-      created_on: localDateText(),
+      created_on: today,
       account: expenseRequest.account,
       type: expenseRequest.expense_type,
       category: expenseRequest.category,

@@ -49,6 +49,7 @@ type DeductibleItem = {
   releaseDate: string;
   paidAmount: number;
   hasDeductiblePayment: boolean;
+  paymentId: number | null;
   paymentDate: string;
   paymentMethod: string;
   paymentDetail: string;
@@ -174,6 +175,7 @@ export default function DeductibleManagementPage({
         releaseDate: row.release_date ?? "",
         paidAmount: Number(payment?.payment_amount ?? 0),
         hasDeductiblePayment: Boolean(payment),
+        paymentId: payment?.id ?? null,
         paymentDate: payment?.payment_date ?? "",
         paymentMethod: payment?.payment_method ?? "",
         paymentDetail: payment?.payment_detail ?? "",
@@ -354,6 +356,42 @@ export default function DeductibleManagementPage({
     savingWorkNamesRef.current.add(item.workName);
     setSavingWorkName(item.workName);
 
+    const { data: todayCashRows, error: todayCashError } = await supabase
+      .from("daily_cash")
+      .select("id")
+      .eq("source_type", "settlement_payment")
+      .eq("source_work_name", item.workName)
+      .eq("category", "면책금")
+      .eq("created_on", localDateText());
+
+    if (todayCashError) {
+      savingWorkNamesRef.current.delete(item.workName);
+      setSavingWorkName(null);
+      alert("오늘 면책금 일일입출금 확인 실패: " + todayCashError.message);
+      return;
+    }
+
+    if (item.hasDeductiblePayment && !todayCashRows?.length) {
+      savingWorkNamesRef.current.delete(item.workName);
+      setSavingWorkName(null);
+      alert(
+        "이미 이전에 입력된 면책금입니다. 금일 일일입출금에 다시 반영하지 않습니다. 오늘 입력한 면책금 수정만 이 화면에서 재반영할 수 있습니다."
+      );
+      return;
+    }
+
+    if (todayCashRows?.length) {
+      const confirmed = confirm(
+        "오늘 일일입출금에 이미 반영된 면책금입니다. 기존 오늘 반영분을 삭제하고 수정 금액으로 다시 반영할까요?"
+      );
+
+      if (!confirmed) {
+        savingWorkNamesRef.current.delete(item.workName);
+        setSavingWorkName(null);
+        return;
+      }
+    }
+
     const paymentPayload = {
       work_name: item.workName,
       payment_type: "면책금",
@@ -370,9 +408,12 @@ export default function DeductibleManagementPage({
       payment_status: "수금",
     };
 
-    const { error: paymentError } = await supabase
-      .from("settlement_payments")
-      .insert(paymentPayload);
+    const { error: paymentError } = item.paymentId
+      ? await supabase
+          .from("settlement_payments")
+          .update(paymentPayload)
+          .eq("id", item.paymentId)
+      : await supabase.from("settlement_payments").insert(paymentPayload);
 
     if (paymentError) {
       savingWorkNamesRef.current.delete(item.workName);
@@ -381,12 +422,20 @@ export default function DeductibleManagementPage({
       return;
     }
 
-    await supabase
+    const { error: deleteCashError } = await supabase
       .from("daily_cash")
       .delete()
       .eq("source_type", "settlement_payment")
       .eq("source_work_name", item.workName)
-      .eq("category", "면책금");
+      .eq("category", "면책금")
+      .eq("created_on", localDateText());
+
+    if (deleteCashError) {
+      savingWorkNamesRef.current.delete(item.workName);
+      setSavingWorkName(null);
+      alert("기존 오늘 일일입출금 정리 실패: " + deleteCashError.message);
+      return;
+    }
 
     const { error: dailyCashError } = await supabase.from("daily_cash").insert({
       date: input.date,
