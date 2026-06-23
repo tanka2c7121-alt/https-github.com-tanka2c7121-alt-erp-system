@@ -96,6 +96,7 @@ export default function DailyCashPage({ onSelectMenu }: DailyCashPageProps) {
       "*",
       (query) => {
         let nextQuery = query
+          .order("created_on", { ascending: false })
           .order("date", { ascending: false })
           .order("id", { ascending: false });
 
@@ -106,7 +107,7 @@ export default function DailyCashPage({ onSelectMenu }: DailyCashPageProps) {
         if (selectedPeriod !== "all" && selectedPeriod !== "today") {
           const startDate = new Date();
           startDate.setMonth(startDate.getMonth() - selectedPeriod);
-          nextQuery = nextQuery.gte("date", localDateText(startDate));
+          nextQuery = nextQuery.gte("created_on", localDateText(startDate));
         }
 
         return nextQuery;
@@ -135,8 +136,9 @@ export default function DailyCashPage({ onSelectMenu }: DailyCashPageProps) {
     "daily_cash",
     "*",
     (query) => query
-      .gte("date", startDate)
-      .lte("date", endDate)
+      .gte("created_on", startDate)
+      .lte("created_on", endDate)
+      .order("created_on", { ascending: false })
       .order("date", { ascending: false })
       .order("id", { ascending: false })
   );

@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { MenuItem } from "../../data/menuData";
 import { supabase } from "../../lib/supabase";
+import { useRealtimeRefresh } from "../../lib/useRealtimeRefresh";
 
 type WorkOrderRow = {
   id: number;
@@ -54,6 +55,12 @@ type SearchItem = {
   settlement?: SettlementRow;
   payments: PaymentRow[];
 };
+
+const realtimeTables = [
+  { table: "work_orders" },
+  { table: "repair_settlements" },
+  { table: "settlement_payments" },
+];
 
 const normalizeText = (value: unknown) => String(value ?? "").trim();
 const toAmount = (value: unknown) =>
@@ -133,71 +140,82 @@ export default function GlobalVehicleSearch({
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState("");
 
+  const loadRows = useCallback(async (showLoading = true) => {
+    if (showLoading) {
+      setLoading(true);
+    }
+    setLoadError("");
+
+    try {
+      const [works, settlements, payments] = await Promise.all([
+        fetchAll<WorkOrderRow>(
+          "work_orders",
+          [
+            "id",
+            "work_name",
+            "car_number",
+            "car_maker",
+            "car_model",
+            "color_code",
+            "category",
+            "coverage_type",
+            "insurance_company",
+            "other_insurance_company",
+            "partner_company",
+            "manager_name",
+            "own_manager_name",
+            "other_manager_name",
+            "inbound_date",
+            "outbound_date",
+            "release_date",
+            "message",
+          ].join(", ")
+        ),
+        fetchAll<SettlementRow>(
+          "repair_settlements",
+          [
+            "id",
+            "work_name",
+            "progress_status",
+            "claim_amount",
+            "claim_date",
+            "own_claim_amount",
+            "other_claim_amount",
+            "own_claim_date",
+            "other_claim_date",
+            "total_amount",
+          ].join(", ")
+        ),
+        fetchAll<PaymentRow>(
+          "settlement_payments",
+          "id, work_name, payment_type, payment_detail, claim_amount, claim_date, payment_amount, payment_date"
+        ),
+      ]);
+
+      setWorkRows(works);
+      setSettlementRows(settlements);
+      setPaymentRows(payments);
+    } catch (error: any) {
+      setLoadError("전체검색 조회 실패: " + error.message);
+    } finally {
+      if (showLoading) {
+        setLoading(false);
+      }
+    }
+  }, []);
+
   useEffect(() => {
     if (!isOpen || workRows.length > 0 || loading) return;
 
-    const loadRows = async () => {
-      setLoading(true);
-      setLoadError("");
-
-      try {
-        const [works, settlements, payments] = await Promise.all([
-          fetchAll<WorkOrderRow>(
-            "work_orders",
-            [
-              "id",
-              "work_name",
-              "car_number",
-              "car_maker",
-              "car_model",
-              "color_code",
-              "category",
-              "coverage_type",
-              "insurance_company",
-              "other_insurance_company",
-              "partner_company",
-              "manager_name",
-              "own_manager_name",
-              "other_manager_name",
-              "inbound_date",
-              "outbound_date",
-              "release_date",
-              "message",
-            ].join(", ")
-          ),
-          fetchAll<SettlementRow>(
-            "repair_settlements",
-            [
-              "id",
-              "work_name",
-              "progress_status",
-              "claim_amount",
-              "claim_date",
-              "own_claim_amount",
-              "other_claim_amount",
-              "own_claim_date",
-              "other_claim_date",
-              "total_amount",
-            ].join(", ")
-          ),
-          fetchAll<PaymentRow>(
-            "settlement_payments",
-            "id, work_name, payment_type, payment_detail, claim_amount, claim_date, payment_amount, payment_date"
-          ),
-        ]);
-
-        setWorkRows(works);
-        setSettlementRows(settlements);
-        setPaymentRows(payments);
-      } catch (error: any) {
-        setLoadError("전체검색 조회 실패: " + error.message);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     void loadRows();
-  }, [isOpen, loading, workRows.length]);
+  }, [isOpen, loadRows, loading, workRows.length]);
+
+  useRealtimeRefresh({
+    channelName: "global-vehicle-search",
+    tables: realtimeTables,
+    onRefresh: () => loadRows(false),
+    enabled: isOpen || workRows.length > 0,
+  });
 
   const searchItems = useMemo(() => {
     const settlementByWorkName = new Map(
