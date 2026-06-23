@@ -935,12 +935,12 @@ function SummaryCard({
 
   return (
     <div
-      className={`flex min-h-16 min-w-0 flex-col justify-between rounded-lg border px-1.5 py-2 text-center shadow-sm md:min-h-28 md:rounded-xl md:p-4 md:text-left ${toneClass}`}
+      className={`flex min-h-[72px] min-w-0 flex-col justify-between rounded-lg border px-1 py-2 text-center shadow-sm md:min-h-28 md:rounded-xl md:p-4 md:text-left ${toneClass}`}
     >
-      <p className="min-w-0 truncate text-[10px] font-semibold leading-tight md:break-keep md:text-sm">
+      <p className="min-w-0 whitespace-normal break-keep text-[9px] font-semibold leading-tight md:text-sm">
         {title}
       </p>
-      <p className="text-xl font-bold leading-none md:text-right md:text-3xl">
+      <p className="mt-1 text-lg font-bold leading-none md:mt-0 md:text-right md:text-3xl">
         {value}
       </p>
     </div>
@@ -1011,20 +1011,30 @@ function NoticePopup({
     }
     setInteraction(null);
   };
-
-  return (
-    <div className="fixed inset-0 z-50 bg-slate-950/50">
-      <div
-        className="fixed flex min-h-80 min-w-80 flex-col overflow-hidden rounded-2xl border border-white/70 bg-white shadow-2xl"
-        style={{
+  const popupStyle =
+    typeof window !== "undefined" && window.innerWidth < 768
+      ? {
+          left: "50%",
+          top: "50%",
+          width: "min(90vw, 360px)",
+          height: "min(72vh, 460px)",
+          transform: "translate(-50%, -50%)",
+        }
+      : {
           left: frame.x,
           top: frame.y,
           width: frame.width,
           height: frame.height,
-        }}
+        };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-slate-950/50 p-4">
+      <div
+        className="fixed flex min-h-0 min-w-0 flex-col overflow-hidden rounded-2xl border border-white/70 bg-white shadow-2xl md:min-h-80 md:min-w-80"
+        style={popupStyle}
       >
         <div
-          className="flex cursor-move touch-none select-none items-start justify-between gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3"
+          className="flex cursor-default select-none items-start justify-between gap-3 border-b border-slate-200 bg-slate-50 px-3 py-2 md:cursor-move md:touch-none md:px-4 md:py-3"
           onPointerDown={(event) => startInteraction("move", event)}
           onPointerMove={moveInteraction}
           onPointerUp={stopInteraction}
@@ -1032,7 +1042,7 @@ function NoticePopup({
         >
           <div>
             <p className="text-xs font-bold text-blue-600">업무 공지</p>
-            <h3 className="mt-1 text-xl font-bold text-slate-900">
+            <h3 className="mt-1 text-base font-bold text-slate-900 md:text-xl">
               {notice.title}
             </h3>
           </div>
@@ -1045,7 +1055,7 @@ function NoticePopup({
             닫기
           </button>
         </div>
-        <div className="m-4 min-h-0 flex-1 whitespace-pre-wrap overflow-y-auto rounded-xl border border-slate-200 bg-white p-4 text-sm leading-6 text-slate-700">
+        <div className="m-3 min-h-0 flex-1 whitespace-pre-wrap overflow-y-auto rounded-xl border border-slate-200 bg-white p-3 text-sm leading-6 text-slate-700 md:m-4 md:p-4">
           {notice.content}
         </div>
         <button
@@ -1062,12 +1072,14 @@ function NoticePopup({
         >
           확인
         </button>
-        <ResizeGrip
-          onPointerDown={(event) => startInteraction("resize", event)}
-          onPointerMove={moveInteraction}
-          onPointerUp={stopInteraction}
-          onPointerCancel={stopInteraction}
-        />
+        <div className="hidden md:block">
+          <ResizeGrip
+            onPointerDown={(event) => startInteraction("resize", event)}
+            onPointerMove={moveInteraction}
+            onPointerUp={stopInteraction}
+            onPointerCancel={stopInteraction}
+          />
+        </div>
       </div>
     </div>
   );
@@ -1724,21 +1736,31 @@ function SchedulePopup({
     }
     setInteraction(null);
   };
-
-  return (
-    <div className="fixed inset-0 z-50 bg-slate-950/50">
-      <div
-        className="fixed grid min-h-80 min-w-80 grid-cols-1 gap-4 overflow-hidden rounded-2xl border border-white/70 bg-white p-5 shadow-2xl md:grid-cols-[minmax(0,1fr)_320px]"
-        style={{
+  const popupStyle =
+    typeof window !== "undefined" && window.innerWidth < 768
+      ? {
+          left: "50%",
+          top: "50%",
+          width: "min(92vw, 380px)",
+          height: "min(82vh, 620px)",
+          transform: "translate(-50%, -50%)",
+        }
+      : {
           left: frame.x,
           top: frame.y,
           width: frame.width,
           height: frame.height,
-        }}
+        };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-slate-950/50 p-4">
+      <div
+        className="fixed grid min-h-0 min-w-0 grid-cols-1 gap-3 overflow-hidden rounded-2xl border border-white/70 bg-white p-3 shadow-2xl md:min-h-80 md:min-w-80 md:gap-4 md:p-5 md:grid-cols-[minmax(0,1fr)_320px]"
+        style={popupStyle}
       >
         <section className="flex min-h-0 flex-col">
           <div
-            className="mb-4 flex cursor-move touch-none select-none items-start justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2"
+            className="mb-3 flex cursor-default select-none items-start justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 md:mb-4 md:cursor-move md:touch-none"
             onPointerDown={(event) => startInteraction("move", event)}
             onPointerMove={moveInteraction}
             onPointerUp={stopInteraction}
@@ -1746,7 +1768,7 @@ function SchedulePopup({
           >
             <div>
               <p className="text-xs font-bold text-blue-600">주요일정</p>
-              <h3 className="mt-1 text-xl font-bold text-slate-900">
+              <h3 className="mt-1 text-base font-bold text-slate-900 md:text-xl">
                 {formatKoreanDate(selectedDate)}
               </h3>
             </div>
@@ -1770,7 +1792,7 @@ function SchedulePopup({
           </div>
         </section>
 
-        <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+        <section className="min-h-0 overflow-y-auto rounded-xl border border-slate-200 bg-white">
           <h4 className="mb-3 text-sm font-bold text-slate-900">일정 입력</h4>
           <div className="space-y-2 p-3">
             <div className="grid grid-cols-2 gap-2">
@@ -1860,12 +1882,14 @@ function SchedulePopup({
             </button>
           </div>
         </section>
-        <ResizeGrip
-          onPointerDown={(event) => startInteraction("resize", event)}
-          onPointerMove={moveInteraction}
-          onPointerUp={stopInteraction}
-          onPointerCancel={stopInteraction}
-        />
+        <div className="hidden md:block">
+          <ResizeGrip
+            onPointerDown={(event) => startInteraction("resize", event)}
+            onPointerMove={moveInteraction}
+            onPointerUp={stopInteraction}
+            onPointerCancel={stopInteraction}
+          />
+        </div>
       </div>
     </div>
   );
