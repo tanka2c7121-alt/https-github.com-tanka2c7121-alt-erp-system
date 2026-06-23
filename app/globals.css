@@ -168,6 +168,12 @@ textarea {
   display: none !important;
 }
 
+.settlement-complete-print {
+  width: min(100%, 210mm);
+  min-height: 297mm;
+  box-sizing: border-box;
+}
+
 .work-camera-overlay {
   position: fixed;
   inset: 0;
@@ -430,9 +436,9 @@ textarea {
   .settlement-complete-print {
     left: auto !important;
     top: auto !important;
-    width: 186mm !important;
-    min-height: auto !important;
-    padding: 3mm 4mm 4mm !important;
+    width: 196mm !important;
+    min-height: 283mm !important;
+    padding: 5mm !important;
     margin: 0 auto !important;
     overflow: visible !important;
   }
@@ -458,8 +464,8 @@ textarea {
   }
 
   .settlement-complete-stamp {
-    right: 3mm !important;
-    top: 3mm !important;
+    right: 5mm !important;
+    top: 5mm !important;
     width: 38mm !important;
     height: 24mm !important;
     border-radius: 0 !important;
