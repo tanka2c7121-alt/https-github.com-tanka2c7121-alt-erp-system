@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Shinheung Hyundai ERP">
+  <rect width="512" height="512" rx="112" fill="#0f172a"/>
+  <path d="M126 166c0-28 22-50 50-50h160c28 0 50 22 50 50v180c0 28-22 50-50 50H176c-28 0-50-22-50-50V166Z" fill="#f8fafc"/>
+  <path d="M164 194c0-16 13-29 29-29h126c16 0 29 13 29 29v22H164v-22Z" fill="#2563eb"/>
+  <path d="M164 244h184v88c0 16-13 29-29 29H193c-16 0-29-13-29-29v-88Z" fill="#e2e8f0"/>
+  <path d="M195 279h122v24H195v-24Zm0 45h86v24h-86v-24Z" fill="#0f172a"/>
+  <path d="M137 411h238" stroke="#38bdf8" stroke-width="22" stroke-linecap="round"/>
+  <text x="256" y="92" fill="#ffffff" font-family="Arial, Helvetica, sans-serif" font-size="54" font-weight="800" text-anchor="middle">ERP</text>
+</svg>
