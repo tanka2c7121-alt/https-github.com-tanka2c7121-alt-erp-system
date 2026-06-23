@@ -382,6 +382,20 @@ const formatPhoneNumber = (value: string) => {
 };
 
 const formatMileage = (value: string) => {
+  const compactValue = value
+    .replace(/,/g, "")
+    .replace(/\s+/g, "")
+    .replace(/킬로/g, "")
+    .replace(/km/gi, "")
+    .replace(/k/gi, "");
+  const tenThousandMatch = compactValue.match(/(\d+(?:\.\d+)?)만/);
+
+  if (tenThousandMatch) {
+    const mileageValue = Math.round(Number(tenThousandMatch[1]) * 10000);
+
+    return mileageValue ? `${mileageValue.toLocaleString()} Km` : "";
+  }
+
   const numbers = value.replace(/[^0-9]/g, "");
   if (!numbers) return "";
   return `${Number(numbers).toLocaleString()} Km`;
@@ -2535,7 +2549,7 @@ function handleClearWorkRow(index: number) {
 
   <input
   className={`${getInputStateClass(mileage)} ${inputClass}`}
-  placeholder="120,000 Km"
+  placeholder="120,000 Km 또는 12만"
   value={mileage}
   onChange={(e) =>
     setMileage(formatMileage(e.target.value))
