@@ -58,13 +58,22 @@ type ScheduleEvent = {
   tone: "amber" | "blue" | "green" | "indigo" | "red";
   kind: "attendance" | "inbound" | "outboundPlan" | "released" | "manual" | "holiday";
   manual?: boolean;
+  dbId?: number;
+  visibility?: ScheduleVisibility;
 };
 
-type ManualSchedule = {
-  id: string;
-  date: string;
+type ScheduleVisibility = "public" | "private";
+
+type HomeSchedule = {
+  id: number;
+  start_date: string;
+  end_date: string;
   title: string;
   memo: string;
+  tone: ScheduleEvent["tone"];
+  visibility: ScheduleVisibility;
+  created_by: string | null;
+  created_name: string | null;
 };
 
 type KoreanHoliday = {
@@ -73,11 +82,37 @@ type KoreanHoliday = {
   name: string;
 };
 
+type ScheduleForm = {
+  startDate: string;
+  endDate: string;
+  title: string;
+  memo: string;
+  tone: ScheduleEvent["tone"];
+  visibility: ScheduleVisibility;
+};
+
 const todayText = localDateText;
-const manualScheduleStorageKey = "erpHomeManualSchedules";
 const holidayStorageKey = (year: string) => `erpKoreanHolidays:${year}`;
 const calendarWeekDays = ["일", "월", "화", "수", "목", "금", "토"];
 const weekDays = ["일", "월", "화", "수", "목", "금", "토"];
+const scheduleToneOptions: Array<{
+  value: ScheduleEvent["tone"];
+  label: string;
+}> = [
+  { value: "red", label: "빨강" },
+  { value: "blue", label: "파랑" },
+  { value: "green", label: "초록" },
+  { value: "amber", label: "노랑" },
+  { value: "indigo", label: "남색" },
+];
+const defaultScheduleForm = (date: string): ScheduleForm => ({
+  startDate: date,
+  endDate: date,
+  title: "",
+  memo: "",
+  tone: "red",
+  visibility: "public",
+});
 const dismissedNoticeKey = (noticeId: number) =>
   `erpDismissedHomeNotice:${noticeId}:${todayText()}`;
 const realtimeTables = [
@@ -87,6 +122,7 @@ const realtimeTables = [
   { table: "attendance_requests" },
   { table: "incident_reports" },
   { table: "home_notices" },
+  { table: "home_schedules" },
 ];
 const parseLocalDate = (dateText: string) => {
   const [year, month, day] = dateText.split("-").map(Number);
@@ -198,15 +234,29 @@ export default function HomeDashboardPage({
   );
   const [selectedScheduleDate, setSelectedScheduleDate] = useState(todayText());
   const [schedulePopupOpen, setSchedulePopupOpen] = useState(false);
-  const [manualSchedules, setManualSchedules] = useState<ManualSchedule[]>([]);
+  const [homeSchedules, setHomeSchedules] = useState<HomeSchedule[]>([]);
   const [koreanHolidays, setKoreanHolidays] = useState<KoreanHoliday[]>([]);
-  const [scheduleTitle, setScheduleTitle] = useState("");
-  const [scheduleMemo, setScheduleMemo] = useState("");
+  const [scheduleForm, setScheduleForm] = useState<ScheduleForm>(
+    defaultScheduleForm(todayText())
+  );
+  const scheduleUserId = user?.user_id ?? null;
+  const scheduleUserName = userName ?? user?.user_name ?? null;
 
   const loadDashboard = useCallback(async () => {
     setLoading(true);
 
-    const [ordersResult, approvedAttendanceResult, noticeResult] =
+    const scheduleQuery = supabase
+      .from("home_schedules")
+      .select("*")
+      .order("start_date", { ascending: true });
+
+    if (scheduleUserId) {
+      scheduleQuery.or(`visibility.eq.public,created_by.eq.${scheduleUserId}`);
+    } else {
+      scheduleQuery.eq("visibility", "public");
+    }
+
+    const [ordersResult, approvedAttendanceResult, noticeResult, scheduleResult] =
       await Promise.all([
       supabase
         .from("work_orders")
@@ -224,6 +274,7 @@ export default function HomeDashboardPage({
         .order("id", { ascending: false })
         .limit(1)
         .maybeSingle(),
+      scheduleQuery,
     ]);
 
     setLoading(false);
@@ -239,6 +290,11 @@ export default function HomeDashboardPage({
         ? []
         : ((approvedAttendanceResult.data ?? []) as ApprovedAttendanceRequest[])
     );
+    setHomeSchedules(
+      scheduleResult.error
+        ? []
+        : ((scheduleResult.data ?? []) as HomeSchedule[])
+    );
 
     if (!noticeResult.error && noticeResult.data) {
       const notice = noticeResult.data as HomeNotice;
@@ -253,22 +309,11 @@ export default function HomeDashboardPage({
     } else {
       setHomeNotice(null);
     }
-  }, []);
+  }, [scheduleUserId]);
 
   useEffect(() => {
     void loadDashboard();
   }, [loadDashboard]);
-
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem(manualScheduleStorageKey);
-      if (saved) {
-        setManualSchedules(JSON.parse(saved) as ManualSchedule[]);
-      }
-    } catch {
-      setManualSchedules([]);
-    }
-  }, []);
 
   useEffect(() => {
     const year = visibleScheduleMonth.slice(0, 4);
@@ -365,17 +410,21 @@ export default function HomeDashboardPage({
         return events;
       })
       .filter((event) => isDateInMonth(event.date, visibleScheduleMonth));
-    const manualScheduleEvents = manualSchedules
-      .filter((event) => isDateInMonth(event.date, visibleScheduleMonth))
-      .map<ScheduleEvent>((event) => ({
-        id: event.id,
-        date: event.date,
-        label: "주요일정",
-        detail: event.memo ? `${event.title} · ${event.memo}` : event.title,
-        tone: "red",
-        kind: "manual",
-        manual: true,
-      }));
+    const manualScheduleEvents = homeSchedules
+      .flatMap<ScheduleEvent>((event) =>
+        buildDateRangeTexts(event.start_date, event.end_date).map((date) => ({
+          id: `manual-${event.id}-${date}`,
+          dbId: event.id,
+          date,
+          label: event.visibility === "private" ? "나만보기" : "주요일정",
+          detail: event.memo ? `${event.title} · ${event.memo}` : event.title,
+          tone: event.tone ?? "red",
+          kind: "manual",
+          manual: true,
+          visibility: event.visibility,
+        }))
+      )
+      .filter((event) => isDateInMonth(event.date, visibleScheduleMonth));
     const attendanceScheduleEvents = approvedAttendanceRequests
       .flatMap<ScheduleEvent>((request) =>
         buildDateRangeTexts(request.start_date, request.end_date).map((date) => ({
@@ -434,7 +483,7 @@ export default function HomeDashboardPage({
   }, [
     koreanHolidays,
     approvedAttendanceRequests,
-    manualSchedules,
+    homeSchedules,
     selectedScheduleDate,
     visibleScheduleMonth,
     workOrders,
@@ -456,35 +505,87 @@ export default function HomeDashboardPage({
     setNoticeList((data ?? []) as HomeNotice[]);
   };
 
-  const saveManualSchedules = (items: ManualSchedule[]) => {
-    setManualSchedules(items);
-    localStorage.setItem(manualScheduleStorageKey, JSON.stringify(items));
+  const updateScheduleForm = <K extends keyof ScheduleForm>(
+    key: K,
+    value: ScheduleForm[K]
+  ) => {
+    setScheduleForm((current) => ({
+      ...current,
+      [key]: value,
+      ...(key === "startDate" && current.endDate < String(value)
+        ? { endDate: String(value) }
+        : {}),
+    }));
   };
 
-  const addManualSchedule = () => {
-    const title = scheduleTitle.trim();
-    const memo = scheduleMemo.trim();
+  const addManualSchedule = async () => {
+    const title = scheduleForm.title.trim();
+    const memo = scheduleForm.memo.trim();
+    const startDate = scheduleForm.startDate;
+    const endDate =
+      scheduleForm.endDate && scheduleForm.endDate >= startDate
+        ? scheduleForm.endDate
+        : startDate;
 
     if (!title) {
       alert("일정 제목을 입력해주세요.");
       return;
     }
 
-    saveManualSchedules([
-      ...manualSchedules,
+    const { error } = await supabase.from("home_schedules").insert({
+      start_date: startDate,
+      end_date: endDate,
+      title,
+      memo,
+      tone: scheduleForm.tone,
+      visibility: scheduleForm.visibility,
+      created_by: scheduleUserId,
+      created_name: scheduleUserName,
+    });
+
+    if (error) {
+      alert(
+        "일정 저장 실패: home_schedules 테이블이 필요합니다. SQL 파일을 먼저 적용해주세요.\n" +
+          error.message
+      );
+      return;
+    }
+
+    setHomeSchedules([
+      ...homeSchedules,
       {
-        id: `manual-${Date.now()}`,
-        date: selectedScheduleDate,
+        id: Date.now(),
+        start_date: startDate,
+        end_date: endDate,
         title,
         memo,
+        tone: scheduleForm.tone,
+        visibility: scheduleForm.visibility,
+        created_by: scheduleUserId,
+        created_name: scheduleUserName,
       },
     ]);
-    setScheduleTitle("");
-    setScheduleMemo("");
+    setScheduleForm(defaultScheduleForm(selectedScheduleDate));
+    await loadDashboard();
   };
 
-  const deleteManualSchedule = (eventId: string) => {
-    saveManualSchedules(manualSchedules.filter((item) => item.id !== eventId));
+  const deleteManualSchedule = async (eventId: string) => {
+    const scheduleId = Number(eventId.split("-")[1]);
+
+    if (!Number.isFinite(scheduleId)) return;
+    if (!confirm("이 일정을 삭제할까요?")) return;
+
+    const { error } = await supabase
+      .from("home_schedules")
+      .delete()
+      .eq("id", scheduleId);
+
+    if (error) {
+      alert("일정 삭제 실패: " + error.message);
+      return;
+    }
+
+    setHomeSchedules(homeSchedules.filter((item) => item.id !== scheduleId));
   };
 
   const changeScheduleMonth = (month: string) => {
@@ -726,13 +827,16 @@ export default function HomeDashboardPage({
             popupOpen={schedulePopupOpen}
             onOpenSchedulePopup={(date) => {
               setSelectedScheduleDate(date);
+              setScheduleForm((current) => ({
+                ...current,
+                startDate: date,
+                endDate: date,
+              }));
               setSchedulePopupOpen(true);
             }}
             onCloseSchedulePopup={() => setSchedulePopupOpen(false)}
-            scheduleTitle={scheduleTitle}
-            scheduleMemo={scheduleMemo}
-            onScheduleTitleChange={setScheduleTitle}
-            onScheduleMemoChange={setScheduleMemo}
+            scheduleForm={scheduleForm}
+            onScheduleFormChange={updateScheduleForm}
             onAddSchedule={addManualSchedule}
             onDeleteSchedule={deleteManualSchedule}
           />
@@ -999,10 +1103,8 @@ function ScheduleBoard({
   popupOpen,
   onOpenSchedulePopup,
   onCloseSchedulePopup,
-  scheduleTitle,
-  scheduleMemo,
-  onScheduleTitleChange,
-  onScheduleMemoChange,
+  scheduleForm,
+  onScheduleFormChange,
   onAddSchedule,
   onDeleteSchedule,
 }: {
@@ -1016,10 +1118,11 @@ function ScheduleBoard({
   popupOpen: boolean;
   onOpenSchedulePopup: (date: string) => void;
   onCloseSchedulePopup: () => void;
-  scheduleTitle: string;
-  scheduleMemo: string;
-  onScheduleTitleChange: (value: string) => void;
-  onScheduleMemoChange: (value: string) => void;
+  scheduleForm: ScheduleForm;
+  onScheduleFormChange: <K extends keyof ScheduleForm>(
+    key: K,
+    value: ScheduleForm[K]
+  ) => void;
   onAddSchedule: () => void;
   onDeleteSchedule: (eventId: string) => void;
 }) {
@@ -1042,8 +1145,10 @@ function ScheduleBoard({
     const attendance = dayEvents.filter(
       (event) => event.kind === "attendance"
     ).length;
-    const manual = dayEvents.filter((event) => event.kind === "manual").length;
+    const manualEvents = dayEvents.filter((event) => event.kind === "manual");
+    const manual = manualEvents.length;
     const holiday = dayEvents.filter((event) => event.kind === "holiday");
+    const firstManualTitle = manualEvents[0]?.detail.split(" · ")[0] ?? "주요일정";
 
     return [
       holiday.length > 0
@@ -1066,7 +1171,11 @@ function ScheduleBoard({
         ? { key: "attendance", label: `근태 ${attendance}건`, tone: "amber" }
         : null,
       manual > 0
-        ? { key: "manual", label: `주요일정 ${manual}건`, tone: "red" }
+        ? {
+            key: "manual",
+            label: `${firstManualTitle}${manual > 1 ? ` 외 ${manual - 1}` : ""}`,
+            tone: manualEvents[0]?.tone ?? "red",
+          }
         : null,
     ].filter(Boolean) as Array<{
       key: string;
@@ -1081,10 +1190,8 @@ function ScheduleBoard({
         <SchedulePopup
           selectedDate={selectedDate}
           selectedEvents={selectedEvents}
-          scheduleTitle={scheduleTitle}
-          scheduleMemo={scheduleMemo}
-          onScheduleTitleChange={onScheduleTitleChange}
-          onScheduleMemoChange={onScheduleMemoChange}
+          scheduleForm={scheduleForm}
+          onScheduleFormChange={onScheduleFormChange}
           onAddSchedule={onAddSchedule}
           onDeleteSchedule={onDeleteSchedule}
           onClose={onCloseSchedulePopup}
@@ -1311,15 +1418,11 @@ function ScheduleBoard({
             </div>
             <div className="space-y-2">
               <input
-                value={scheduleTitle}
-                onChange={(event) => onScheduleTitleChange(event.target.value)}
+                value={scheduleForm.title}
+                onChange={(event) =>
+                  onScheduleFormChange("title", event.target.value)
+                }
                 placeholder="일정 제목"
-                className="w-full rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500"
-              />
-              <input
-                value={scheduleMemo}
-                onChange={(event) => onScheduleMemoChange(event.target.value)}
-                placeholder="간단 메모"
                 className="w-full rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500"
               />
               <button
@@ -1404,20 +1507,19 @@ function ScheduleBoard({
 function SchedulePopup({
   selectedDate,
   selectedEvents,
-  scheduleTitle,
-  scheduleMemo,
-  onScheduleTitleChange,
-  onScheduleMemoChange,
+  scheduleForm,
+  onScheduleFormChange,
   onAddSchedule,
   onDeleteSchedule,
   onClose,
 }: {
   selectedDate: string;
   selectedEvents: ScheduleEvent[];
-  scheduleTitle: string;
-  scheduleMemo: string;
-  onScheduleTitleChange: (value: string) => void;
-  onScheduleMemoChange: (value: string) => void;
+  scheduleForm: ScheduleForm;
+  onScheduleFormChange: <K extends keyof ScheduleForm>(
+    key: K,
+    value: ScheduleForm[K]
+  ) => void;
   onAddSchedule: () => void;
   onDeleteSchedule: (eventId: string) => void;
   onClose: () => void;
@@ -1455,18 +1557,84 @@ function SchedulePopup({
         <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
           <h4 className="mb-3 text-sm font-bold text-slate-900">일정 입력</h4>
           <div className="space-y-2 p-3">
+            <div className="grid grid-cols-2 gap-2">
+              <label className="text-xs font-bold text-slate-600">
+                시작일
+                <input
+                  type="date"
+                  value={scheduleForm.startDate}
+                  onChange={(event) =>
+                    onScheduleFormChange("startDate", event.target.value)
+                  }
+                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500"
+                />
+              </label>
+              <label className="text-xs font-bold text-slate-600">
+                종료일
+                <input
+                  type="date"
+                  value={scheduleForm.endDate}
+                  min={scheduleForm.startDate}
+                  onChange={(event) =>
+                    onScheduleFormChange("endDate", event.target.value)
+                  }
+                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500"
+                />
+              </label>
+            </div>
             <input
-              value={scheduleTitle}
-              onChange={(event) => onScheduleTitleChange(event.target.value)}
+              value={scheduleForm.title}
+              onChange={(event) =>
+                onScheduleFormChange("title", event.target.value)
+              }
               placeholder="일정 제목"
               className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500"
             />
             <textarea
-              value={scheduleMemo}
-              onChange={(event) => onScheduleMemoChange(event.target.value)}
+              value={scheduleForm.memo}
+              onChange={(event) =>
+                onScheduleFormChange("memo", event.target.value)
+              }
               placeholder="간단 메모"
               className="min-h-28 w-full resize-none rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500"
             />
+            <div className="grid grid-cols-2 gap-2">
+              <label className="text-xs font-bold text-slate-600">
+                색상
+                <select
+                  value={scheduleForm.tone}
+                  onChange={(event) =>
+                    onScheduleFormChange(
+                      "tone",
+                      event.target.value as ScheduleEvent["tone"]
+                    )
+                  }
+                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500"
+                >
+                  {scheduleToneOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="text-xs font-bold text-slate-600">
+                공개범위
+                <select
+                  value={scheduleForm.visibility}
+                  onChange={(event) =>
+                    onScheduleFormChange(
+                      "visibility",
+                      event.target.value as ScheduleVisibility
+                    )
+                  }
+                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500"
+                >
+                  <option value="public">전체공개</option>
+                  <option value="private">나만보기</option>
+                </select>
+              </label>
+            </div>
             <button
               type="button"
               onClick={onAddSchedule}
