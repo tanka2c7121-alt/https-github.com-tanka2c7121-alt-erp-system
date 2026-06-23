@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { MenuItem } from "../../data/menuData";
+import { localDateText } from "../../lib/date";
 import { supabase } from "../../lib/supabase";
 import { imageFilePattern, workPhotoBucket } from "./workPhotoFiles";
 
@@ -37,7 +38,6 @@ export default function PhotoManagementPage({
   const [rows, setRows] = useState<WorkOrder[]>([]);
   const [photoCounts, setPhotoCounts] = useState<Record<number, number>>({});
   const [searchText, setSearchText] = useState("");
-  const [showReleased, setShowReleased] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const loadRows = useCallback(async () => {
@@ -69,7 +69,7 @@ export default function PhotoManagementPage({
     const keyword = searchText.trim();
 
     return rows.filter((row) => {
-      if (!showReleased && row.release_date) return false;
+      if (row.release_date) return false;
       if (!keyword) return true;
 
       const text = [
@@ -82,7 +82,7 @@ export default function PhotoManagementPage({
 
       return text.includes(keyword);
     });
-  }, [rows, searchText, showReleased]);
+  }, [rows, searchText]);
 
   useEffect(() => {
     let cancelled = false;
@@ -155,8 +155,10 @@ export default function PhotoManagementPage({
     });
   };
 
-  const activeCount = rows.filter((row) => !row.release_date).length;
-  const releasedCount = rows.length - activeCount;
+  const activeRows = rows.filter((row) => !row.release_date);
+  const dueTodayCount = activeRows.filter(
+    (row) => row.outbound_date === localDateText()
+  ).length;
 
   return (
     <div className="space-y-5 text-slate-900">
@@ -177,10 +179,9 @@ export default function PhotoManagementPage({
         </button>
       </div>
 
-      <section className="grid grid-cols-3 gap-2 md:gap-3">
-        <SummaryCard title="진행 차량" value={activeCount} tone="blue" />
-        <SummaryCard title="출고 차량" value={releasedCount} tone="slate" />
-        <SummaryCard title="표시 목록" value={filteredRows.length} tone="green" />
+      <section className="grid grid-cols-2 gap-2 md:gap-3">
+        <SummaryCard title="진행 차량" value={activeRows.length} tone="blue" />
+        <SummaryCard title="금일 출고예정" value={dueTodayCount} tone="green" />
       </section>
 
       <section className="rounded-xl border border-slate-200 bg-white p-3 md:p-4">
@@ -192,16 +193,6 @@ export default function PhotoManagementPage({
               placeholder="작명 / 차량번호 / 차종 / 담당자 검색"
               className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 md:w-80"
             />
-
-            <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
-              <input
-                type="checkbox"
-                checked={showReleased}
-                onChange={(event) => setShowReleased(event.target.checked)}
-                className="h-4 w-4"
-              />
-              출고 차량 포함
-            </label>
           </div>
         </div>
 
@@ -217,7 +208,7 @@ export default function PhotoManagementPage({
           <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
             {filteredRows.map((row) => {
               const photoCount = photoCounts[row.id] ?? 0;
-              const isReleased = Boolean(row.release_date);
+              const isDueToday = row.outbound_date === localDateText();
 
               return (
                 <article
@@ -235,20 +226,23 @@ export default function PhotoManagementPage({
                       <div className="absolute right-4 top-4 rounded-full bg-white/90 px-2 py-1 text-xs font-black text-blue-700 shadow-sm">
                         {photoCount}장
                       </div>
-                      {isReleased && (
-                        <div className="absolute left-4 bottom-4 rounded-full bg-slate-900/80 px-2 py-1 text-[11px] font-bold text-white">
-                          출고
+                      {isDueToday && (
+                        <div className="absolute left-4 bottom-4 rounded-full bg-green-700 px-2 py-1 text-[11px] font-bold text-white">
+                          금일 출고
                         </div>
                       )}
                     </div>
 
                     <div className="flex flex-1 flex-col gap-2 p-3">
                       <div>
-                        <h4 className="truncate text-sm font-black text-slate-900">
-                          {row.work_name}
+                        <h4 className="truncate text-lg font-black leading-tight text-slate-950">
+                          {row.car_number || "-"}
                         </h4>
-                        <p className="mt-1 truncate text-xs font-semibold text-slate-600">
-                          {row.car_number || "-"} / {row.car_model || "-"}
+                        <p className="mt-1 truncate text-sm font-bold text-slate-700">
+                          {row.car_model || "-"}
+                        </p>
+                        <p className="mt-1 truncate text-[11px] font-semibold text-slate-400">
+                          {row.work_name}
                         </p>
                       </div>
 
@@ -260,9 +254,9 @@ export default function PhotoManagementPage({
                           </span>
                         </div>
                         <div className="flex justify-between gap-2">
-                          <span>{isReleased ? "출고" : "예정"}</span>
+                          <span>예정</span>
                           <span className="font-semibold text-slate-700">
-                            {row.release_date || row.outbound_date || "-"}
+                            {row.outbound_date || "-"}
                           </span>
                         </div>
                       </div>
@@ -277,15 +271,13 @@ export default function PhotoManagementPage({
                     >
                       열기
                     </button>
-                    {!isReleased && (
-                      <button
-                        type="button"
-                        onClick={() => openWorkPhotos(row, true)}
-                        className="flex-1 border-l border-slate-200 px-2 py-2 text-xs font-bold text-green-700 hover:bg-green-50"
-                      >
-                        카메라
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      onClick={() => openWorkPhotos(row, true)}
+                      className="flex-1 border-l border-slate-200 px-2 py-2 text-xs font-bold text-green-700 hover:bg-green-50"
+                    >
+                      카메라
+                    </button>
                   </div>
                 </article>
               );
