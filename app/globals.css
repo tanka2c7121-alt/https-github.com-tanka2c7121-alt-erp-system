@@ -430,14 +430,15 @@ textarea {
   .settlement-complete-print {
     left: auto !important;
     top: auto !important;
-    width: 190mm !important;
+    width: 186mm !important;
     min-height: auto !important;
-    padding: 4mm !important;
+    padding: 3mm 4mm 4mm !important;
+    margin: 0 auto !important;
     overflow: visible !important;
   }
 
   .settlement-complete-header {
-    padding-right: 40mm !important;
+    padding-right: 36mm !important;
   }
 
   .settlement-complete-print h1 {
@@ -457,10 +458,10 @@ textarea {
   }
 
   .settlement-complete-stamp {
-    right: 4mm !important;
-    top: 5mm !important;
-    width: 42mm !important;
-    height: 26mm !important;
+    right: 3mm !important;
+    top: 3mm !important;
+    width: 38mm !important;
+    height: 24mm !important;
     border-radius: 0 !important;
   }
 }

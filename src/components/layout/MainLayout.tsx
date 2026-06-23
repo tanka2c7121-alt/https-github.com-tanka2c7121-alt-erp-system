@@ -30,6 +30,7 @@ import PendingInsurancePrintPage, {
 import ClosedSettlementManagementPage from "../../modules/factory/ClosedSettlementManagementPage";
 import DeductibleManagementPage from "../../modules/factory/DeductibleManagementPage";
 import PartsCostManagementPage from "../../modules/factory/PartsCostManagementPage";
+import PhotoManagementPage from "../../modules/factory/PhotoManagementPage";
 import EmployeeManagePage from "../../modules/admin/EmployeeManagePage";
 import VehicleCatalogPage from "../../modules/admin/VehicleCatalogPage";
 import EmployeeStatusPage from "../../modules/employee/EmployeeStatusPage";
@@ -636,6 +637,9 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
     }
     if (menu.id === "factory-parts-cost-management") {
       return <PartsCostManagementPage user={user} />;
+    }
+    if (menu.id === "factory-photo-management") {
+      return <PhotoManagementPage onSelectMenu={handleSelectMenu} />;
     }
     if (menu.id === "factory-work-register") {
       return (

@@ -74,6 +74,10 @@ export const menuData: MenuItem[] = [
           },
         ],
       },
+      {
+        id: "factory-photo-management",
+        title: "사진관리",
+      },
     ],
   },
   {
