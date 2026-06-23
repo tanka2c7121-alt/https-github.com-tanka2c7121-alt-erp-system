@@ -63,6 +63,25 @@ const formatRequesterName = (user: LoginUser) => {
   return department ? `${department} / ${user.user_name}` : user.user_name;
 };
 
+const formatDateTime = (value?: string | null) => {
+  if (!value) return "";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+
+  return date.toLocaleString("ko-KR", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+};
+
+const formatCheckDisplay = (name?: string | null, at?: string | null) =>
+  name ? `${name}${at ? ` (${formatDateTime(at)})` : ""}` : "-";
+
 export default function IncidentReportPage({
   user,
   isAdmin,
@@ -507,7 +526,7 @@ function IncidentTable({
               </button>
             </td>
             <td className="border px-2 py-2 text-center">
-              {row.checked_name ?? "-"}
+              {formatCheckDisplay(row.checked_name, row.checked_at)}
             </td>
             <td className="border px-2 py-2">
               <div className="max-w-md whitespace-pre-wrap text-slate-700">
@@ -598,7 +617,7 @@ function MobileIncidentCards({
 
           <div className="mt-3 text-sm text-slate-700">
             <div>작성자: {row.requested_name ?? "-"}</div>
-            <div>확인자: {row.checked_name ?? "-"}</div>
+            <div>확인자: {formatCheckDisplay(row.checked_name, row.checked_at)}</div>
           </div>
 
           <div className="mt-3 whitespace-pre-wrap rounded-lg bg-slate-50 p-3 text-sm text-slate-700">

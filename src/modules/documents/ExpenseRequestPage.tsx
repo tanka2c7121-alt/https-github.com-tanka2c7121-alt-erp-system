@@ -110,6 +110,27 @@ const formatRequesterName = (user: LoginUser) => {
   return department ? `${department} / ${user.user_name}` : user.user_name;
 };
 
+const formatDateTime = (value?: string | null) => {
+  if (!value) return "";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+
+  return date.toLocaleString("ko-KR", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+};
+
+const formatApprovalDisplay = (
+  name?: string | null,
+  at?: string | null
+) => (name ? `${name}${at ? ` (${formatDateTime(at)})` : ""}` : "-");
+
 const expensePendingStatuses: ExpenseRequest["status"][] = [
   "승인대기",
   "부서장 승인대기",
@@ -1477,7 +1498,7 @@ function ExpenseTable({
                     )}
                     {!canApprove(row) && !canEdit(row) && !canDelete(row) && (
                     <span className="text-xs text-slate-400">
-                      {row.approved_name ?? "-"}
+                      {formatApprovalDisplay(row.approved_name, row.approved_at)}
                     </span>
                     )}
                   </div>
@@ -1536,6 +1557,9 @@ function MobileExpenseCards({
                 </div>
                 <div className="text-sm text-slate-500">
                   {row.request_date} / {row.requested_name ?? row.requested_by}
+                </div>
+                <div className="mt-1 text-xs text-slate-500">
+                  승인자: {formatApprovalDisplay(row.approved_name, row.approved_at)}
                 </div>
               </div>
               {row.receipt_url ? (

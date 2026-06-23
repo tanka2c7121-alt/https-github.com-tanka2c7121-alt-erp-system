@@ -96,6 +96,22 @@ const formatRequesterName = (user: LoginUser) => {
   return department ? `${department} / ${user.user_name}` : user.user_name;
 };
 
+const formatDateTime = (value?: string | null) => {
+  if (!value) return "";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+
+  return date.toLocaleString("ko-KR", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+};
+
 const getInitialAttendanceStatus = (
   user: LoginUser
 ): AttendanceStatus => {
@@ -936,7 +952,7 @@ function ApprovalTrail({ row }: { row: AttendanceRequest }) {
       {items.map((item) => (
         <div key={item.label}>
           <span className="font-semibold">{item.label}</span>:{" "}
-          {item.name ? `${item.name} (${item.at?.slice(0, 10) ?? ""})` : "-"}
+          {item.name ? `${item.name} (${formatDateTime(item.at)})` : "-"}
         </div>
       ))}
     </div>
