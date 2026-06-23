@@ -163,6 +163,7 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
   const mobileMenuTitle = mobileMenuParent?.title ?? "업무목록";
   const hideRefreshButton = selectedMenu.id === "dashboard";
   const openWindowMenus = cachedMenus.filter((menu) => menu.id !== "dashboard");
+  const quickActions = [defaultCameraQuickAction, ...quickActionMenus];
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -786,7 +787,7 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
           user={user}
           onLogout={onLogout}
           notifications={notifications}
-          quickActions={[defaultCameraQuickAction, ...quickActionMenus]}
+          quickActions={quickActions}
           onSelectMenu={handleSelectMenu}
         />
 
@@ -875,6 +876,35 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
                   </button>
                 );
               })}
+            </div>
+
+            <div className="border-t border-blue-100/80 bg-white/70 px-2 py-2">
+              <div className="mb-1 text-[10px] font-black uppercase tracking-wide text-blue-500">
+                빠른작업
+              </div>
+              <div className="flex gap-1.5 overflow-x-auto">
+                {quickActions.map((action, index) => (
+                  <button
+                    key={`${action.id}-${index}`}
+                    type="button"
+                    onClick={() =>
+                      handleSelectMenu({
+                        id: action.id,
+                        title: action.title,
+                        data: action.data,
+                      })
+                    }
+                    className={[
+                      "min-h-8 shrink-0 rounded-full border px-3 py-1.5 text-xs font-bold shadow-sm transition",
+                      action.data?.openCamera
+                        ? "border-green-200 bg-green-50 text-green-700 hover:bg-green-100"
+                        : "border-blue-100 bg-white text-slate-800 hover:border-blue-200 hover:bg-blue-50",
+                    ].join(" ")}
+                  >
+                    {action.data?.openCamera ? "카메라" : action.title}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
