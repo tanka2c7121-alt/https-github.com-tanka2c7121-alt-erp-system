@@ -62,7 +62,36 @@ const fetchReceivableRows = useCallback(async () => {
     }
   }
 
-  setPaymentRows(rows);
+  const workNames = Array.from(
+    new Set(rows.map((row) => normalizeText(row.work_name)).filter(Boolean))
+  );
+  const carNumberByWorkName = new Map<string, string>();
+
+  if (workNames.length > 0) {
+    const { data: workOrderRows, error: workOrderError } = await supabase
+      .from("work_orders")
+      .select("work_name, car_number")
+      .in("work_name", workNames);
+
+    if (workOrderError) {
+      alert("미수금 차량번호 조회 실패: " + workOrderError.message);
+      return;
+    }
+
+    (workOrderRows ?? []).forEach((row: any) => {
+      carNumberByWorkName.set(
+        normalizeText(row.work_name),
+        normalizeText(row.car_number)
+      );
+    });
+  }
+
+  setPaymentRows(
+    rows.map((row) => ({
+      ...row,
+      car_number: carNumberByWorkName.get(normalizeText(row.work_name)) ?? "",
+    }))
+  );
 }, []);
 
 const fetchBalanceRows = useCallback(async () => {
@@ -210,6 +239,12 @@ const getReceivableAmount = (row: any) =>
 const getReceivableAccountName = (row: any) =>
   normalizeAccountName(row.payment_method);
 
+const getDailyCashContent = (row: any) =>
+  `${row.payment_type ?? ""} / ${row.payment_detail ?? ""} / ${row.car_number ?? ""}`;
+
+const getLegacyDailyCashContent = (row: any) =>
+  `${row.payment_type ?? ""} / ${row.payment_detail ?? ""} / ${row.work_name ?? ""}`;
+
 const isReceivableAccountRow = (row: any) => {
   const accountName = getReceivableAccountName(row);
 
@@ -318,7 +353,7 @@ const handleReceivableDateSave = async (row: any) => {
     .delete()
     .eq("source_type", "settlement_payment")
     .eq("source_work_name", row.work_name ?? "")
-    .eq("content", `${row.payment_type ?? ""} / ${row.payment_detail ?? ""} / ${row.work_name ?? ""}`);
+    .in("content", [getDailyCashContent(row), getLegacyDailyCashContent(row)]);
 
   if (deleteCashError) {
     savingReceivableIdsRef.current.delete(row.id);
@@ -333,7 +368,7 @@ const handleReceivableDateSave = async (row: any) => {
     account: row.normalized_payment_method,
     type: "수입",
     category: "차량정산",
-    content: `${row.payment_type ?? ""} / ${row.payment_detail ?? ""} / ${row.work_name ?? ""}`,
+    content: getDailyCashContent(row),
     income: row.receivable_amount,
     expense: 0,
     memo: row.work_name ?? "",

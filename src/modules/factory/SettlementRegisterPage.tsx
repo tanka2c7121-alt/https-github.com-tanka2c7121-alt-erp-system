@@ -155,8 +155,10 @@ const getDailyCashEligiblePaymentRows = (rows: PaymentRow[]) =>
       !isPartnerSupportPaymentRow(row)
   );
 
-const getDailyCashContent = (row: PaymentRow, workName: string) =>
-  `${row.paymentType} / ${row.paymentDetail} / ${workName}`;
+const getDailyCashContent = (
+  row: PaymentRow,
+  vehicleIdentifier: string
+) => `${row.paymentType} / ${row.paymentDetail} / ${vehicleIdentifier}`;
 
 export default function SettlementRegisterPage({
   initialWorkName,
@@ -597,7 +599,7 @@ export default function SettlementRegisterPage({
         account: row.method,
         type: "수입",
         category: "차량정산",
-        content: getDailyCashContent(row, targetForm.workName),
+        content: getDailyCashContent(row, targetForm.carNumber),
         income: toNumber(row.amount),
         expense: 0,
         memo: targetForm.workName,
@@ -620,7 +622,7 @@ export default function SettlementRegisterPage({
     );
     const eligibleRows = getDailyCashEligiblePaymentRows(paymentRows);
     const rowsToSync = eligibleRows.filter((row) => {
-      const currentContent = getDailyCashContent(row, targetForm.workName);
+      const currentContent = getDailyCashContent(row, targetForm.carNumber);
 
       return (
         !row.id ||
@@ -629,7 +631,7 @@ export default function SettlementRegisterPage({
       );
     });
     const skippedExistingRows = eligibleRows.filter((row) => {
-      const currentContent = getDailyCashContent(row, targetForm.workName);
+      const currentContent = getDailyCashContent(row, targetForm.carNumber);
 
       return (
         row.id &&
