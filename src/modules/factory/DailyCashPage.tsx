@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { MenuItem } from "../../data/menuData";
-import { localDateText } from "../../lib/date";
+import { addLocalDaysText, localDateText } from "../../lib/date";
 import { fetchAllRows } from "../../lib/fetchAllRows";
 import { supabase } from "../../lib/supabase";
 
@@ -30,6 +30,16 @@ type DailyCashRow = {
 const formatWon = (amount: number) => amount.toLocaleString();
 const isTodayCreatedRow = (row: DailyCashRow) =>
   row.created_on === localDateText();
+const unconfirmedIncomeEditStartDate = () => addLocalDaysText(-6);
+const isUnconfirmedIncome = (row: Pick<DailyCashRow, "type" | "category">) =>
+  row.type === "수입" && row.category === "미확인";
+const canEditDailyCashRow = (row: DailyCashRow) =>
+  isTodayCreatedRow(row) ||
+  Boolean(
+    row.created_on &&
+      isUnconfirmedIncome(row) &&
+      row.created_on >= unconfirmedIncomeEditStartDate()
+  );
 const normalizeAccountName = (value: unknown) => {
   const rawText = String(value ?? "").trim();
   const accountKey = rawText
@@ -445,7 +455,7 @@ export default function DailyCashPage({ onSelectMenu }: DailyCashPageProps) {
                 </tr>
               ) : (
                 filteredRows.map((item) => {
-                  const canEditRow = isTodayCreatedRow(item);
+                  const canEditRow = canEditDailyCashRow(item);
 
                   return (
                     <tr key={item.id} className="hover:bg-blue-50">
@@ -490,7 +500,7 @@ export default function DailyCashPage({ onSelectMenu }: DailyCashPageProps) {
                               title={
                                 canEditRow
                                   ? undefined
-                                  : "입력한 당일 내역만 수정할 수 있습니다."
+                                  : "입력 당일 내역 또는 최근 7일 이내 수입 미확인 내역만 수정할 수 있습니다."
                               }
                               className="rounded border border-blue-300 px-3 py-1 text-xs font-semibold text-blue-600 hover:bg-blue-50 disabled:border-slate-200 disabled:text-slate-400 disabled:hover:bg-white"
                             >

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { localDateText } from "../../lib/date";
+import { addLocalDaysText, localDateText } from "../../lib/date";
 import { supabase } from "../../lib/supabase";
 
 const inputClass =
@@ -13,6 +13,20 @@ const normalizeAccountName = (value: string) =>
   value.trim().toUpperCase().includes("BLUE") || value.includes("블루")
     ? "BLUE POINT"
     : value;
+
+const unconfirmedIncomeEditStartDate = () => addLocalDaysText(-6);
+const isUnconfirmedIncome = (row: Pick<DailyCashRow, "type" | "category">) =>
+  row.type === "수입" && row.category === "미확인";
+const canEditDailyCashRow = (row?: DailyCashRow) => {
+  if (!row) return true;
+  if (row.created_on === localDateText()) return true;
+
+  return Boolean(
+    row.created_on &&
+      isUnconfirmedIncome(row) &&
+      row.created_on >= unconfirmedIncomeEditStartDate()
+  );
+};
 
 type FormState = {
   date: string;
@@ -100,8 +114,7 @@ export default function DailyCashRegisterPage({
   const saveInProgressRef = useRef(false);
 
   const isEditMode = Boolean(editData);
-  const canEditCurrentRow =
-    !editData || editData.created_on === localDateText();
+  const canEditCurrentRow = canEditDailyCashRow(editData);
 
   useEffect(() => {
     const loadCategoryOptions = async () => {
@@ -199,7 +212,7 @@ export default function DailyCashRegisterPage({
 
     try {
     if (editData && !canEditCurrentRow) {
-      alert("입력한 당일 내역만 수정할 수 있습니다.");
+      alert("입력 당일 내역 또는 최근 7일 이내 수입 미확인 내역만 수정할 수 있습니다.");
       return;
     }
 
@@ -238,17 +251,30 @@ expense:
       memo: form.memo,
     };
 
-    const saveResult = editData
-      ? await supabase
-          .from("daily_cash")
-          .update(payload)
-          .eq("id", editData.id)
-          .eq("created_on", localDateText())
-          .select("id")
-      : await supabase.from("daily_cash").insert({
-          ...payload,
-          created_on: localDateText(),
-        });
+    let saveResult;
+
+    if (editData) {
+      let updateQuery = supabase
+        .from("daily_cash")
+        .update(payload)
+        .eq("id", editData.id);
+
+      if (isUnconfirmedIncome(editData)) {
+        updateQuery = updateQuery
+          .eq("type", "수입")
+          .eq("category", "미확인")
+          .gte("created_on", unconfirmedIncomeEditStartDate());
+      } else {
+        updateQuery = updateQuery.eq("created_on", localDateText());
+      }
+
+      saveResult = await updateQuery.select("id");
+    } else {
+      saveResult = await supabase.from("daily_cash").insert({
+        ...payload,
+        created_on: localDateText(),
+      });
+    }
     const { error } = saveResult;
 
     if (error) {
@@ -257,7 +283,7 @@ expense:
     }
 
     if (editData && (!saveResult.data || saveResult.data.length === 0)) {
-      alert("입력한 당일 내역만 수정할 수 있습니다.");
+      alert("입력 당일 내역 또는 최근 7일 이내 수입 미확인 내역만 수정할 수 있습니다.");
       return;
     }
 
@@ -409,7 +435,7 @@ expense:
           title={
             canEditCurrentRow
               ? undefined
-              : "입력한 당일 내역만 수정할 수 있습니다."
+              : "입력 당일 내역 또는 최근 7일 이내 수입 미확인 내역만 수정할 수 있습니다."
           }
           className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:bg-slate-400"
         >
