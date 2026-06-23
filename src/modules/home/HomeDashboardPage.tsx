@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import type { PointerEvent as ReactPointerEvent } from "react";
 import { localDateText } from "../../lib/date";
 import { supabase } from "../../lib/supabase";
 import { useRealtimeRefresh } from "../../lib/useRealtimeRefresh";
@@ -91,6 +92,13 @@ type ScheduleForm = {
   visibility: ScheduleVisibility;
 };
 
+type NoticeFrame = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
 const todayText = localDateText;
 const holidayStorageKey = (year: string) => `erpKoreanHolidays:${year}`;
 const calendarWeekDays = ["일", "월", "화", "수", "목", "금", "토"];
@@ -113,6 +121,23 @@ const defaultScheduleForm = (date: string): ScheduleForm => ({
   tone: "red",
   visibility: "public",
 });
+const clampNumber = (value: number, min: number, max: number) =>
+  Math.min(Math.max(value, min), max);
+const getInitialNoticeFrame = (): NoticeFrame => {
+  if (typeof window === "undefined") {
+    return { x: 0, y: 0, width: 520, height: 460 };
+  }
+
+  const width = Math.min(560, window.innerWidth - 32);
+  const height = Math.min(500, window.innerHeight - 32);
+
+  return {
+    x: Math.max(16, (window.innerWidth - width) / 2),
+    y: Math.max(16, (window.innerHeight - height) / 2),
+    width,
+    height,
+  };
+};
 const dismissedNoticeKey = (noticeId: number) =>
   `erpDismissedHomeNotice:${noticeId}:${todayText()}`;
 const realtimeTables = [
@@ -888,10 +913,92 @@ function NoticePopup({
   onClose: () => void;
   onCloseToday: () => void;
 }) {
+  const [frame, setFrame] = useState<NoticeFrame>(getInitialNoticeFrame);
+  const [interaction, setInteraction] = useState<{
+    mode: "move" | "resize";
+    pointerId: number;
+    startX: number;
+    startY: number;
+    startFrame: NoticeFrame;
+  } | null>(null);
+
+  const clampFrame = (next: NoticeFrame) => {
+    const maxWidth = Math.max(320, window.innerWidth - 32);
+    const maxHeight = Math.max(320, window.innerHeight - 32);
+    const width = clampNumber(next.width, 320, maxWidth);
+    const height = clampNumber(next.height, 320, maxHeight);
+
+    return {
+      width,
+      height,
+      x: clampNumber(next.x, 16, Math.max(16, window.innerWidth - width - 16)),
+      y: clampNumber(next.y, 16, Math.max(16, window.innerHeight - height - 16)),
+    };
+  };
+
+  const startInteraction = (
+    mode: "move" | "resize",
+    event: ReactPointerEvent<HTMLElement>
+  ) => {
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setInteraction({
+      mode,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      startFrame: frame,
+    });
+  };
+
+  const moveInteraction = (event: ReactPointerEvent<HTMLElement>) => {
+    if (!interaction || interaction.pointerId !== event.pointerId) return;
+
+    const dx = event.clientX - interaction.startX;
+    const dy = event.clientY - interaction.startY;
+
+    setFrame(
+      clampFrame(
+        interaction.mode === "move"
+          ? {
+              ...interaction.startFrame,
+              x: interaction.startFrame.x + dx,
+              y: interaction.startFrame.y + dy,
+            }
+          : {
+              ...interaction.startFrame,
+              width: interaction.startFrame.width + dx,
+              height: interaction.startFrame.height + dy,
+            }
+      )
+    );
+  };
+
+  const stopInteraction = (event: ReactPointerEvent<HTMLElement>) => {
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    setInteraction(null);
+  };
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4">
-      <div className="w-full max-w-lg overflow-hidden rounded-2xl border border-white/70 bg-white shadow-2xl">
-        <div className="flex items-start justify-between gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3">
+    <div className="fixed inset-0 z-50 bg-slate-950/50">
+      <div
+        className="fixed flex min-h-80 min-w-80 flex-col overflow-hidden rounded-2xl border border-white/70 bg-white shadow-2xl"
+        style={{
+          left: frame.x,
+          top: frame.y,
+          width: frame.width,
+          height: frame.height,
+        }}
+      >
+        <div
+          className="flex cursor-move touch-none select-none items-start justify-between gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3"
+          onPointerDown={(event) => startInteraction("move", event)}
+          onPointerMove={moveInteraction}
+          onPointerUp={stopInteraction}
+          onPointerCancel={stopInteraction}
+        >
           <div>
             <p className="text-xs font-bold text-blue-600">업무 공지</p>
             <h3 className="mt-1 text-xl font-bold text-slate-900">
@@ -900,13 +1007,14 @@ function NoticePopup({
           </div>
           <button
             type="button"
+            onPointerDown={(event) => event.stopPropagation()}
             onClick={onClose}
             className="rounded-lg border border-slate-300 bg-white px-3 py-1 text-sm font-semibold text-slate-600 hover:bg-slate-50"
           >
             닫기
           </button>
         </div>
-        <div className="m-4 max-h-[50vh] whitespace-pre-wrap overflow-y-auto rounded-xl border border-slate-200 bg-white p-4 text-sm leading-6 text-slate-700">
+        <div className="m-4 min-h-0 flex-1 whitespace-pre-wrap overflow-y-auto rounded-xl border border-slate-200 bg-white p-4 text-sm leading-6 text-slate-700">
           {notice.content}
         </div>
         <button
@@ -922,6 +1030,18 @@ function NoticePopup({
           className="mx-4 mb-4 w-[calc(100%-2rem)] rounded-lg bg-blue-600 py-3 text-sm font-semibold text-white hover:bg-blue-700"
         >
           확인
+        </button>
+        <button
+          type="button"
+          aria-label="공지 팝업 크기 조절"
+          className="absolute bottom-1 right-1 h-7 w-7 cursor-nwse-resize touch-none rounded-br-xl text-slate-400 hover:text-slate-700"
+          onPointerDown={(event) => startInteraction("resize", event)}
+          onPointerMove={moveInteraction}
+          onPointerUp={stopInteraction}
+          onPointerCancel={stopInteraction}
+        >
+          <span className="absolute bottom-2 right-2 h-3 w-3 border-b-2 border-r-2 border-current" />
+          <span className="absolute bottom-3.5 right-3.5 h-2 w-2 border-b-2 border-r-2 border-current" />
         </button>
       </div>
     </div>
