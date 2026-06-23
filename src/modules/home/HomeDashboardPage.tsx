@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { localDateText } from "../../lib/date";
 import { supabase } from "../../lib/supabase";
@@ -303,12 +303,11 @@ export default function HomeDashboardPage({
   const [scheduleForm, setScheduleForm] = useState<ScheduleForm>(
     defaultScheduleForm(todayText())
   );
+  const noticePopupClosedIdRef = useRef<number | null>(null);
   const scheduleUserId = user?.user_id ?? null;
   const scheduleUserName = userName ?? user?.user_name ?? null;
 
   const loadDashboard = useCallback(async () => {
-    setLoading(true);
-
     const scheduleQuery = supabase
       .from("home_schedules")
       .select("*")
@@ -365,11 +364,12 @@ export default function HomeDashboardPage({
       const dismissedToday =
         typeof window !== "undefined" &&
         localStorage.getItem(dismissedNoticeKey(notice.id)) === "1";
+      const closedThisSession = noticePopupClosedIdRef.current === notice.id;
 
       setHomeNotice(notice);
       setNoticeTitle(notice.title);
       setNoticeContent(notice.content);
-      setNoticePopupOpen(!dismissedToday);
+      setNoticePopupOpen(!dismissedToday && !closedThisSession);
     } else {
       setHomeNotice(null);
     }
@@ -803,8 +803,12 @@ export default function HomeDashboardPage({
       {noticePopupOpen && homeNotice && (
         <NoticePopup
           notice={homeNotice}
-          onClose={() => setNoticePopupOpen(false)}
+          onClose={() => {
+            noticePopupClosedIdRef.current = homeNotice.id;
+            setNoticePopupOpen(false);
+          }}
           onCloseToday={() => {
+            noticePopupClosedIdRef.current = homeNotice.id;
             localStorage.setItem(dismissedNoticeKey(homeNotice.id), "1");
             setNoticePopupOpen(false);
           }}
