@@ -121,6 +121,13 @@ const defaultScheduleForm = (date: string): ScheduleForm => ({
   tone: "red",
   visibility: "public",
 });
+const isMissingHomeSchedulesTableError = (error: { code?: string; message?: string }) =>
+  error.code === "42P01" ||
+  error.code === "PGRST205" ||
+  Boolean(
+    error.message?.includes("home_schedules") &&
+      error.message.includes("schema cache")
+  );
 const clampNumber = (value: number, min: number, max: number) =>
   Math.min(Math.max(value, min), max);
 const getInitialFloatingFrame = (preferredWidth: number, preferredHeight: number): FloatingFrame => {
@@ -608,8 +615,16 @@ export default function HomeDashboardPage({
     });
 
     if (error) {
+      if (isMissingHomeSchedulesTableError(error)) {
+        alert(
+          "일정 저장 실패: home_schedules 테이블이 DB에 없습니다. supabase_home_schedules.sql을 먼저 적용해주세요.\n" +
+            error.message
+        );
+        return;
+      }
+
       alert(
-        "일정 저장 실패: home_schedules 테이블이 필요합니다. SQL 파일을 먼저 적용해주세요.\n" +
+        "일정 저장 실패: " +
           error.message
       );
       return;
