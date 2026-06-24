@@ -21,6 +21,8 @@ type WorkOrder = {
   manager_name: string | null;
 };
 
+type ProgressTone = "red" | "orange" | "blue" | "green" | "emerald";
+
 const getWorkPhotoFolder = (workName: string) =>
   workName.trim().replace(/[^0-9A-Za-z가-힣_-]/g, "_");
 
@@ -44,6 +46,92 @@ const comparePhotoRows = (today: string) => (left: WorkOrder, right: WorkOrder) 
   }
 
   return right.id - left.id;
+};
+
+const progressToneClasses: Record<
+  ProgressTone,
+  { bar: string; bg: string; text: string }
+> = {
+  red: {
+    bar: "bg-red-500",
+    bg: "bg-red-50",
+    text: "text-red-700",
+  },
+  orange: {
+    bar: "bg-orange-500",
+    bg: "bg-orange-50",
+    text: "text-orange-700",
+  },
+  blue: {
+    bar: "bg-blue-500",
+    bg: "bg-blue-50",
+    text: "text-blue-700",
+  },
+  green: {
+    bar: "bg-green-500",
+    bg: "bg-green-50",
+    text: "text-green-700",
+  },
+  emerald: {
+    bar: "bg-emerald-600",
+    bg: "bg-emerald-50",
+    text: "text-emerald-700",
+  },
+};
+
+const progressStages = [
+  { from: 0, to: 0, label: "입고사진", min: 0, max: 0 },
+  { from: 1, to: 5, label: "탈거", min: 1, max: 15 },
+  { from: 6, to: 10, label: "판금", min: 16, max: 39 },
+  { from: 11, to: 15, label: "퍼티/샌딩", min: 40, max: 55 },
+  { from: 16, to: 20, label: "마스킹", min: 56, max: 65 },
+  { from: 21, to: 25, label: "도장", min: 66, max: 70 },
+  { from: 26, to: 30, label: "조립", min: 71, max: 80 },
+  { from: 31, to: 35, label: "광택/세차", min: 81, max: 99 },
+] as const;
+
+const interpolateProgress = (
+  photoCount: number,
+  stage: (typeof progressStages)[number]
+) => {
+  if (stage.min === stage.max) return stage.max;
+
+  const stagePhotoCount = photoCount - stage.from + 1;
+  const stageSlots = stage.to - stage.from + 1;
+
+  return Math.round(
+    stage.min + ((stagePhotoCount - 1) / (stageSlots - 1)) * (stage.max - stage.min)
+  );
+};
+
+const getProgressTone = (percent: number): ProgressTone => {
+  if (percent >= 100) return "emerald";
+  if (percent >= 71) return "green";
+  if (percent >= 40) return "blue";
+  if (percent >= 16) return "orange";
+  return "red";
+};
+
+const getPhotoProgress = (photoCount: number) => {
+  if (photoCount >= 36) {
+    return {
+      label: "완료사진",
+      percent: 100,
+      tone: "emerald" as ProgressTone,
+    };
+  }
+
+  const stage =
+    progressStages.find(
+      (item) => photoCount >= item.from && photoCount <= item.to
+    ) ?? progressStages[0];
+  const percent = interpolateProgress(photoCount, stage);
+
+  return {
+    label: stage.label,
+    percent,
+    tone: getProgressTone(percent),
+  };
 };
 
 const shouldUseNasPhotoStorage = () => {
@@ -240,6 +328,10 @@ export default function PhotoManagementPage({
             {filteredRows.map((row) => {
               const photoCount = photoCounts[row.id] ?? 0;
               const isDueToday = isTodayOutboundRow(row, today);
+              const progress = getPhotoProgress(photoCount);
+              const progressTone = progressToneClasses[
+                isDueToday && progress.percent < 80 ? "red" : progress.tone
+              ];
 
               return (
                 <article
@@ -251,15 +343,26 @@ export default function PhotoManagementPage({
                     onClick={() => openWorkPhotos(row)}
                     className="flex min-h-48 w-full flex-col p-0 text-left"
                   >
-                    <div className="relative h-20 bg-blue-50">
-                      <div className="absolute left-3 top-3 h-4 w-20 rounded-t-md bg-blue-200" />
-                      <div className="absolute inset-x-3 bottom-3 top-6 rounded-md rounded-tl-sm bg-blue-400 shadow-inner transition group-hover:bg-blue-500" />
-                      <div className="absolute right-4 top-4 rounded-full bg-white/90 px-2 py-1 text-xs font-black text-blue-700 shadow-sm">
+                    <div className={`relative h-20 ${progressTone.bg}`}>
+                      <div className="absolute left-3 top-3 h-4 w-20 rounded-t-md bg-white/70 shadow-sm" />
+                      <div className="absolute inset-x-3 bottom-3 top-6 overflow-hidden rounded-md rounded-tl-sm bg-white/75 shadow-inner">
+                        <div
+                          className={`h-full ${progressTone.bar} transition-all group-hover:brightness-95`}
+                          style={{ width: `${progress.percent}%` }}
+                        />
+                      </div>
+                      <div className="absolute inset-x-5 top-8 flex min-w-0 items-center justify-between gap-2 text-xs font-black text-slate-900">
+                        <span className="min-w-0 truncate">{progress.label}</span>
+                        <span className="shrink-0">{progress.percent}%</span>
+                      </div>
+                      <div
+                        className={`absolute right-4 top-4 rounded-full bg-white/90 px-2 py-1 text-xs font-black ${progressTone.text} shadow-sm`}
+                      >
                         {photoCount}장
                       </div>
                       {isDueToday && (
-                        <div className="absolute left-4 bottom-4 rounded-full bg-green-700 px-2 py-1 text-[11px] font-bold text-white">
-                          금일 출고
+                        <div className="absolute left-4 bottom-4 rounded-full bg-slate-950 px-2 py-1 text-[11px] font-bold text-white">
+                          {progress.percent < 80 ? "출고임박" : "금일 출고"}
                         </div>
                       )}
                     </div>
