@@ -134,6 +134,28 @@ export default function LoginPage({ onLogin }: Props) {
     setRememberId(true);
   }, []);
 
+  useEffect(() => {
+    const updateVisualHeight = () => {
+      const visualHeight = window.visualViewport?.height ?? window.innerHeight;
+      document.documentElement.style.setProperty(
+        "--login-visual-height",
+        `${visualHeight}px`
+      );
+    };
+
+    updateVisualHeight();
+    window.visualViewport?.addEventListener("resize", updateVisualHeight);
+    window.visualViewport?.addEventListener("scroll", updateVisualHeight);
+    window.addEventListener("resize", updateVisualHeight);
+
+    return () => {
+      window.visualViewport?.removeEventListener("resize", updateVisualHeight);
+      window.visualViewport?.removeEventListener("scroll", updateVisualHeight);
+      window.removeEventListener("resize", updateVisualHeight);
+      document.documentElement.style.removeProperty("--login-visual-height");
+    };
+  }, []);
+
   async function handleLogin() {
     const normalizedUserId = userId.trim().toLowerCase();
 
@@ -467,13 +489,16 @@ export default function LoginPage({ onLogin }: Props) {
 
           @media (max-width: 760px) {
             .login-showcase {
-              min-height: 100svh;
+              min-height: var(--login-visual-height, 100svh);
+              overflow-y: auto;
             }
 
             .login-auth-shell {
-              min-height: 100svh;
-              padding-top: clamp(28px, 7svh, 58px);
-              padding-bottom: 24px;
+              min-height: var(--login-visual-height, 100svh);
+              justify-content: center;
+              padding-top: max(18px, env(safe-area-inset-top));
+              padding-bottom: max(18px, env(safe-area-inset-bottom));
+              transition: min-height 180ms ease, padding 180ms ease;
             }
 
             .logo-animation-stage {
