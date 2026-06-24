@@ -24,6 +24,28 @@ type WorkOrder = {
 const getWorkPhotoFolder = (workName: string) =>
   workName.trim().replace(/[^0-9A-Za-z가-힣_-]/g, "_");
 
+const getPhotoSortDate = (row: WorkOrder) =>
+  row.release_date || row.outbound_date || "";
+const isTodayOutboundRow = (row: WorkOrder, today: string) =>
+  row.release_date === today || (!row.release_date && row.outbound_date === today);
+const comparePhotoRows = (today: string) => (left: WorkOrder, right: WorkOrder) => {
+  const leftToday = isTodayOutboundRow(left, today);
+  const rightToday = isTodayOutboundRow(right, today);
+
+  if (leftToday !== rightToday) return leftToday ? -1 : 1;
+
+  const leftDate = getPhotoSortDate(left);
+  const rightDate = getPhotoSortDate(right);
+
+  if (leftDate !== rightDate) {
+    if (!leftDate) return 1;
+    if (!rightDate) return -1;
+    return leftDate.localeCompare(rightDate);
+  }
+
+  return right.id - left.id;
+};
+
 const shouldUseNasPhotoStorage = () => {
   if (typeof window === "undefined") return false;
 
@@ -42,14 +64,17 @@ export default function PhotoManagementPage({
 
   const loadRows = useCallback(async () => {
     setLoading(true);
+    const today = localDateText();
 
     const { data, error } = await supabase
       .from("work_orders")
       .select(
         "id, work_name, car_number, car_model, inbound_date, outbound_date, release_date, manager_name"
       )
+      .or(`release_date.is.null,release_date.eq.${today}`)
+      .order("outbound_date", { ascending: true })
       .order("id", { ascending: false })
-      .limit(300);
+      .limit(500);
 
     setLoading(false);
 
@@ -67,21 +92,26 @@ export default function PhotoManagementPage({
 
   const filteredRows = useMemo(() => {
     const keyword = searchText.trim();
+    const today = localDateText();
 
-    return rows.filter((row) => {
-      if (row.release_date) return false;
-      if (!keyword) return true;
+    return rows
+      .filter((row) => {
+        if (row.release_date && row.release_date !== today) return false;
+        if (!keyword) return true;
 
-      const text = [
-        row.work_name,
-        row.car_number,
-        row.car_model,
-        row.manager_name ?? "",
-        row.inbound_date,
-      ].join(" ");
+        const text = [
+          row.work_name,
+          row.car_number,
+          row.car_model,
+          row.manager_name ?? "",
+          row.inbound_date,
+          row.outbound_date ?? "",
+          row.release_date ?? "",
+        ].join(" ");
 
-      return text.includes(keyword);
-    });
+        return text.includes(keyword);
+      })
+      .sort(comparePhotoRows(today));
   }, [rows, searchText]);
 
   useEffect(() => {
@@ -155,9 +185,10 @@ export default function PhotoManagementPage({
     });
   };
 
+  const today = localDateText();
   const activeRows = rows.filter((row) => !row.release_date);
-  const dueTodayCount = activeRows.filter(
-    (row) => row.outbound_date === localDateText()
+  const dueTodayCount = rows.filter((row) =>
+    isTodayOutboundRow(row, today)
   ).length;
 
   return (
@@ -208,7 +239,7 @@ export default function PhotoManagementPage({
           <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
             {filteredRows.map((row) => {
               const photoCount = photoCounts[row.id] ?? 0;
-              const isDueToday = row.outbound_date === localDateText();
+              const isDueToday = isTodayOutboundRow(row, today);
 
               return (
                 <article
