@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { createPortal } from "react-dom";
 import type { MenuItem } from "../../data/menuData";
 import { localDateText } from "../../lib/date";
 import { supabase } from "../../lib/supabase";
@@ -56,7 +55,6 @@ export default function SalesDashboardPage({
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [selectedMonth, setSelectedMonth] = useState(currentMonth);
   const [isLoading, setIsLoading] = useState(false);
-  const [printPortalRoot, setPrintPortalRoot] = useState<HTMLElement | null>(null);
 
   const loadRows = useCallback(async () => {
     setIsLoading(true);
@@ -148,17 +146,6 @@ export default function SalesDashboardPage({
   useEffect(() => {
     void loadRows();
   }, [loadRows]);
-
-  useEffect(() => {
-    const root = document.createElement("div");
-    root.className = "sales-print-portal";
-    document.body.appendChild(root);
-    setPrintPortalRoot(root);
-
-    return () => {
-      root.remove();
-    };
-  }, []);
 
   const totals = useMemo(() => {
     const result = {
@@ -265,13 +252,6 @@ export default function SalesDashboardPage({
             })}
           </select>
 
-          <button
-            type="button"
-            onClick={() => window.print()}
-            className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
-          >
-            출력
-          </button>
         </div>
       </div>
 
@@ -364,31 +344,6 @@ export default function SalesDashboardPage({
         />
       </section>
 
-      {printPortalRoot
-        ? createPortal(
-            <section className="print-only sales-print-sheet mx-auto bg-white text-black">
-        <div className="mx-auto min-h-[283mm] w-[196mm] px-[3mm] pb-[4mm] pt-[2mm]">
-          <div className="mb-2 text-center">
-            <h1 className="text-2xl font-bold">매출현황 요약</h1>
-            <p className="mt-1 text-xs">
-              조회기간: {selectedYear}년{" "}
-              {selectedMonth ? `${Number(selectedMonth)}월` : "전체"}
-            </p>
-          </div>
-
-          <table className="mb-3 w-full border-collapse text-sm">
-            <tbody>
-              <PrintSummaryRow label="총매출" value={totals.total} />
-              <PrintSummaryRow label="보험매출" value={totals.insurance} />
-              <PrintSummaryRow label="캐피탈매출" value={totals.capital} />
-              <PrintSummaryRow label="일반매출" value={totals.general} />
-            </tbody>
-          </table>
-        </div>
-            </section>,
-            printPortalRoot
-          )
-        : null}
     </div>
   );
 }
@@ -482,19 +437,6 @@ function RevenueGroupChart({
         </div>
       )}
     </div>
-  );
-}
-
-function PrintSummaryRow({ label, value }: { label: string; value: number }) {
-  return (
-    <tr>
-      <th className="border border-slate-400 bg-slate-100 px-3 py-2 text-left">
-        {label}
-      </th>
-      <td className="border border-slate-400 px-3 py-2 text-right font-bold">
-        {formatWon(value)}원
-      </td>
-    </tr>
   );
 }
 

@@ -19,6 +19,33 @@ create table if not exists public.home_schedules (
   )
 );
 
+alter table public.home_schedules enable row level security;
+
+drop policy if exists "home_schedules_select" on public.home_schedules;
+create policy "home_schedules_select"
+on public.home_schedules
+for select
+using (true);
+
+drop policy if exists "home_schedules_insert" on public.home_schedules;
+create policy "home_schedules_insert"
+on public.home_schedules
+for insert
+with check (true);
+
+drop policy if exists "home_schedules_update" on public.home_schedules;
+create policy "home_schedules_update"
+on public.home_schedules
+for update
+using (true)
+with check (true);
+
+drop policy if exists "home_schedules_delete" on public.home_schedules;
+create policy "home_schedules_delete"
+on public.home_schedules
+for delete
+using (true);
+
 create or replace function public.set_home_schedules_updated_at()
 returns trigger
 language plpgsql
