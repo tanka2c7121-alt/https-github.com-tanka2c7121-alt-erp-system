@@ -204,6 +204,35 @@ const formatCashWorkflowError = (error: any) =>
     ? cashWorkflowSetupMessage
     : String(error?.message ?? error ?? "알 수 없는 오류");
 
+const omitCashWorkflowColumns = <T extends Record<string, any>>(payload: T) => {
+  const legacyPayload = { ...payload };
+
+  delete legacyPayload.source_detail_id;
+  delete legacyPayload.source_key;
+  delete legacyPayload.ledger_effective;
+  delete legacyPayload.approval_status;
+  delete legacyPayload.correction_note;
+
+  return legacyPayload;
+};
+
+const omitSettlementRefundColumns = <T extends Record<string, any>>(payload: T) => {
+  const legacyPayload = { ...payload };
+
+  delete legacyPayload.refund_requested;
+  delete legacyPayload.refund_status;
+  delete legacyPayload.refund_requested_at;
+  delete legacyPayload.refund_requested_by;
+  delete legacyPayload.refund_requested_name;
+  delete legacyPayload.refund_approved_at;
+  delete legacyPayload.refund_approved_by;
+  delete legacyPayload.refund_approved_name;
+  delete legacyPayload.refund_daily_cash_id;
+  delete legacyPayload.refund_reason;
+
+  return legacyPayload;
+};
+
 export default function SettlementRegisterPage({
   initialWorkName,
   initialDailyCashLink,
@@ -697,7 +726,7 @@ export default function SettlementRegisterPage({
           refund_reason: row.refundRequested ? row.refundReason || null : null,
         };
 
-      const saveResult = row.id
+      let saveResult = row.id
         ? await supabase
             .from("settlement_payments")
             .update(payload)
@@ -709,6 +738,22 @@ export default function SettlementRegisterPage({
             .insert(payload)
             .select("id, refund_status")
             .maybeSingle();
+
+      if (saveResult.error && isCashWorkflowSetupError(saveResult.error)) {
+        const legacyPayload = omitSettlementRefundColumns(payload);
+        saveResult = row.id
+          ? await supabase
+              .from("settlement_payments")
+              .update(legacyPayload)
+              .eq("id", row.id)
+              .select("id")
+              .maybeSingle()
+          : await supabase
+              .from("settlement_payments")
+              .insert(legacyPayload)
+              .select("id")
+              .maybeSingle();
+      }
 
       if (saveResult.error) {
         return { error: saveResult.error, rows: savedRows };
@@ -851,11 +896,27 @@ export default function SettlementRegisterPage({
       .eq("source_work_name", targetForm.workName)
       .eq("category", "차량정산");
 
+    let existingRows: any[] = existingCashRows ?? [];
+
     if (existingCashError) {
-      return { error: existingCashError, requiresApproval: false };
+      if (!isCashWorkflowSetupError(existingCashError)) {
+        return { error: existingCashError, requiresApproval: false };
+      }
+
+      const { data: legacyRows, error: legacyError } = await supabase
+        .from("daily_cash")
+        .select("id, created_on, date, account, content, income, expense, memo")
+        .eq("source_type", "settlement_payment")
+        .eq("source_work_name", targetForm.workName)
+        .eq("category", "차량정산");
+
+      if (legacyError) {
+        return { error: legacyError, requiresApproval: false };
+      }
+
+      existingRows = legacyRows ?? [];
     }
 
-    const existingRows = existingCashRows ?? [];
     const eligibleRows = getDailyCashEligiblePaymentRows(paymentRows);
     const usedExistingIds = new Set<number>();
 
@@ -1005,6 +1066,7 @@ export default function SettlementRegisterPage({
   };
 
   const saveDailyCashRows = async (targetForm = form, targetPaymentRows = paymentRows) => {
+    let supportsCashWorkflowColumns = true;
     const { data: existingCashRows, error: existingCashError } = await supabase
       .from("daily_cash")
       .select("id, source_key, content")
@@ -1012,9 +1074,23 @@ export default function SettlementRegisterPage({
       .eq("source_work_name", targetForm.workName)
       .eq("category", "차량정산");
 
-    if (existingCashError) return existingCashError;
+    let existingRows: any[] = existingCashRows ?? [];
 
-    const existingRows = existingCashRows ?? [];
+    if (existingCashError) {
+      if (!isCashWorkflowSetupError(existingCashError)) return existingCashError;
+
+      supportsCashWorkflowColumns = false;
+      const legacyResult = await supabase
+        .from("daily_cash")
+        .select("id, content")
+        .eq("source_type", "settlement_payment")
+        .eq("source_work_name", targetForm.workName)
+        .eq("category", "차량정산");
+
+      if (legacyResult.error) return legacyResult.error;
+      existingRows = legacyResult.data ?? [];
+    }
+
     const eligibleRows = getDailyCashEligiblePaymentRows(targetPaymentRows);
     const usedExistingIds = new Set<number>();
     const insertRows = [];
@@ -1048,7 +1124,11 @@ export default function SettlementRegisterPage({
           };
           const { error: linkError } = await supabase
             .from("daily_cash")
-            .update(updatePayload)
+            .update(
+              supportsCashWorkflowColumns
+                ? updatePayload
+                : omitCashWorkflowColumns(updatePayload)
+            )
             .eq("id", row.sourceDailyCashId);
 
           if (linkError) return linkError;
@@ -1060,7 +1140,9 @@ export default function SettlementRegisterPage({
         }
 
         if (!row.sourceDailyCashId) {
-          insertRows.push(payload);
+          insertRows.push(
+            supportsCashWorkflowColumns ? payload : omitCashWorkflowColumns(payload)
+          );
         }
         continue;
       }
@@ -1084,7 +1166,11 @@ export default function SettlementRegisterPage({
       };
       const { error: updateError } = await supabase
         .from("daily_cash")
-        .update(updatePayload)
+        .update(
+          supportsCashWorkflowColumns
+            ? updatePayload
+            : omitCashWorkflowColumns(updatePayload)
+        )
         .eq("id", matchingCashRow.id);
 
       if (updateError) return updateError;

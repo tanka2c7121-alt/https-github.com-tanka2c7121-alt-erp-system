@@ -37,6 +37,8 @@ const tables = [
   "work_orders",
 ];
 
+const optionalTables = new Set(["cash_change_requests"]);
+
 const pageSize = 1000;
 
 const supabaseAuthPassword = (password) =>
@@ -90,6 +92,19 @@ async function fetchAll(client, tableName) {
       .range(from, from + pageSize - 1);
 
     if (error) {
+      if (optionalTables.has(tableName)) {
+        const message = String(error.message ?? "").toLowerCase();
+
+        if (
+          message.includes("does not exist") ||
+          message.includes("schema cache") ||
+          message.includes("could not find")
+        ) {
+          console.warn(`Skipping optional table ${tableName}: ${error.message}`);
+          return null;
+        }
+      }
+
       throw new Error(`${tableName}: ${error.message}`);
     }
 
@@ -154,6 +169,7 @@ async function main() {
   for (const tableName of tables) {
     console.log(`Exporting ${tableName}...`);
     const rows = await fetchAll(client, tableName);
+    if (rows === null) continue;
     const columns = Array.from(
       rows.reduce((set, row) => {
         Object.keys(row).forEach((key) => set.add(key));

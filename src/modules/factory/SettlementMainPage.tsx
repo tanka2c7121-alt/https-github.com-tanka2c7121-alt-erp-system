@@ -14,6 +14,22 @@ const realtimeTables = [
   { table: "work_orders" },
 ];
 
+const isCashWorkflowSetupError = (error: any) => {
+  const message = String(error?.message ?? "").toLowerCase();
+  const code = String(error?.code ?? "");
+
+  return (
+    code === "42P01" ||
+    code === "42703" ||
+    message.includes("source_key") ||
+    message.includes("source_detail_id") ||
+    message.includes("ledger_effective") ||
+    message.includes("approval_status") ||
+    message.includes("does not exist") ||
+    message.includes("schema cache")
+  );
+};
+
 
 export default function SettlementMainPage({
   onSelectMenu,
@@ -350,13 +366,26 @@ const handleReceivableDateSave = async (row: any) => {
 
   const sourceKey = `settlement_payment:${row.id}`;
 
-  const { error: deleteCashError } = await supabase
+  let supportsCashWorkflowColumns = true;
+  let { error: deleteCashError } = await supabase
     .from("daily_cash")
     .delete()
     .eq("source_type", "settlement_payment")
     .eq("source_work_name", row.work_name ?? "")
     .is("source_key", null)
     .in("content", [getDailyCashContent(row), getLegacyDailyCashContent(row)]);
+
+  if (deleteCashError && isCashWorkflowSetupError(deleteCashError)) {
+    supportsCashWorkflowColumns = false;
+    const legacyDeleteResult = await supabase
+      .from("daily_cash")
+      .delete()
+      .eq("source_type", "settlement_payment")
+      .eq("source_work_name", row.work_name ?? "")
+      .in("content", [getDailyCashContent(row), getLegacyDailyCashContent(row)]);
+
+    deleteCashError = legacyDeleteResult.error;
+  }
 
   if (deleteCashError) {
     savingReceivableIdsRef.current.delete(row.id);
@@ -365,7 +394,7 @@ const handleReceivableDateSave = async (row: any) => {
     return;
   }
 
-  const { error: cashError } = await supabase.from("daily_cash").upsert({
+  const cashPayload = {
     date: paymentDate,
     created_on: localDateText(),
     account: row.normalized_payment_method,
@@ -381,7 +410,27 @@ const handleReceivableDateSave = async (row: any) => {
     source_key: sourceKey,
     ledger_effective: true,
     approval_status: "approved",
-  }, { onConflict: "source_key" });
+  };
+
+  const legacyCashPayload = {
+    date: cashPayload.date,
+    created_on: cashPayload.created_on,
+    account: cashPayload.account,
+    type: cashPayload.type,
+    category: cashPayload.category,
+    content: cashPayload.content,
+    income: cashPayload.income,
+    expense: cashPayload.expense,
+    memo: cashPayload.memo,
+    source_type: cashPayload.source_type,
+    source_work_name: cashPayload.source_work_name,
+  };
+
+  const { error: cashError } = supportsCashWorkflowColumns
+    ? await supabase
+        .from("daily_cash")
+        .upsert(cashPayload, { onConflict: "source_key" })
+    : await supabase.from("daily_cash").insert(legacyCashPayload);
 
   savingReceivableIdsRef.current.delete(row.id);
   setSavingReceivableId(null);
