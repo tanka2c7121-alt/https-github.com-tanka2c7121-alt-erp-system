@@ -177,6 +177,7 @@ export default function SettlementRegisterPage({
   const [loadedProgressStatus, setLoadedProgressStatus] = useState("미결");
   const [completionWarningAccepted, setCompletionWarningAccepted] = useState(false);
   const [closingWarningAccepted, setClosingWarningAccepted] = useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [adminUnlocked, setAdminUnlocked] = useState(false);
   const [dailyCashAdminUnlocked, setDailyCashAdminUnlocked] = useState(false);
   const [adminPasswordOpen, setAdminPasswordOpen] = useState(false);
@@ -250,6 +251,7 @@ export default function SettlementRegisterPage({
 
       if (!canMoveCompletedToClosed) return;
     }
+    setHasUnsavedChanges(true);
     setForm((prev) => ({ ...prev, [key]: value }));
   };
 
@@ -259,6 +261,7 @@ export default function SettlementRegisterPage({
     value: string | boolean
   ) => {
     if (isLocked) return;
+    setHasUnsavedChanges(true);
     setPaymentRows((prev) =>
       prev.map((row, rowIndex) => {
         if (rowIndex !== index) return row;
@@ -284,6 +287,7 @@ export default function SettlementRegisterPage({
     value: string
   ) => {
     if (isLocked) return;
+    setHasUnsavedChanges(true);
     setClaimRows((prev) =>
       prev.map((row, rowIndex) =>
         rowIndex === index ? { ...row, [field]: value } : row
@@ -297,6 +301,7 @@ export default function SettlementRegisterPage({
     value: string
   ) => {
     if (isExpenseLocked) return;
+    setHasUnsavedChanges(true);
     setExpenseRows((prev) =>
       prev.map((row, rowIndex) =>
         rowIndex === index ? { ...row, [field]: value } : row
@@ -438,7 +443,7 @@ export default function SettlementRegisterPage({
               id: item.id,
               originalContent: `${item.payment_type ?? ""} / ${
                 item.payment_detail ?? ""
-              } / ${targetWorkName}`,
+              } / ${workOrder.car_number ?? targetWorkName}`,
             };
           })
         : defaultPaymentRows();
@@ -498,6 +503,7 @@ export default function SettlementRegisterPage({
     setLoadedProgressStatus(loadedStatus);
     setCompletionWarningAccepted(false);
     setClosingWarningAccepted(false);
+    setHasUnsavedChanges(false);
     setAdminUnlocked(false);
     setDailyCashAdminUnlocked(false);
     setIsEditMode(Boolean(settlement) || paymentItems.length > 0 || Boolean(expenses?.length));
@@ -517,7 +523,7 @@ export default function SettlementRegisterPage({
   useRealtimeRefresh({
     channelName: `settlement-register-page-${form.workName || initialWorkName || "empty"}`,
     tables: realtimeTables,
-    enabled: Boolean(form.workName && isEditMode),
+    enabled: Boolean(form.workName && isEditMode && !hasUnsavedChanges),
     onRefresh: () => loadWorkOrder(form.workName || initialWorkName, { silent: true }),
   });
 
@@ -607,6 +613,29 @@ export default function SettlementRegisterPage({
     source_work_name: targetForm.workName,
   });
 
+  const getDailyCashContentCandidates = (row: PaymentRow, targetForm = form) =>
+    [
+      getDailyCashContent(row, targetForm.carNumber),
+      row.originalContent,
+      `${row.paymentType} / ${row.paymentDetail} / ${targetForm.workName}`,
+    ].filter((value): value is string => Boolean(value));
+
+  const findMatchingDailyCashRow = (
+    existingRows: any[],
+    usedExistingIds: Set<number>,
+    row: PaymentRow,
+    targetForm = form
+  ) => {
+    const candidates = new Set(getDailyCashContentCandidates(row, targetForm));
+
+    return existingRows.find((cashRow: any) => {
+      const id = Number(cashRow.id);
+      if (usedExistingIds.has(id)) return false;
+
+      return candidates.has(String(cashRow.content ?? ""));
+    });
+  };
+
   const requiresDailyCashAdminApproval = async (targetForm = form) => {
     const today = localDateText();
     const { data: existingCashRows, error: existingCashError } = await supabase
@@ -626,15 +655,12 @@ export default function SettlementRegisterPage({
 
     for (const row of eligibleRows) {
       const payload = toDailyCashPayload(row, targetForm);
-      const matchingCashRow = existingRows.find((cashRow: any) => {
-        if (usedExistingIds.has(Number(cashRow.id))) return false;
-
-        const existingContent = String(cashRow.content ?? "");
-        return (
-          existingContent === payload.content ||
-          (row.originalContent ? existingContent === row.originalContent : false)
-        );
-      });
+      const matchingCashRow = findMatchingDailyCashRow(
+        existingRows,
+        usedExistingIds,
+        row,
+        targetForm
+      );
 
       if (!matchingCashRow) continue;
 
@@ -655,13 +681,21 @@ export default function SettlementRegisterPage({
       }
     }
 
-    const willDeleteLockedRow = existingRows.some((row: any) => {
-      const id = Number(row.id);
-      return (
-        Number.isFinite(id) &&
-        !usedExistingIds.has(id) &&
-        row.created_on !== today
+    const removedStoredPaymentRows = paymentRows.filter(
+      (row) =>
+        row.id &&
+        !getDailyCashEligiblePaymentRows([row]).length &&
+        !isPartnerSupportPaymentRow(row)
+    );
+    const willDeleteLockedRow = removedStoredPaymentRows.some((row) => {
+      const matchingCashRow = findMatchingDailyCashRow(
+        existingRows,
+        usedExistingIds,
+        row,
+        targetForm
       );
+
+      return Boolean(matchingCashRow && matchingCashRow.created_on !== today);
     });
 
     return { error: null, requiresApproval: willDeleteLockedRow };
@@ -684,18 +718,17 @@ export default function SettlementRegisterPage({
 
     for (const row of eligibleRows) {
       const payload = toDailyCashPayload(row, targetForm);
-      const matchingCashRow = existingRows.find((cashRow: any) => {
-        if (usedExistingIds.has(Number(cashRow.id))) return false;
-
-        const existingContent = String(cashRow.content ?? "");
-        return (
-          existingContent === payload.content ||
-          (row.originalContent ? existingContent === row.originalContent : false)
-        );
-      });
+      const matchingCashRow = findMatchingDailyCashRow(
+        existingRows,
+        usedExistingIds,
+        row,
+        targetForm
+      );
 
       if (!matchingCashRow) {
-        insertRows.push(payload);
+        if (!row.id) {
+          insertRows.push(payload);
+        }
         continue;
       }
 
@@ -720,9 +753,24 @@ export default function SettlementRegisterPage({
       if (updateError) return updateError;
     }
 
-    const deleteIds = existingRows
-      .map((row: any) => Number(row.id))
-      .filter((id) => Number.isFinite(id) && !usedExistingIds.has(id));
+    const removedStoredPaymentRows = paymentRows.filter(
+      (row) =>
+        row.id &&
+        !getDailyCashEligiblePaymentRows([row]).length &&
+        !isPartnerSupportPaymentRow(row)
+    );
+    const deleteIds = removedStoredPaymentRows
+      .map((row) => {
+        const matchingCashRow = findMatchingDailyCashRow(
+          existingRows,
+          usedExistingIds,
+          row,
+          targetForm
+        );
+
+        return Number(matchingCashRow?.id);
+      })
+      .filter((id) => Number.isFinite(id));
 
     if (deleteIds.length > 0) {
       const { error: deleteError } = await supabase
@@ -754,6 +802,7 @@ export default function SettlementRegisterPage({
     if (isLocked) return;
 
     if (!checked) {
+      setHasUnsavedChanges(true);
       setForm((prev) => ({ ...prev, serviceChargeOverride: false }));
       return;
     }
@@ -786,6 +835,7 @@ export default function SettlementRegisterPage({
     }
 
     if (adminPasswordPurpose === "serviceChargeOverride") {
+      setHasUnsavedChanges(true);
       setForm((prev) => ({ ...prev, serviceChargeOverride: true }));
       setAdminPassword("");
       setAdminPasswordOpen(false);
@@ -1006,6 +1056,7 @@ export default function SettlementRegisterPage({
     setForm(saveForm);
     setIsEditMode(true);
     setLoadedProgressStatus(saveForm.progressStatus);
+    setHasUnsavedChanges(false);
     setAdminUnlocked(false);
     setDailyCashAdminUnlocked(false);
 
@@ -1185,7 +1236,10 @@ export default function SettlementRegisterPage({
             </label>
             <button
               type="button"
-              onClick={() => setClaimRows((prev) => [...prev, emptyClaimRow()])}
+              onClick={() => {
+                setHasUnsavedChanges(true);
+                setClaimRows((prev) => [...prev, emptyClaimRow()]);
+              }}
               disabled={isLocked}
               className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700"
             >
@@ -1194,11 +1248,12 @@ export default function SettlementRegisterPage({
             <button
               type="button"
               disabled={isLocked}
-              onClick={() =>
+              onClick={() => {
+                setHasUnsavedChanges(true);
                 setClaimRows((prev) =>
                   prev.length > 1 ? prev.slice(0, -1) : [emptyClaimRow()]
-                )
-              }
+                );
+              }}
               className="rounded-lg border border-red-300 px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50"
             >
               삭제
@@ -1245,7 +1300,10 @@ export default function SettlementRegisterPage({
           <div className="flex gap-2">
             <button
               type="button"
-              onClick={() => setPaymentRows((prev) => [...prev, emptyPaymentRow()])}
+              onClick={() => {
+                setHasUnsavedChanges(true);
+                setPaymentRows((prev) => [...prev, emptyPaymentRow()]);
+              }}
               disabled={isLocked}
               className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700"
             >
@@ -1254,11 +1312,12 @@ export default function SettlementRegisterPage({
             <button
               type="button"
               disabled={isLocked}
-              onClick={() =>
+              onClick={() => {
+                setHasUnsavedChanges(true);
                 setPaymentRows((prev) =>
                   prev.length > 1 ? prev.slice(0, -1) : [emptyPaymentRow()]
-                )
-              }
+                );
+              }}
               className="rounded-lg border border-red-300 px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50"
             >
               삭제
@@ -1370,7 +1429,10 @@ export default function SettlementRegisterPage({
           <div className="flex gap-2">
             <button
               type="button"
-              onClick={() => setExpenseRows((prev) => [...prev, emptyExpenseRow()])}
+              onClick={() => {
+                setHasUnsavedChanges(true);
+                setExpenseRows((prev) => [...prev, emptyExpenseRow()]);
+              }}
               disabled={isExpenseLocked}
               className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700"
             >
@@ -1379,11 +1441,12 @@ export default function SettlementRegisterPage({
             <button
               type="button"
               disabled={isExpenseLocked}
-              onClick={() =>
+              onClick={() => {
+                setHasUnsavedChanges(true);
                 setExpenseRows((prev) =>
                   prev.length > 1 ? prev.slice(0, -1) : [emptyExpenseRow()]
-                )
-              }
+                );
+              }}
               className="rounded-lg border border-red-300 px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50"
             >
               삭제
