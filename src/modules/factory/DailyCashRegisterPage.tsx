@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { addLocalDaysText, localDateText } from "../../lib/date";
 import { supabase } from "../../lib/supabase";
+import type { MenuItem } from "../../data/menuData";
 
 const inputClass =
   "mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:outline-none";
@@ -55,6 +56,7 @@ export type DailyCashRow = {
 
 type DailyCashRegisterPageProps = {
   editData?: DailyCashRow;
+  onSelectMenu: (menu: MenuItem) => void;
 };
 
 const defaultCategoryOptions: Record<string, string[]> = {
@@ -101,6 +103,7 @@ const defaultCategoryOptions: Record<string, string[]> = {
 
 export default function DailyCashRegisterPage({
   editData,
+  onSelectMenu,
 }: DailyCashRegisterPageProps) {
   const [categoryOptions, setCategoryOptions] = useState(defaultCategoryOptions);
   const [form, setForm] = useState<FormState>({
@@ -116,6 +119,7 @@ export default function DailyCashRegisterPage({
   const [adminUnlocked, setAdminUnlocked] = useState(false);
   const [adminPasswordOpen, setAdminPasswordOpen] = useState(false);
   const [adminPassword, setAdminPassword] = useState("");
+  const [settlementWorkName, setSettlementWorkName] = useState("");
   const saveInProgressRef = useRef(false);
 
   const isEditMode = Boolean(editData);
@@ -195,6 +199,7 @@ export default function DailyCashRegisterPage({
     setAdminUnlocked(false);
     setAdminPassword("");
     setAdminPasswordOpen(false);
+    setSettlementWorkName("");
   }, [editData]);
 
   function canChangeForm() {
@@ -228,6 +233,37 @@ export default function DailyCashRegisterPage({
       type: value,
       category: "",
     }));
+  }
+
+  function handleSettlementLink() {
+    if (!editData || !isUnconfirmedIncome(editData)) return;
+
+    if (requiresAdminUnlock && !adminUnlocked) {
+      alert("관리자 승인 후 변경할 수 있습니다.");
+      return;
+    }
+
+    const workName = settlementWorkName.trim();
+    if (!workName) {
+      alert("연동할 작명을 입력하세요.");
+      return;
+    }
+
+    onSelectMenu({
+      id: "factory-settlement-repair-register",
+      title: "정산등록",
+      data: {
+        workName,
+        dailyCashLink: {
+          dailyCashId: editData.id,
+          date: editData.date,
+          account: normalizeAccountName(editData.account),
+          amount: Number(editData.income || editData.expense || 0),
+          content: editData.content ?? "",
+          memo: editData.memo ?? "",
+        },
+      },
+    });
   }
 
   function handleReset() {
@@ -417,6 +453,32 @@ expense:
           <p className="font-bold">차량정산에서 입력된 입출금 내역입니다.</p>
           <p className="mt-1">
             정산등록에서 입금수단과 금액을 수정한 뒤 저장하면 일일입출금에 반영됩니다.
+          </p>
+        </section>
+      )}
+
+      {editData && isUnconfirmedIncome(editData) && (
+        <section className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+          <div className="flex flex-col gap-3 md:flex-row md:items-end">
+            <div className="flex-1">
+              <label className={labelClass}>차량정산 작명</label>
+              <input
+                className={inputClass}
+                placeholder="2026-05-028"
+                value={settlementWorkName}
+                onChange={(event) => setSettlementWorkName(event.target.value)}
+              />
+            </div>
+            <button
+              type="button"
+              onClick={handleSettlementLink}
+              className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
+            >
+              차량정산으로 연동
+            </button>
+          </div>
+          <p className="mt-2">
+            미확인 입금이 차량정산 입금이면 작명을 입력해 정산등록으로 가져갈 수 있습니다.
           </p>
         </section>
       )}

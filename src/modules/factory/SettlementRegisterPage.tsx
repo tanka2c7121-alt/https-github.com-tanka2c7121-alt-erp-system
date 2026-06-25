@@ -9,6 +9,7 @@ import type { UserRole } from "../../types/roles";
 
 type SettlementRegisterPageProps = {
   initialWorkName?: string;
+  initialDailyCashLink?: DailyCashLink;
   user: {
     user_id: string;
     user_name: string;
@@ -20,6 +21,7 @@ type SettlementRegisterPageProps = {
 type PaymentRow = {
   id?: number;
   originalContent?: string;
+  sourceDailyCashId?: number;
   paymentType: string;
   paymentDetail: string;
   claimAmount: string;
@@ -44,6 +46,15 @@ type ClaimRow = {
   date: string;
   amount: string;
   detail: string;
+};
+
+type DailyCashLink = {
+  dailyCashId: number;
+  date: string;
+  account: string;
+  amount: number;
+  content: string;
+  memo: string;
 };
 
 const inputClass =
@@ -162,6 +173,7 @@ const getDailyCashContent = (
 
 export default function SettlementRegisterPage({
   initialWorkName,
+  initialDailyCashLink,
   user,
   onSelectMenu,
 }: SettlementRegisterPageProps) {
@@ -311,7 +323,7 @@ export default function SettlementRegisterPage({
 
   const loadWorkOrder = async (
     targetWorkName = form.workName,
-    options: { silent?: boolean } = {}
+    options: { silent?: boolean; dailyCashLink?: DailyCashLink } = {}
   ) => {
     if (!targetWorkName) {
       alert("작명을 입력하세요.");
@@ -448,7 +460,29 @@ export default function SettlementRegisterPage({
           })
         : defaultPaymentRows();
 
-    setPaymentRows(normalizePaymentRowsForWorkOrder(loadedPaymentRows));
+    const normalizedPaymentRows = normalizePaymentRowsForWorkOrder(loadedPaymentRows);
+    const dailyCashLink = options.dailyCashLink;
+    const linkedPaymentRow: PaymentRow | null = dailyCashLink
+      ? {
+          ...emptyPaymentRow(),
+          sourceDailyCashId: dailyCashLink.dailyCashId,
+          date: dailyCashLink.date,
+          amount: dailyCashLink.amount ? dailyCashLink.amount.toLocaleString() : "",
+          method: dailyCashLink.account,
+          paymentStatus: "수금",
+        }
+      : null;
+    const hasOnlyEmptyPaymentRow =
+      normalizedPaymentRows.length === 1 &&
+      !hasPaymentInputValue(normalizedPaymentRows[0]);
+
+    setPaymentRows(
+      linkedPaymentRow
+        ? hasOnlyEmptyPaymentRow
+          ? [linkedPaymentRow]
+          : [...normalizedPaymentRows, linkedPaymentRow]
+        : normalizedPaymentRows
+    );
 
     const loadedClaimRows =
       storedClaimRows.length > 0
@@ -503,7 +537,7 @@ export default function SettlementRegisterPage({
     setLoadedProgressStatus(loadedStatus);
     setCompletionWarningAccepted(false);
     setClosingWarningAccepted(false);
-    setHasUnsavedChanges(false);
+    setHasUnsavedChanges(Boolean(linkedPaymentRow));
     setAdminUnlocked(false);
     setDailyCashAdminUnlocked(false);
     setIsEditMode(Boolean(settlement) || paymentItems.length > 0 || Boolean(expenses?.length));
@@ -516,9 +550,9 @@ export default function SettlementRegisterPage({
     if (!initialWorkName) return;
 
     setForm((prev) => ({ ...prev, workName: initialWorkName }));
-    void loadWorkOrder(initialWorkName);
+    void loadWorkOrder(initialWorkName, { dailyCashLink: initialDailyCashLink });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialWorkName]);
+  }, [initialWorkName, initialDailyCashLink]);
 
   useRealtimeRefresh({
     channelName: `settlement-register-page-${form.workName || initialWorkName || "empty"}`,
@@ -733,6 +767,28 @@ export default function SettlementRegisterPage({
       );
 
       if (!matchingCashRow) {
+        if (row.sourceDailyCashId) {
+          const updatePayload = {
+            date: payload.date,
+            account: payload.account,
+            type: payload.type,
+            category: payload.category,
+            content: payload.content,
+            income: payload.income,
+            expense: payload.expense,
+            memo: payload.memo,
+            source_type: payload.source_type,
+            source_work_name: payload.source_work_name,
+          };
+          const { error: linkError } = await supabase
+            .from("daily_cash")
+            .update(updatePayload)
+            .eq("id", row.sourceDailyCashId);
+
+          if (linkError) return linkError;
+          continue;
+        }
+
         if (!row.id) {
           insertRows.push(payload);
         }

@@ -68,6 +68,7 @@ type PageData = {
   nextWorkName?: string;
   openCamera?: boolean;
   autoPrint?: boolean;
+  dailyCashLink?: any;
   expenseRequest?: any;
   attendanceRequest?: any;
   incidentReport?: any;
@@ -598,6 +599,7 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
       return (
         <SettlementRegisterPage
           initialWorkName={pageData?.workName}
+          initialDailyCashLink={pageData?.dailyCashLink}
           user={user}
           onSelectMenu={handleSelectMenu}
         />
@@ -616,7 +618,12 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
       return <FactorySettlementPage onSelectMenu={handleSelectMenu} view="all" />;
     }
     if (menu.id === "factory-settlement-daily-cash-register") {
-      return <DailyCashRegisterPage editData={menu.data as any} />;
+      return (
+        <DailyCashRegisterPage
+          editData={menu.data as any}
+          onSelectMenu={handleSelectMenu}
+        />
+      );
     }
     if (menu.id === "factory-settlement-daily-cash-print") {
       return <DailyCashPrintPageNew user={user} />;
