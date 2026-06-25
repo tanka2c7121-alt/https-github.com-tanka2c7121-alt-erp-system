@@ -66,6 +66,11 @@ export const menuData: MenuItem[] = [
                 id: "factory-settlement-daily-cash-register",
                 title: "입출금등록",
               },
+              {
+                id: "factory-cash-change-approval",
+                title: "입출금 승인요청",
+                roles: ["ADMIN"],
+              },
             ],
           },
           {

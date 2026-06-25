@@ -25,6 +25,7 @@ type DailyCashRow = {
   memo: string | null;
   source_type: string | null;
   source_work_name: string | null;
+  ledger_effective?: boolean | null;
 };
 
 const formatWon = (amount: number) => amount.toLocaleString();
@@ -113,7 +114,7 @@ export default function DailyCashPage({ onSelectMenu }: DailyCashPageProps) {
       return;
     }
 
-    setBalanceRows(data ?? []);
+    setBalanceRows((data ?? []).filter((row) => row.ledger_effective !== false));
   }, []);
 
   const fetchRows = useCallback(async (selectedPeriod: PeriodValue) => {

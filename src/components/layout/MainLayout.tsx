@@ -21,6 +21,7 @@ import SettlementCompletePrintPage from "../../modules/factory/SettlementComplet
 import DailyCashPage from "../../modules/factory/DailyCashPage";
 import DailyCashPrintPageNew from "../../modules/factory/DailyCashPrintPageNew";
 import DailyCashRegisterPage from "../../modules/factory/DailyCashRegisterPage";
+import CashChangeApprovalPage from "../../modules/factory/CashChangeApprovalPage";
 import SettlementMainPage from "../../modules/factory/SettlementMainPage";
 import PendingSettlementPage from "../../modules/factory/PendingSettlementPage";
 import PendingInsuranceListPage from "../../modules/factory/PendingInsuranceListPage";
@@ -146,6 +147,7 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
     expenses: 0,
     attendances: 0,
     incidents: 0,
+    cashChanges: 0,
     myExpenses: 0,
     myAttendances: 0,
     myIncidents: 0,
@@ -340,6 +342,7 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
       expensesResult,
       attendancesResult,
       incidentsResult,
+      cashChangesResult,
       myExpensesResult,
       myAttendancesResult,
       myIncidentsResult,
@@ -390,6 +393,12 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
             .select("id", { count: "exact", head: true })
             .eq("status", "확인대기")
         : Promise.resolve({ count: 0, error: null }),
+      isAdmin
+        ? supabase
+            .from("cash_change_requests")
+            .select("id", { count: "exact", head: true })
+            .eq("status", "pending")
+        : Promise.resolve({ count: 0, error: null }),
       supabase
         .from("expense_requests")
         .select("id", { count: "exact", head: true })
@@ -415,6 +424,7 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
       expenses: expensesResult.error ? 0 : expensesResult.count ?? 0,
       attendances: attendancesResult.error ? 0 : attendancesResult.count ?? 0,
       incidents: incidentsResult.error ? 0 : incidentsResult.count ?? 0,
+      cashChanges: cashChangesResult.error ? 0 : cashChangesResult.count ?? 0,
       myExpenses: myExpensesResult.error ? 0 : myExpensesResult.count ?? 0,
       myAttendances: myAttendancesResult.error ? 0 : myAttendancesResult.count ?? 0,
       myIncidents: myIncidentsResult.error ? 0 : myIncidentsResult.count ?? 0,
@@ -459,6 +469,15 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
             title: "경위서 확인대기",
             count: notificationCounts.incidents,
             menu: { id: "documents-incident-report", title: "경위서" },
+          },
+          {
+            id: "cashChanges",
+            title: "입출금 승인요청",
+            count: notificationCounts.cashChanges,
+            menu: {
+              id: "factory-cash-change-approval",
+              title: "입출금 승인요청",
+            },
           },
         ]
       : []),
@@ -627,6 +646,9 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
     }
     if (menu.id === "factory-settlement-daily-cash-print") {
       return <DailyCashPrintPageNew user={user} />;
+    }
+    if (menu.id === "factory-cash-change-approval") {
+      return <CashChangeApprovalPage user={user} />;
     }
     if (menu.id === "factory-settlement-daily-cash") {
       return <DailyCashPage onSelectMenu={handleSelectMenu} />;

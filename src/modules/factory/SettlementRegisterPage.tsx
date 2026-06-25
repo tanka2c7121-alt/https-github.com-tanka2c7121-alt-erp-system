@@ -22,6 +22,9 @@ type PaymentRow = {
   id?: number;
   originalContent?: string;
   sourceDailyCashId?: number;
+  refundRequested?: boolean;
+  refundStatus?: string;
+  refundReason?: string;
   paymentType: string;
   paymentDetail: string;
   claimAmount: string;
@@ -171,6 +174,36 @@ const getDailyCashContent = (
   vehicleIdentifier: string
 ) => `${row.paymentType} / ${row.paymentDetail} / ${vehicleIdentifier}`;
 
+const getSettlementPaymentSourceKey = (paymentId: number) =>
+  `settlement_payment:${paymentId}`;
+
+const getSettlementRefundSourceKey = (paymentId: number) =>
+  `settlement_payment_refund:${paymentId}`;
+
+const cashWorkflowSetupMessage =
+  "입출금 승인요청 DB 업데이트가 아직 적용되지 않았습니다. Supabase 운영 DB는 supabase_cash_control_workflow.sql, NAS DB는 nas_cash_control_workflow.sql을 먼저 실행해 주세요.";
+
+const isCashWorkflowSetupError = (error: any) => {
+  const message = String(error?.message ?? "").toLowerCase();
+  const code = String(error?.code ?? "");
+
+  return (
+    code === "42P01" ||
+    code === "42703" ||
+    message.includes("cash_change_requests") ||
+    message.includes("ledger_effective") ||
+    message.includes("source_key") ||
+    message.includes("source_detail_id") ||
+    message.includes("does not exist") ||
+    message.includes("schema cache")
+  );
+};
+
+const formatCashWorkflowError = (error: any) =>
+  isCashWorkflowSetupError(error)
+    ? cashWorkflowSetupMessage
+    : String(error?.message ?? error ?? "알 수 없는 오류");
+
 export default function SettlementRegisterPage({
   initialWorkName,
   initialDailyCashLink,
@@ -290,6 +323,32 @@ export default function SettlementRegisterPage({
 
         return nextRow;
       })
+    );
+  };
+
+  const handleRefundRequestChange = (index: number, checked: boolean) => {
+    if (isLocked) return;
+
+    if (checked) {
+      const confirmed = window.confirm("환불처리 하시겠습니까?");
+      if (!confirmed) return;
+    }
+
+    setHasUnsavedChanges(true);
+    setPaymentRows((prev) =>
+      prev.map((row, rowIndex) =>
+        rowIndex === index
+          ? {
+              ...row,
+              refundRequested: checked,
+              refundStatus: checked ? row.refundStatus || "pending" : "none",
+              refundReason: checked
+                ? row.refundReason ||
+                  `${row.paymentType} / ${row.paymentDetail} / ${form.carNumber} 환불`
+                : "",
+            }
+          : row
+      )
     );
   };
 
@@ -453,6 +512,9 @@ export default function SettlementRegisterPage({
               claimDate: item.claim_date ?? "",
               paymentStatus: item.payment_status ?? "청구",
               id: item.id,
+              refundRequested: Boolean(item.refund_requested),
+              refundStatus: item.refund_status ?? "none",
+              refundReason: item.refund_reason ?? "",
               originalContent: `${item.payment_type ?? ""} / ${
                 item.payment_detail ?? ""
               } / ${workOrder.car_number ?? targetWorkName}`,
@@ -569,14 +631,54 @@ export default function SettlementRegisterPage({
   });
 
   const savePaymentRows = async (targetForm = form) => {
-    const rows = paymentRows
-      .filter(hasPaymentInputValue)
-      .map((row) => {
+    const inputRows = paymentRows.filter(hasPaymentInputValue);
+    const savedRows: PaymentRow[] = [];
+    const keptIds = new Set(
+      inputRows
+        .map((row) => row.id)
+        .filter((id): id is number => typeof id === "number")
+    );
+
+    const { data: existingPaymentRows, error: existingPaymentError } =
+      await supabase
+        .from("settlement_payments")
+        .select("id, payment_type, payment_amount, payment_date, payment_method")
+        .eq("work_name", targetForm.workName);
+
+    if (existingPaymentError) {
+      return { error: existingPaymentError, rows: savedRows };
+    }
+
+    const removableIds = (existingPaymentRows ?? [])
+      .filter((item: any) => {
+        const isClaimOnly =
+          item.payment_type === "청구" &&
+          Number(item.payment_amount ?? 0) === 0 &&
+          !item.payment_date &&
+          !item.payment_method;
+
+        return !isClaimOnly && !keptIds.has(Number(item.id));
+      })
+      .map((item: any) => Number(item.id))
+      .filter((id) => Number.isFinite(id));
+
+    if (removableIds.length > 0) {
+      const { error: deleteError } = await supabase
+        .from("settlement_payments")
+        .delete()
+        .in("id", removableIds);
+
+      if (deleteError) {
+        return { error: deleteError, rows: savedRows };
+      }
+    }
+
+    for (const row of inputRows) {
         const inputAmount = toNumber(row.amount);
         const claimAmount =
           toNumber(row.claimAmount) || (row.invoiceIssued ? inputAmount : 0);
 
-        return {
+        const payload = {
           work_name: targetForm.workName,
           payment_type: row.paymentType,
           payment_detail: row.paymentDetail,
@@ -590,16 +692,66 @@ export default function SettlementRegisterPage({
           invoice_issued: row.invoiceIssued,
           claim_date: row.claimDate || null,
           payment_status: row.paymentStatus,
+          refund_requested: Boolean(row.refundRequested),
+          refund_status: row.refundRequested ? row.refundStatus || "pending" : "none",
+          refund_reason: row.refundRequested ? row.refundReason || null : null,
         };
+
+      const saveResult = row.id
+        ? await supabase
+            .from("settlement_payments")
+            .update(payload)
+            .eq("id", row.id)
+            .select("id, refund_status")
+            .maybeSingle()
+        : await supabase
+            .from("settlement_payments")
+            .insert(payload)
+            .select("id, refund_status")
+            .maybeSingle();
+
+      if (saveResult.error) {
+        return { error: saveResult.error, rows: savedRows };
+      }
+
+      savedRows.push({
+        ...row,
+        id: Number(saveResult.data?.id ?? row.id),
+        refundStatus: saveResult.data?.refund_status ?? row.refundStatus,
       });
+    }
 
-    if (rows.length === 0) return null;
-
-    const { error } = await supabase.from("settlement_payments").insert(rows);
-    return error;
+    return { error: null, rows: savedRows };
   };
 
   const saveClaimRows = async (targetForm = form) => {
+    const { data: existingRows, error: existingError } = await supabase
+      .from("settlement_payments")
+      .select("id, payment_type, payment_amount, payment_date, payment_method")
+      .eq("work_name", targetForm.workName);
+
+    if (existingError) return existingError;
+
+    const claimOnlyIds = (existingRows ?? [])
+      .filter(
+        (item: any) =>
+          item.payment_type === "청구" &&
+          Number(item.payment_amount ?? 0) === 0 &&
+          !item.payment_date &&
+          !item.payment_method
+      )
+      .map((item: any) => Number(item.id))
+      .filter((id) => Number.isFinite(id));
+
+    if (claimOnlyIds.length > 0) {
+      const { error: deleteError } = await supabase
+        .from("settlement_payments")
+        .delete()
+        .in("id", claimOnlyIds);
+
+      if (deleteError) return deleteError;
+    }
+
     const rows = claimRows
       .filter((row) => row.date || row.amount || row.detail)
       .map((row) => ({
@@ -652,6 +804,10 @@ export default function SettlementRegisterPage({
     memo: targetForm.workName,
     source_type: "settlement_payment",
     source_work_name: targetForm.workName,
+    source_detail_id: row.id ?? null,
+    source_key: row.id ? getSettlementPaymentSourceKey(row.id) : null,
+    ledger_effective: true,
+    approval_status: "approved",
   });
 
   const getDailyCashContentCandidates = (row: PaymentRow, targetForm = form) =>
@@ -673,6 +829,15 @@ export default function SettlementRegisterPage({
       const id = Number(cashRow.id);
       if (usedExistingIds.has(id)) return false;
 
+      if (row.sourceDailyCashId && id === row.sourceDailyCashId) return true;
+
+      if (
+        row.id &&
+        String(cashRow.source_key ?? "") === getSettlementPaymentSourceKey(row.id)
+      ) {
+        return true;
+      }
+
       return candidates.has(String(cashRow.content ?? ""));
     });
   };
@@ -681,7 +846,7 @@ export default function SettlementRegisterPage({
     const today = localDateText();
     const { data: existingCashRows, error: existingCashError } = await supabase
       .from("daily_cash")
-      .select("id, created_on, date, account, content, income, expense, memo")
+      .select("id, source_key, created_on, date, account, content, income, expense, memo")
       .eq("source_type", "settlement_payment")
       .eq("source_work_name", targetForm.workName)
       .eq("category", "차량정산");
@@ -742,10 +907,11 @@ export default function SettlementRegisterPage({
     return { error: null, requiresApproval: willDeleteLockedRow };
   };
 
-  const saveDailyCashRows = async (targetForm = form) => {
+  const createDailyCashCorrectionRequests = async (targetForm = form) => {
+    const today = localDateText();
     const { data: existingCashRows, error: existingCashError } = await supabase
       .from("daily_cash")
-      .select("id, content")
+      .select("id, source_key, created_on, date, account, content, income, expense, memo")
       .eq("source_type", "settlement_payment")
       .eq("source_work_name", targetForm.workName)
       .eq("category", "차량정산");
@@ -754,6 +920,102 @@ export default function SettlementRegisterPage({
 
     const existingRows = existingCashRows ?? [];
     const eligibleRows = getDailyCashEligiblePaymentRows(paymentRows);
+    const usedExistingIds = new Set<number>();
+
+    for (const row of eligibleRows) {
+      const payload = toDailyCashPayload(row, targetForm);
+      const matchingCashRow = findMatchingDailyCashRow(
+        existingRows,
+        usedExistingIds,
+        row,
+        targetForm
+      );
+
+      if (!matchingCashRow) continue;
+      usedExistingIds.add(Number(matchingCashRow.id));
+
+      if (matchingCashRow.created_on === today) continue;
+
+      const updatePayload = {
+        date: payload.date,
+        account: payload.account,
+        type: payload.type,
+        category: payload.category,
+        content: payload.content,
+        income: payload.income,
+        expense: payload.expense,
+        memo: [
+          payload.memo,
+          "관리자 승인 정정",
+          `입금금액 ${payload.income.toLocaleString()}원`,
+        ].join(" / "),
+        source_type: payload.source_type,
+        source_work_name: payload.source_work_name,
+        source_detail_id: payload.source_detail_id,
+        source_key:
+          payload.source_key ?? matchingCashRow.source_key ?? `daily_cash:${matchingCashRow.id}`,
+        ledger_effective: true,
+        approval_status: "approved",
+      };
+
+      const willChange =
+        String(matchingCashRow.date ?? "") !== updatePayload.date ||
+        String(matchingCashRow.account ?? "") !== updatePayload.account ||
+        String(matchingCashRow.content ?? "") !== updatePayload.content ||
+        Number(matchingCashRow.income ?? 0) !== updatePayload.income ||
+        Number(matchingCashRow.expense ?? 0) !== updatePayload.expense ||
+        String(matchingCashRow.memo ?? "") !== updatePayload.memo;
+
+      if (!willChange) continue;
+
+      const requestSourceKey = `daily_cash_correction:${matchingCashRow.id}`;
+      const { data: existingRequest, error: existingRequestError } =
+        await supabase
+          .from("cash_change_requests")
+          .select("id")
+          .eq("source_key", requestSourceKey)
+          .eq("status", "pending")
+          .limit(1)
+          .maybeSingle();
+
+      if (existingRequestError) return existingRequestError;
+      if (existingRequest) continue;
+
+      const { error } = await supabase.from("cash_change_requests").insert({
+        request_type: "daily_cash_correction",
+        status: "pending",
+        source_type: "settlement_payment",
+        source_work_name: targetForm.workName,
+        source_detail_id: row.id ?? null,
+        source_key: requestSourceKey,
+        target_table: "daily_cash",
+        target_id: Number(matchingCashRow.id),
+        title: `${targetForm.workName} 일일입출금 정정 요청`,
+        reason: "당일이 지난 차량정산 입금내역 수정",
+        before_payload: matchingCashRow,
+        requested_payload: { daily_cash: updatePayload },
+        requested_by: user.user_id,
+        requested_name: user.user_name,
+      });
+
+      if (error) return error;
+    }
+
+    return null;
+  };
+
+  const saveDailyCashRows = async (targetForm = form, targetPaymentRows = paymentRows) => {
+    const { data: existingCashRows, error: existingCashError } = await supabase
+      .from("daily_cash")
+      .select("id, source_key, content")
+      .eq("source_type", "settlement_payment")
+      .eq("source_work_name", targetForm.workName)
+      .eq("category", "차량정산");
+
+    if (existingCashError) return existingCashError;
+
+    const existingRows = existingCashRows ?? [];
+    const eligibleRows = getDailyCashEligiblePaymentRows(targetPaymentRows);
     const usedExistingIds = new Set<number>();
     const insertRows = [];
 
@@ -779,6 +1041,10 @@ export default function SettlementRegisterPage({
             memo: payload.memo,
             source_type: payload.source_type,
             source_work_name: payload.source_work_name,
+            source_detail_id: payload.source_detail_id,
+            source_key: payload.source_key,
+            ledger_effective: payload.ledger_effective,
+            approval_status: payload.approval_status,
           };
           const { error: linkError } = await supabase
             .from("daily_cash")
@@ -790,6 +1056,10 @@ export default function SettlementRegisterPage({
         }
 
         if (!row.id) {
+          return new Error("입금내역 저장 후 일일입출금 연동키를 만들 수 없습니다.");
+        }
+
+        if (!row.sourceDailyCashId) {
           insertRows.push(payload);
         }
         continue;
@@ -807,6 +1077,10 @@ export default function SettlementRegisterPage({
         memo: payload.memo,
         source_type: payload.source_type,
         source_work_name: payload.source_work_name,
+        source_detail_id: payload.source_detail_id,
+        source_key: payload.source_key,
+        ledger_effective: payload.ledger_effective,
+        approval_status: payload.approval_status,
       };
       const { error: updateError } = await supabase
         .from("daily_cash")
@@ -816,7 +1090,7 @@ export default function SettlementRegisterPage({
       if (updateError) return updateError;
     }
 
-    const removedStoredPaymentRows = paymentRows.filter(
+    const removedStoredPaymentRows = targetPaymentRows.filter(
       (row) =>
         row.id &&
         !getDailyCashEligiblePaymentRows([row]).length &&
@@ -848,6 +1122,144 @@ export default function SettlementRegisterPage({
 
     const { error } = await supabase.from("daily_cash").insert(insertRows);
     return error;
+  };
+
+  const createRefundApprovalRequests = async (
+    targetForm = form,
+    targetPaymentRows = paymentRows
+  ) => {
+    const refundRows = targetPaymentRows.filter(
+      (row) => row.id && row.refundRequested && row.refundStatus !== "approved"
+    );
+
+    for (const row of refundRows) {
+      const paymentId = Number(row.id);
+      const sourceKey = getSettlementRefundSourceKey(paymentId);
+      const { data: existingRequest, error: existingRequestError } =
+        await supabase
+          .from("cash_change_requests")
+          .select("id")
+          .eq("source_key", sourceKey)
+          .eq("status", "pending")
+          .limit(1)
+          .maybeSingle();
+
+      if (existingRequestError) return existingRequestError;
+      if (existingRequest) continue;
+
+      const refundAmount = toNumber(row.amount);
+      const refundContent = getDailyCashContent(row, targetForm.carNumber);
+      const refundMemo = [
+        targetForm.workName,
+        "환불 승인 후 일일입출금 지출 반영",
+        row.refundReason,
+      ]
+        .filter(Boolean)
+        .join(" / ");
+
+      const { error } = await supabase.from("cash_change_requests").insert({
+        request_type: "settlement_refund",
+        status: "pending",
+        source_type: "settlement_payment_refund",
+        source_work_name: targetForm.workName,
+        source_detail_id: paymentId,
+        source_key: sourceKey,
+        target_table: "settlement_payments",
+        target_id: paymentId,
+        title: `${targetForm.workName} ${refundContent} 환불 요청`,
+        reason: row.refundReason || "차량정산 입금 환불 요청",
+        before_payload: {
+          payment_id: paymentId,
+          amount: refundAmount,
+          payment_date: row.date,
+          payment_method: row.method,
+        },
+        requested_payload: {
+          daily_cash: {
+            date: localDateText(),
+            created_on: localDateText(),
+            account: row.method,
+            type: "변동비",
+            category: "환불",
+            content: refundContent,
+            income: 0,
+            expense: refundAmount,
+            memo: refundMemo,
+            source_type: "settlement_payment_refund",
+            source_work_name: targetForm.workName,
+            source_detail_id: paymentId,
+            source_key: sourceKey,
+            ledger_effective: true,
+            approval_status: "approved",
+          },
+        },
+        requested_by: user.user_id,
+        requested_name: user.user_name,
+      });
+
+      if (error) return error;
+    }
+
+    return null;
+  };
+
+  const requestSettlementReopen = async () => {
+    if (!form.workName) {
+      alert("작명을 입력하세요.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "완결/종결 정산 수정 요청을 관리자에게 보낼까요?"
+    );
+    if (!confirmed) return;
+
+    const { data: existingRequest, error: existingRequestError } =
+      await supabase
+        .from("cash_change_requests")
+        .select("id")
+        .eq("request_type", "reopen_settlement")
+        .eq("source_work_name", form.workName)
+        .eq("status", "pending")
+        .limit(1)
+        .maybeSingle();
+
+    if (existingRequestError) {
+      alert("수정 요청 확인 실패: " + formatCashWorkflowError(existingRequestError));
+      return;
+    }
+
+    if (existingRequest) {
+      alert("이미 관리자 승인 대기 중인 수정 요청이 있습니다.");
+      return;
+    }
+
+    const { error } = await supabase.from("cash_change_requests").insert({
+      request_type: "reopen_settlement",
+      status: "pending",
+      source_type: "repair_settlement",
+      source_work_name: form.workName,
+      source_key: `repair_settlement_reopen:${form.workName}`,
+      target_table: "repair_settlements",
+      title: `${form.workName} 완결/종결 정산 수정 요청`,
+      reason: `${loadedProgressStatus} 상태 정산을 미결로 되돌린 뒤 수정 필요`,
+      before_payload: {
+        progress_status: loadedProgressStatus,
+        memo: form.memo,
+      },
+      requested_payload: {
+        progress_status: "미결",
+      },
+      requested_by: user.user_id,
+      requested_name: user.user_name,
+    });
+
+    if (error) {
+      alert("수정 요청 저장 실패: " + formatCashWorkflowError(error));
+      return;
+    }
+
+    alert("관리자에게 수정 요청을 보냈습니다.");
   };
 
   const handleAdminUnlock = () => {
@@ -1011,10 +1423,14 @@ export default function SettlementRegisterPage({
     }
 
     if (dailyCashRequiresApproval && !dailyCashAdminUnlocked) {
-      setAdminPassword("");
-      setAdminPasswordPurpose("dailyCashCorrection");
-      setAdminPasswordOpen(true);
-      alert("이미 일일입출금에 반영된 과거 입금내역은 관리자 승인 후 변경할 수 있습니다.");
+      const requestError = await createDailyCashCorrectionRequests(saveForm);
+      if (requestError) {
+        alert("일일입출금 정정 요청 실패: " + formatCashWorkflowError(requestError));
+      } else {
+        alert(
+          "이미 일일입출금에 반영된 과거 입금내역은 관리자 승인 후 변경됩니다. 관리자에게 정정 요청을 보냈습니다."
+        );
+      }
       saveInProgressRef.current = false;
       return;
     }
@@ -1022,7 +1438,6 @@ export default function SettlementRegisterPage({
     setSaving(true);
 
     await supabase.from("repair_settlements").delete().eq("work_name", saveForm.workName);
-    await supabase.from("settlement_payments").delete().eq("work_name", saveForm.workName);
     await supabase.from("settlement_expenses").delete().eq("work_name", saveForm.workName);
 
     const completedAt =
@@ -1091,19 +1506,30 @@ export default function SettlementRegisterPage({
       return;
     }
 
-    const paymentError = await savePaymentRows(saveForm);
-    if (paymentError) {
+    const paymentSaveResult = await savePaymentRows(saveForm);
+    if (paymentSaveResult.error) {
       saveInProgressRef.current = false;
       setSaving(false);
-      alert("입금내역 저장 실패: " + paymentError.message);
+      alert("입금내역 저장 실패: " + paymentSaveResult.error.message);
       return;
     }
 
-    const dailyCashError = await saveDailyCashRows(saveForm);
+    const dailyCashError = await saveDailyCashRows(saveForm, paymentSaveResult.rows);
     if (dailyCashError) {
       saveInProgressRef.current = false;
       setSaving(false);
       alert("일일입출금 연동 저장 실패: " + dailyCashError.message);
+      return;
+    }
+
+    const refundApprovalError = await createRefundApprovalRequests(
+      saveForm,
+      paymentSaveResult.rows
+    );
+    if (refundApprovalError) {
+      saveInProgressRef.current = false;
+      setSaving(false);
+      alert("환불 승인요청 저장 실패: " + formatCashWorkflowError(refundApprovalError));
       return;
     }
 
@@ -1183,10 +1609,19 @@ export default function SettlementRegisterPage({
       </div>
 
       {isLocked && (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
-          {canEditExpenseWhileCompleted
-            ? "완결 처리된 정산입니다. 기본정보, 청구정보, 입금내역은 잠기며 지출내역만 수정할 수 있습니다."
-            : "완결 또는 종결 처리된 정산입니다. 관리자 잠금해제 후 수정할 수 있습니다."}
+        <div className="flex flex-col gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700 md:flex-row md:items-center md:justify-between">
+          <span>
+            {canEditExpenseWhileCompleted
+              ? "완결 처리된 정산입니다. 기본정보, 청구정보, 입금내역은 잠기며 지출내역만 수정할 수 있습니다."
+              : "완결 또는 종결 처리된 정산입니다. 관리자 승인 후 미결로 되돌려 수정할 수 있습니다."}
+          </span>
+          <button
+            type="button"
+            onClick={() => void requestSettlementReopen()}
+            className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700"
+          >
+            수정 요청
+          </button>
         </div>
       )}
       {isFinalized && adminUnlocked && (
@@ -1457,6 +1892,28 @@ export default function SettlementRegisterPage({
                   }
                 />
                 계산서발행
+              </label>
+
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={Boolean(row.refundRequested)}
+                  disabled={row.refundStatus === "approved" || isLocked}
+                  onChange={(event) =>
+                    handleRefundRequestChange(index, event.target.checked)
+                  }
+                />
+                환불
+                {row.refundStatus === "pending" && (
+                  <span className="rounded bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">
+                    승인대기
+                  </span>
+                )}
+                {row.refundStatus === "approved" && (
+                  <span className="rounded bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-700">
+                    승인완료
+                  </span>
+                )}
               </label>
 
               {row.invoiceIssued && (

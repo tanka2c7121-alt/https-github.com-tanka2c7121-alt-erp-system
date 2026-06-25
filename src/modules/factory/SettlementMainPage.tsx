@@ -108,7 +108,7 @@ const fetchBalanceRows = useCallback(async () => {
     return;
   }
 
-  setBalanceRows(data ?? []);
+  setBalanceRows((data ?? []).filter((row) => row.ledger_effective !== false));
 }, []);
 
 const filteredRows = dailyRows;
@@ -348,11 +348,14 @@ const handleReceivableDateSave = async (row: any) => {
     return;
   }
 
+  const sourceKey = `settlement_payment:${row.id}`;
+
   const { error: deleteCashError } = await supabase
     .from("daily_cash")
     .delete()
     .eq("source_type", "settlement_payment")
     .eq("source_work_name", row.work_name ?? "")
+    .is("source_key", null)
     .in("content", [getDailyCashContent(row), getLegacyDailyCashContent(row)]);
 
   if (deleteCashError) {
@@ -362,7 +365,7 @@ const handleReceivableDateSave = async (row: any) => {
     return;
   }
 
-  const { error: cashError } = await supabase.from("daily_cash").insert({
+  const { error: cashError } = await supabase.from("daily_cash").upsert({
     date: paymentDate,
     created_on: localDateText(),
     account: row.normalized_payment_method,
@@ -374,7 +377,11 @@ const handleReceivableDateSave = async (row: any) => {
     memo: row.work_name ?? "",
     source_type: "settlement_payment",
     source_work_name: row.work_name ?? "",
-  });
+    source_detail_id: row.id,
+    source_key: sourceKey,
+    ledger_effective: true,
+    approval_status: "approved",
+  }, { onConflict: "source_key" });
 
   savingReceivableIdsRef.current.delete(row.id);
   setSavingReceivableId(null);

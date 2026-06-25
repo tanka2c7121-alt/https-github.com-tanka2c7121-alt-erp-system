@@ -15,6 +15,7 @@ const tables = [
   "app_users",
   "attendance_requests",
   "business_catalog",
+  "cash_change_requests",
   "daily_cash",
   "daily_cash_categories",
   "expense_requests",
