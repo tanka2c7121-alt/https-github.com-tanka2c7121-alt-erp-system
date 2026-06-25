@@ -178,9 +178,10 @@ export default function SettlementRegisterPage({
   const [completionWarningAccepted, setCompletionWarningAccepted] = useState(false);
   const [closingWarningAccepted, setClosingWarningAccepted] = useState(false);
   const [adminUnlocked, setAdminUnlocked] = useState(false);
+  const [dailyCashAdminUnlocked, setDailyCashAdminUnlocked] = useState(false);
   const [adminPasswordOpen, setAdminPasswordOpen] = useState(false);
   const [adminPasswordPurpose, setAdminPasswordPurpose] = useState<
-    "unlock" | "serviceChargeOverride"
+    "unlock" | "serviceChargeOverride" | "dailyCashCorrection"
   >("unlock");
   const [adminPassword, setAdminPassword] = useState("");
   const saveInProgressRef = useRef(false);
@@ -498,6 +499,7 @@ export default function SettlementRegisterPage({
     setCompletionWarningAccepted(false);
     setClosingWarningAccepted(false);
     setAdminUnlocked(false);
+    setDailyCashAdminUnlocked(false);
     setIsEditMode(Boolean(settlement) || paymentItems.length > 0 || Boolean(expenses?.length));
     if (!options.silent) {
       alert("불러왔습니다.");
@@ -591,82 +593,145 @@ export default function SettlementRegisterPage({
     return error;
   };
 
-  const saveDailyCashRows = async (targetForm = form) => {
-    const today = localDateText();
-    const toDailyCashPayload = (row: PaymentRow) => ({
-        date: row.date,
-        created_on: today,
-        account: row.method,
-        type: "수입",
-        category: "차량정산",
-        content: getDailyCashContent(row, targetForm.carNumber),
-        income: toNumber(row.amount),
-        expense: 0,
-        memo: targetForm.workName,
-        source_type: "settlement_payment",
-        source_work_name: targetForm.workName,
-    });
+  const toDailyCashPayload = (row: PaymentRow, targetForm = form) => ({
+    date: row.date,
+    created_on: localDateText(),
+    account: row.method,
+    type: "수입",
+    category: "차량정산",
+    content: getDailyCashContent(row, targetForm.carNumber),
+    income: toNumber(row.amount),
+    expense: 0,
+    memo: targetForm.workName,
+    source_type: "settlement_payment",
+    source_work_name: targetForm.workName,
+  });
 
-    const { data: todayCashRows, error: todayCashError } = await supabase
+  const requiresDailyCashAdminApproval = async (targetForm = form) => {
+    const today = localDateText();
+    const { data: existingCashRows, error: existingCashError } = await supabase
       .from("daily_cash")
-      .select("content")
+      .select("id, created_on, date, account, content, income, expense, memo")
       .eq("source_type", "settlement_payment")
       .eq("source_work_name", targetForm.workName)
-      .eq("category", "차량정산")
-      .eq("created_on", today);
+      .eq("category", "차량정산");
 
-    if (todayCashError) return todayCashError;
+    if (existingCashError) {
+      return { error: existingCashError, requiresApproval: false };
+    }
 
-    const todayCashContents = new Set(
-      (todayCashRows ?? []).map((row: any) => String(row.content ?? ""))
-    );
+    const existingRows = existingCashRows ?? [];
     const eligibleRows = getDailyCashEligiblePaymentRows(paymentRows);
-    const rowsToSync = eligibleRows.filter((row) => {
-      const currentContent = getDailyCashContent(row, targetForm.carNumber);
+    const usedExistingIds = new Set<number>();
 
-      return (
-        !row.id ||
-        todayCashContents.has(currentContent) ||
-        (row.originalContent ? todayCashContents.has(row.originalContent) : false)
-      );
-    });
-    const skippedExistingRows = eligibleRows.filter((row) => {
-      const currentContent = getDailyCashContent(row, targetForm.carNumber);
+    for (const row of eligibleRows) {
+      const payload = toDailyCashPayload(row, targetForm);
+      const matchingCashRow = existingRows.find((cashRow: any) => {
+        if (usedExistingIds.has(Number(cashRow.id))) return false;
 
-      return (
-        row.id &&
-        !todayCashContents.has(currentContent) &&
-        !(row.originalContent && todayCashContents.has(row.originalContent))
-      );
-    });
+        const existingContent = String(cashRow.content ?? "");
+        return (
+          existingContent === payload.content ||
+          (row.originalContent ? existingContent === row.originalContent : false)
+        );
+      });
 
-    if (todayCashContents.size > 0) {
-      const confirmed = window.confirm(
-        "오늘 일일입출금에 이미 반영된 차량정산 금액이 있습니다. 기존 오늘 반영분을 삭제하고 현재 입력값으로 다시 반영할까요?"
-      );
+      if (!matchingCashRow) continue;
 
-      if (!confirmed) {
-        return new Error("사용자가 일일입출금 재반영을 취소했습니다.");
+      usedExistingIds.add(Number(matchingCashRow.id));
+
+      if (matchingCashRow.created_on === today) continue;
+
+      const willChange =
+        String(matchingCashRow.date ?? "") !== payload.date ||
+        String(matchingCashRow.account ?? "") !== payload.account ||
+        String(matchingCashRow.content ?? "") !== payload.content ||
+        Number(matchingCashRow.income ?? 0) !== payload.income ||
+        Number(matchingCashRow.expense ?? 0) !== payload.expense ||
+        String(matchingCashRow.memo ?? "") !== payload.memo;
+
+      if (willChange) {
+        return { error: null, requiresApproval: true };
       }
     }
 
-    if (skippedExistingRows.length > 0 && rowsToSync.length > 0) {
-      alert(
-        "기존에 입력되어 있던 입금내역은 금일 일일입출금에 다시 반영하지 않습니다. 오늘 새로 추가했거나 오늘 이미 반영된 행만 연동합니다."
+    const willDeleteLockedRow = existingRows.some((row: any) => {
+      const id = Number(row.id);
+      return (
+        Number.isFinite(id) &&
+        !usedExistingIds.has(id) &&
+        row.created_on !== today
       );
-    }
+    });
 
-    const { error: deleteError } = await supabase
+    return { error: null, requiresApproval: willDeleteLockedRow };
+  };
+
+  const saveDailyCashRows = async (targetForm = form) => {
+    const { data: existingCashRows, error: existingCashError } = await supabase
       .from("daily_cash")
-      .delete()
+      .select("id, content")
       .eq("source_type", "settlement_payment")
       .eq("source_work_name", targetForm.workName)
-      .eq("category", "차량정산")
-      .eq("created_on", today);
+      .eq("category", "차량정산");
 
-    if (deleteError) return deleteError;
+    if (existingCashError) return existingCashError;
 
-    const insertRows = rowsToSync.map(toDailyCashPayload);
+    const existingRows = existingCashRows ?? [];
+    const eligibleRows = getDailyCashEligiblePaymentRows(paymentRows);
+    const usedExistingIds = new Set<number>();
+    const insertRows = [];
+
+    for (const row of eligibleRows) {
+      const payload = toDailyCashPayload(row, targetForm);
+      const matchingCashRow = existingRows.find((cashRow: any) => {
+        if (usedExistingIds.has(Number(cashRow.id))) return false;
+
+        const existingContent = String(cashRow.content ?? "");
+        return (
+          existingContent === payload.content ||
+          (row.originalContent ? existingContent === row.originalContent : false)
+        );
+      });
+
+      if (!matchingCashRow) {
+        insertRows.push(payload);
+        continue;
+      }
+
+      usedExistingIds.add(Number(matchingCashRow.id));
+      const updatePayload = {
+        date: payload.date,
+        account: payload.account,
+        type: payload.type,
+        category: payload.category,
+        content: payload.content,
+        income: payload.income,
+        expense: payload.expense,
+        memo: payload.memo,
+        source_type: payload.source_type,
+        source_work_name: payload.source_work_name,
+      };
+      const { error: updateError } = await supabase
+        .from("daily_cash")
+        .update(updatePayload)
+        .eq("id", matchingCashRow.id);
+
+      if (updateError) return updateError;
+    }
+
+    const deleteIds = existingRows
+      .map((row: any) => Number(row.id))
+      .filter((id) => Number.isFinite(id) && !usedExistingIds.has(id));
+
+    if (deleteIds.length > 0) {
+      const { error: deleteError } = await supabase
+        .from("daily_cash")
+        .delete()
+        .in("id", deleteIds);
+
+      if (deleteError) return deleteError;
+    }
 
     if (insertRows.length === 0) return null;
 
@@ -725,6 +790,14 @@ export default function SettlementRegisterPage({
       setAdminPassword("");
       setAdminPasswordOpen(false);
       alert("서비스 체크가 적용되었습니다.");
+      return;
+    }
+
+    if (adminPasswordPurpose === "dailyCashCorrection") {
+      setDailyCashAdminUnlocked(true);
+      setAdminPassword("");
+      setAdminPasswordOpen(false);
+      alert("일일입출금 정정 승인이 완료되었습니다. 다시 저장하세요.");
       return;
     }
 
@@ -809,6 +882,26 @@ export default function SettlementRegisterPage({
       (claimTotal <= 0 || !hasDatedPaymentAmount)
     ) {
       alert("완결/종결은 청구금액, 입금일, 입금금액이 모두 있어야 저장할 수 있습니다.");
+      saveInProgressRef.current = false;
+      return;
+    }
+
+    const {
+      error: dailyCashApprovalCheckError,
+      requiresApproval: dailyCashRequiresApproval,
+    } = await requiresDailyCashAdminApproval(saveForm);
+
+    if (dailyCashApprovalCheckError) {
+      alert("일일입출금 연동 확인 실패: " + dailyCashApprovalCheckError.message);
+      saveInProgressRef.current = false;
+      return;
+    }
+
+    if (dailyCashRequiresApproval && !dailyCashAdminUnlocked) {
+      setAdminPassword("");
+      setAdminPasswordPurpose("dailyCashCorrection");
+      setAdminPasswordOpen(true);
+      alert("이미 일일입출금에 반영된 과거 입금내역은 관리자 승인 후 변경할 수 있습니다.");
       saveInProgressRef.current = false;
       return;
     }
@@ -914,6 +1007,7 @@ export default function SettlementRegisterPage({
     setIsEditMode(true);
     setLoadedProgressStatus(saveForm.progressStatus);
     setAdminUnlocked(false);
+    setDailyCashAdminUnlocked(false);
 
     if (printAfterSave || isNewCompletion) {
       saveInProgressRef.current = false;
@@ -986,6 +1080,11 @@ export default function SettlementRegisterPage({
       {isFinalized && adminUnlocked && (
         <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-700">
           관리자 잠금해제 상태입니다. 저장 후 다시 잠깁니다.
+        </div>
+      )}
+      {dailyCashAdminUnlocked && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
+          일일입출금 정정 승인 상태입니다. 저장 후 다시 잠깁니다.
         </div>
       )}
 
@@ -1378,9 +1477,15 @@ export default function SettlementRegisterPage({
       {adminPasswordOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
           <div className="w-full max-w-sm rounded-xl border border-white/70 bg-white p-5 shadow-2xl">
-            <h4 className="text-lg font-bold text-slate-900">관리자 잠금해제</h4>
+            <h4 className="text-lg font-bold text-slate-900">
+              {adminPasswordPurpose === "dailyCashCorrection"
+                ? "일일입출금 정정 승인"
+                : "관리자 잠금해제"}
+            </h4>
             <p className="mt-1 text-sm text-slate-600">
-              관리자 비밀번호를 입력하세요.
+              {adminPasswordPurpose === "dailyCashCorrection"
+                ? "이미 반영된 과거 일일입출금 내역을 변경하려면 관리자 비밀번호를 입력하세요."
+                : "관리자 비밀번호를 입력하세요."}
             </p>
 
             <input

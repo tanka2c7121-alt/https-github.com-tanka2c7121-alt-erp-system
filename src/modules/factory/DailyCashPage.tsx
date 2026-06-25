@@ -458,6 +458,15 @@ export default function DailyCashPage({ onSelectMenu }: DailyCashPageProps) {
               ) : (
                 filteredRows.map((item) => {
                   const canEditRow = canEditDailyCashRow(item);
+                  const isSettlementPaymentRow =
+                    item.source_type === "settlement_payment";
+                  const settlementWorkName =
+                    item.source_work_name || item.memo || "";
+                  const editButtonTitle = isSettlementPaymentRow
+                    ? "차량정산에서 수정 후 저장하면 일일입출금에 반영됩니다."
+                    : canEditRow
+                      ? undefined
+                      : "관리자 승인 후 수정할 수 있습니다.";
 
                   return (
                     <tr key={item.id} className="hover:bg-blue-50">
@@ -487,44 +496,51 @@ export default function DailyCashPage({ onSelectMenu }: DailyCashPageProps) {
                     </td>
                     <td className="border border-slate-300 px-3 py-2 text-center">
                       <div className="flex justify-center gap-2">
-                        {item.source_type !== "settlement_payment" && (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                onSelectMenu({
-                                  id: "factory-settlement-daily-cash-register",
-                                  title: "입출금수정",
-                                  data: item,
-                                })
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (isSettlementPaymentRow) {
+                              if (!settlementWorkName) {
+                                alert("연결된 작업명을 찾지 못했습니다.");
+                                return;
                               }
-                              disabled={!canEditRow}
-                              title={
-                                canEditRow
-                                  ? undefined
-                                  : "입력 당일 내역 또는 최근 7일 이내 수입 미확인 내역만 수정할 수 있습니다."
-                              }
-                              className="rounded border border-blue-300 px-3 py-1 text-xs font-semibold text-blue-600 hover:bg-blue-50 disabled:border-slate-200 disabled:text-slate-400 disabled:hover:bg-white"
-                            >
-                              수정
-                            </button>
 
-                            <button
-                              type="button"
-                              onClick={() => {
-                                void handleDelete(item);
-                              }}
-                              disabled={!canEditRow}
-                              title={
-                                canEditRow
-                                  ? undefined
-                                  : "입력한 당일 내역만 삭제할 수 있습니다."
-                              }
-                              className="rounded border border-red-300 px-3 py-1 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:border-slate-200 disabled:text-slate-400 disabled:hover:bg-white"
-                            >
-                              삭제
-                            </button>
-                          </>
+                              onSelectMenu({
+                                id: "factory-settlement-repair-register",
+                                title: "정산등록",
+                                data: { workName: settlementWorkName },
+                              });
+                              return;
+                            }
+
+                            onSelectMenu({
+                              id: "factory-settlement-daily-cash-register",
+                              title: "입출금수정",
+                              data: item,
+                            });
+                          }}
+                          title={editButtonTitle}
+                          className="rounded border border-blue-300 px-3 py-1 text-xs font-semibold text-blue-600 hover:bg-blue-50"
+                        >
+                          {isSettlementPaymentRow ? "정산수정" : "수정"}
+                        </button>
+
+                        {item.source_type !== "settlement_payment" && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              void handleDelete(item);
+                            }}
+                            disabled={!canEditRow}
+                            title={
+                              canEditRow
+                                ? undefined
+                                : "입력한 당일 내역만 삭제할 수 있습니다."
+                            }
+                            className="rounded border border-red-300 px-3 py-1 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:border-slate-200 disabled:text-slate-400 disabled:hover:bg-white"
+                          >
+                            삭제
+                          </button>
                         )}
  
                       </div>

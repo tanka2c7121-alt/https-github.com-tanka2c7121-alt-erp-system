@@ -49,6 +49,8 @@ export type DailyCashRow = {
   income: number;
   expense: number;
   memo: string | null;
+  source_type?: string | null;
+  source_work_name?: string | null;
 };
 
 type DailyCashRegisterPageProps = {
@@ -111,10 +113,19 @@ export default function DailyCashRegisterPage({
     memo: "",
   });
   const [saving, setSaving] = useState(false);
+  const [adminUnlocked, setAdminUnlocked] = useState(false);
+  const [adminPasswordOpen, setAdminPasswordOpen] = useState(false);
+  const [adminPassword, setAdminPassword] = useState("");
   const saveInProgressRef = useRef(false);
 
   const isEditMode = Boolean(editData);
   const canEditCurrentRow = canEditDailyCashRow(editData);
+  const isSettlementPaymentRow = editData?.source_type === "settlement_payment";
+  const requiresAdminUnlock = Boolean(
+    editData && !canEditCurrentRow && !isSettlementPaymentRow
+  );
+  const canSaveCurrentRow =
+    !isSettlementPaymentRow && (!requiresAdminUnlock || adminUnlocked);
 
   useEffect(() => {
     const loadCategoryOptions = async () => {
@@ -181,16 +192,47 @@ export default function DailyCashRegisterPage({
       amount: String(editData.income || editData.expense || ""),
       memo: editData.memo ?? "",
     });
+    setAdminUnlocked(false);
+    setAdminPassword("");
+    setAdminPasswordOpen(false);
   }, [editData]);
 
+  function canChangeForm() {
+    if (isSettlementPaymentRow) {
+      alert("차량정산에서 입력된 내역은 정산등록에서 수정 후 저장하세요.");
+      return false;
+    }
+
+    if (requiresAdminUnlock && !adminUnlocked) {
+      alert("관리자 승인 후 변경할 수 있습니다.");
+      return false;
+    }
+
+    return true;
+  }
+
   function handleChange(key: keyof FormState, value: string) {
+    if (!canChangeForm()) return;
+
     setForm((prev) => ({
       ...prev,
       [key]: value,
     }));
   }
 
+  function handleTypeChange(value: string) {
+    if (!canChangeForm()) return;
+
+    setForm((prev) => ({
+      ...prev,
+      type: value,
+      category: "",
+    }));
+  }
+
   function handleReset() {
+    if (!canChangeForm()) return;
+
     setForm({
       date: "",
       account: "",
@@ -202,6 +244,35 @@ export default function DailyCashRegisterPage({
     });
   }
 
+  function handleAdminUnlock() {
+    setAdminPassword("");
+    setAdminPasswordOpen(true);
+  }
+
+  async function confirmAdminUnlock() {
+    const password = adminPassword.trim();
+    if (!password) return;
+
+    const { data, error } = await supabase
+      .from("app_users")
+      .select("id")
+      .eq("password", password)
+      .eq("role", "ADMIN")
+      .eq("is_active", true)
+      .limit(1)
+      .maybeSingle();
+
+    if (error || !data) {
+      alert("관리자 승인에 실패했습니다.");
+      return;
+    }
+
+    setAdminUnlocked(true);
+    setAdminPassword("");
+    setAdminPasswordOpen(false);
+    alert("관리자 승인이 완료되었습니다. 저장 후 다시 잠금 상태가 됩니다.");
+  }
+
   async function handleSave() {
     if (saveInProgressRef.current) {
       return;
@@ -211,8 +282,13 @@ export default function DailyCashRegisterPage({
     setSaving(true);
 
     try {
-    if (editData && !canEditCurrentRow) {
-      alert("입력 당일 내역 또는 최근 7일 이내 수입 미확인 내역만 수정할 수 있습니다.");
+    if (isSettlementPaymentRow) {
+      alert("차량정산에서 입력된 내역은 정산등록에서 수정 후 저장하세요.");
+      return;
+    }
+
+    if (editData && !canSaveCurrentRow) {
+      alert("관리자 승인 후 수정할 수 있습니다.");
       return;
     }
 
@@ -259,7 +335,9 @@ expense:
         .update(payload)
         .eq("id", editData.id);
 
-      if (isUnconfirmedIncome(editData)) {
+      if (adminUnlocked) {
+        updateQuery = updateQuery;
+      } else if (isUnconfirmedIncome(editData)) {
         updateQuery = updateQuery
           .eq("type", "수입")
           .eq("category", "미확인")
@@ -283,12 +361,17 @@ expense:
     }
 
     if (editData && (!saveResult.data || saveResult.data.length === 0)) {
-      alert("입력 당일 내역 또는 최근 7일 이내 수입 미확인 내역만 수정할 수 있습니다.");
+      alert(
+        adminUnlocked
+          ? "수정할 입출금 내역을 찾지 못했습니다."
+          : "입력 당일 내역 또는 최근 7일 이내 수입 미확인 내역만 수정할 수 있습니다."
+      );
       return;
     }
 
     alert(isEditMode ? "수정되었습니다." : "저장되었습니다.");
     handleReset();
+    setAdminUnlocked(false);
     } finally {
       saveInProgressRef.current = false;
       setSaving(false);
@@ -305,6 +388,38 @@ expense:
           일일 입금 및 출금 내역을 등록하는 화면입니다.
         </p>
       </div>
+
+      {requiresAdminUnlock && (
+        <section className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="font-bold">
+                입력 당일이 지난 입출금 내역입니다.
+              </p>
+              <p className="mt-1">
+                관리자 승인 후 계정, 구분, 금액 등을 정정할 수 있습니다.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleAdminUnlock}
+              className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:bg-slate-400"
+              disabled={adminUnlocked}
+            >
+              {adminUnlocked ? "관리자 승인 완료" : "관리자 승인"}
+            </button>
+          </div>
+        </section>
+      )}
+
+      {isSettlementPaymentRow && (
+        <section className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
+          <p className="font-bold">차량정산에서 입력된 입출금 내역입니다.</p>
+          <p className="mt-1">
+            정산등록에서 입금수단과 금액을 수정한 뒤 저장하면 일일입출금에 반영됩니다.
+          </p>
+        </section>
+      )}
 
       <section className="grid grid-cols-1 gap-4 md:grid-cols-4">
         <div className="rounded-xl border border-slate-200 bg-white p-4">
@@ -341,8 +456,7 @@ expense:
   className={inputClass}
   value={form.type}
   onChange={(event) => {
-    handleChange("type", event.target.value);
-    handleChange("category", "");
+    handleTypeChange(event.target.value);
   }}
 >
     <option value="">선택</option>
@@ -431,17 +545,63 @@ expense:
         <button
           type="button"
           onClick={handleSave}
-          disabled={!canEditCurrentRow || saving}
+          disabled={!canSaveCurrentRow || saving}
           title={
-            canEditCurrentRow
+            canSaveCurrentRow
               ? undefined
-              : "입력 당일 내역 또는 최근 7일 이내 수입 미확인 내역만 수정할 수 있습니다."
+              : isSettlementPaymentRow
+                ? "차량정산에서 수정 후 저장하세요."
+                : "관리자 승인 후 수정할 수 있습니다."
           }
           className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:bg-slate-400"
         >
           {saving ? (isEditMode ? "수정 중..." : "저장 중...") : isEditMode ? "수정저장" : "저장"}
         </button>
       </div>
+
+      {adminPasswordOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-sm rounded-xl bg-white p-5 shadow-xl">
+            <h4 className="text-lg font-bold text-slate-900">관리자 승인</h4>
+            <p className="mt-2 text-sm text-slate-600">
+              잠긴 일일입출금 내역을 수정하려면 관리자 비밀번호를 입력하세요.
+            </p>
+            <input
+              className={inputClass}
+              type="password"
+              value={adminPassword}
+              onChange={(event) => setAdminPassword(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  void confirmAdminUnlock();
+                }
+              }}
+              autoFocus
+            />
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setAdminPassword("");
+                  setAdminPasswordOpen(false);
+                }}
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  void confirmAdminUnlock();
+                }}
+                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+              >
+                확인
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
