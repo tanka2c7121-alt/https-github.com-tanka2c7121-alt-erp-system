@@ -523,7 +523,14 @@ export default function SettlementRegisterPage({
   useRealtimeRefresh({
     channelName: `settlement-register-page-${form.workName || initialWorkName || "empty"}`,
     tables: realtimeTables,
-    enabled: Boolean(form.workName && isEditMode && !hasUnsavedChanges),
+    enabled: Boolean(
+      form.workName &&
+        isEditMode &&
+        !hasUnsavedChanges &&
+        !adminUnlocked &&
+        !dailyCashAdminUnlocked &&
+        !adminPasswordOpen
+    ),
     onRefresh: () => loadWorkOrder(form.workName || initialWorkName, { silent: true }),
   });
 
