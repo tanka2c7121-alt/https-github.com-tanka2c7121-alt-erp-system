@@ -1052,13 +1052,11 @@ export default function SettlementRegisterPage({
       return;
     }
 
-    setSaving(false);
-    setForm(saveForm);
-    setIsEditMode(true);
-    setLoadedProgressStatus(saveForm.progressStatus);
     setHasUnsavedChanges(false);
     setAdminUnlocked(false);
     setDailyCashAdminUnlocked(false);
+    await loadWorkOrder(saveForm.workName, { silent: true });
+    setSaving(false);
 
     if (printAfterSave || isNewCompletion) {
       saveInProgressRef.current = false;

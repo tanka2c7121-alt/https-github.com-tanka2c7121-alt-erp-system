@@ -40,6 +40,32 @@ const canEditDailyCashRow = (row: DailyCashRow) =>
       isUnconfirmedIncome(row) &&
       row.created_on >= unconfirmedIncomeEditStartDate()
   );
+const sortDailyCashRows = (rows: DailyCashRow[]) =>
+  [...rows].sort((left, right) => {
+    const createdCompare = String(right.created_on ?? "").localeCompare(
+      String(left.created_on ?? "")
+    );
+    if (createdCompare !== 0) return createdCompare;
+
+    const dateCompare = String(right.date ?? "").localeCompare(
+      String(left.date ?? "")
+    );
+    if (dateCompare !== 0) return dateCompare;
+
+    return Number(right.id ?? 0) - Number(left.id ?? 0);
+  });
+const mergeDailyCashRows = (
+  baseRows: DailyCashRow[],
+  extraRows: DailyCashRow[]
+) => {
+  const rowMap = new Map<number, DailyCashRow>();
+
+  [...baseRows, ...extraRows].forEach((row) => {
+    rowMap.set(row.id, row);
+  });
+
+  return sortDailyCashRows(Array.from(rowMap.values()));
+};
 const normalizeAccountName = (value: unknown) => {
   const rawText = String(value ?? "").trim();
   const accountKey = rawText
@@ -119,7 +145,22 @@ export default function DailyCashPage({ onSelectMenu }: DailyCashPageProps) {
       return;
     }
 
-    setRows(data ?? []);
+    const { data: unconfirmedRows, error: unconfirmedError } =
+      await fetchAllRows<DailyCashRow>("daily_cash", "*", (query) =>
+        query
+          .eq("type", "수입")
+          .eq("category", "미확인")
+          .order("created_on", { ascending: false })
+          .order("date", { ascending: false })
+          .order("id", { ascending: false })
+      );
+
+    if (unconfirmedError) {
+      alert("미확인 입금 조회 실패: " + unconfirmedError.message);
+      return;
+    }
+
+    setRows(mergeDailyCashRows(data ?? [], unconfirmedRows ?? []));
   }, []);
 
   function handlePeriodChange(value: PeriodValue) {
@@ -148,8 +189,23 @@ export default function DailyCashPage({ onSelectMenu }: DailyCashPageProps) {
     return;
   }
 
+  const { data: unconfirmedRows, error: unconfirmedError } =
+    await fetchAllRows<DailyCashRow>("daily_cash", "*", (query) =>
+      query
+        .eq("type", "수입")
+        .eq("category", "미확인")
+        .order("created_on", { ascending: false })
+        .order("date", { ascending: false })
+        .order("id", { ascending: false })
+    );
+
+  if (unconfirmedError) {
+    alert("미확인 입금 조회 실패: " + unconfirmedError.message);
+    return;
+  }
+
   setPeriod("all");
-  setRows(data ?? []);
+  setRows(mergeDailyCashRows(data ?? [], unconfirmedRows ?? []));
 }
 
   async function handleDelete(row: DailyCashRow) {
