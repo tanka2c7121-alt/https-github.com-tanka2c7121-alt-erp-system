@@ -7,6 +7,7 @@ import Statusbar from "../statusbar/Statusbar";
 import { menuData, type MenuItem } from "../../data/menuData";
 import { getApprovalRole } from "../../lib/approval";
 import { supabase } from "../../lib/supabase";
+import { useRealtimeRefresh } from "../../lib/useRealtimeRefresh";
 import type { UserRole } from "../../types/roles";
 
 import WorkRegisterPage from "../../modules/factory/WorkRegisterPage";
@@ -127,6 +128,14 @@ const menuCacheKey = (menu: MenuItem) =>
   `${menu.id}:${JSON.stringify(menu.data ?? {})}`;
 
 const isCacheableMenu = (menu: MenuItem) => !menu.id.includes("print");
+
+const notificationRealtimeTables = [
+  { table: "cash_change_requests" },
+  { table: "expense_requests" },
+  { table: "attendance_requests" },
+  { table: "incident_reports" },
+  { table: "app_users" },
+];
 
 export default function MainLayout({ user, onLogout }: MainLayoutProps) {
   const isAdmin = user.role === "ADMIN";
@@ -430,6 +439,12 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
       myIncidents: myIncidentsResult.error ? 0 : myIncidentsResult.count ?? 0,
     });
   }, [approvalRole, isAdmin, user.department, user.user_id]);
+
+  useRealtimeRefresh({
+    channelName: "main-layout-notifications",
+    tables: notificationRealtimeTables,
+    onRefresh: loadNotificationCounts,
+  });
 
   useEffect(() => {
     void loadNotificationCounts();

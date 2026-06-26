@@ -152,3 +152,10 @@ on public.cash_change_requests
 for delete
 to authenticated
 using (public.current_app_user_is_admin());
+
+do $$
+begin
+  alter publication supabase_realtime add table public.cash_change_requests;
+exception
+  when duplicate_object then null;
+end $$;
