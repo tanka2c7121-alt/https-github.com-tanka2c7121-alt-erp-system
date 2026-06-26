@@ -143,6 +143,8 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
   const canViewSales = ["ADMIN", "CHIEF"].includes(userRole);
   const approvalRole = getApprovalRole(user);
   const canCheckIncident = approvalRole === "관리자";
+  const canApproveCashChanges =
+    isAdmin || approvalRole === "관리자" || user.approval_role === "관리자";
 
   const [selectedMenu, setSelectedMenu] = useState<MenuItem>(initialMenu);
   const [menuHistory, setMenuHistory] = useState<MenuItem[]>([]);
@@ -402,7 +404,7 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
             .select("id", { count: "exact", head: true })
             .eq("status", "확인대기")
         : Promise.resolve({ count: 0, error: null }),
-      isAdmin
+      canApproveCashChanges
         ? supabase
             .from("cash_change_requests")
             .select("id", { count: "exact", head: true })
@@ -438,7 +440,13 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
       myAttendances: myAttendancesResult.error ? 0 : myAttendancesResult.count ?? 0,
       myIncidents: myIncidentsResult.error ? 0 : myIncidentsResult.count ?? 0,
     });
-  }, [approvalRole, isAdmin, user.department, user.user_id]);
+  }, [
+    approvalRole,
+    canApproveCashChanges,
+    isAdmin,
+    user.department,
+    user.user_id,
+  ]);
 
   useRealtimeRefresh({
     channelName: "main-layout-notifications",
@@ -454,7 +462,7 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
     };
     const intervalId = window.setInterval(() => {
       void loadNotificationCounts();
-    }, 60000);
+    }, 15000);
 
     window.addEventListener("focus", handleFocus);
 
@@ -485,6 +493,10 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
             count: notificationCounts.incidents,
             menu: { id: "documents-incident-report", title: "경위서" },
           },
+        ]
+      : []),
+    ...(canApproveCashChanges
+      ? [
           {
             id: "cashChanges",
             title: "입출금 승인요청",

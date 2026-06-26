@@ -127,7 +127,7 @@ on public.cash_change_requests
 for select
 to authenticated
 using (
-  public.current_app_user_is_admin()
+  public.current_app_user_is_admin_dept()
   or requested_by = public.current_app_user_id()
 );
 
@@ -144,14 +144,14 @@ create policy cash_change_requests_update_admin
 on public.cash_change_requests
 for update
 to authenticated
-using (public.current_app_user_is_admin())
-with check (public.current_app_user_is_admin());
+using (public.current_app_user_is_admin_dept())
+with check (public.current_app_user_is_admin_dept());
 
 create policy cash_change_requests_delete_admin
 on public.cash_change_requests
 for delete
 to authenticated
-using (public.current_app_user_is_admin());
+using (public.current_app_user_is_admin_dept());
 
 do $$
 begin

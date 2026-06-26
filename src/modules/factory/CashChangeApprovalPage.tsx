@@ -1,13 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { getApprovalRole } from "../../lib/approval";
 import { supabase } from "../../lib/supabase";
+import { useRealtimeRefresh } from "../../lib/useRealtimeRefresh";
 import type { UserRole } from "../../types/roles";
 
 type CashChangeApprovalPageProps = {
   user: {
     user_id: string;
     user_name: string;
+    approval_role?: string | null;
     role: UserRole;
   };
 };
@@ -29,6 +32,7 @@ type CashChangeRequest = {
 };
 
 const formatWon = (amount: number) => Number(amount || 0).toLocaleString();
+const cashChangeRealtimeTables = [{ table: "cash_change_requests" }];
 const isMissingSchemaError = (error: any) => {
   const message = String(error?.message ?? "").toLowerCase();
   const code = String(error?.code ?? "");
@@ -77,7 +81,10 @@ export default function CashChangeApprovalPage({
   const [processingId, setProcessingId] = useState<number | null>(null);
   const [setupError, setSetupError] = useState<string | null>(null);
 
-  const isAdmin = user.role === "ADMIN";
+  const canApprove =
+    user.role === "ADMIN" ||
+    getApprovalRole(user) === "관리자" ||
+    user.approval_role === "관리자";
 
   const fetchRows = useCallback(async () => {
     setLoading(true);
@@ -107,8 +114,22 @@ export default function CashChangeApprovalPage({
     void fetchRows();
   }, [fetchRows]);
 
+  useRealtimeRefresh({
+    channelName: "cash-change-approval-page",
+    tables: cashChangeRealtimeTables,
+    onRefresh: fetchRows,
+  });
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      void fetchRows();
+    }, 10000);
+
+    return () => window.clearInterval(intervalId);
+  }, [fetchRows]);
+
   async function approveRequest(row: CashChangeRequest) {
-    if (!isAdmin) {
+    if (!canApprove) {
       alert("관리자만 승인할 수 있습니다.");
       return;
     }
@@ -197,7 +218,7 @@ export default function CashChangeApprovalPage({
   }
 
   async function rejectRequest(row: CashChangeRequest) {
-    if (!isAdmin) {
+    if (!canApprove) {
       alert("관리자만 반려할 수 있습니다.");
       return;
     }
@@ -317,7 +338,7 @@ export default function CashChangeApprovalPage({
                         <div className="flex justify-center gap-2">
                           <button
                             type="button"
-                            disabled={!isAdmin || processingId === row.id}
+                            disabled={!canApprove || processingId === row.id}
                             onClick={() => void approveRequest(row)}
                             className="rounded border border-blue-300 px-3 py-1 text-xs font-semibold text-blue-600 hover:bg-blue-50 disabled:border-slate-200 disabled:text-slate-400"
                           >
@@ -325,7 +346,7 @@ export default function CashChangeApprovalPage({
                           </button>
                           <button
                             type="button"
-                            disabled={!isAdmin || processingId === row.id}
+                            disabled={!canApprove || processingId === row.id}
                             onClick={() => void rejectRequest(row)}
                             className="rounded border border-red-300 px-3 py-1 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:border-slate-200 disabled:text-slate-400"
                           >
