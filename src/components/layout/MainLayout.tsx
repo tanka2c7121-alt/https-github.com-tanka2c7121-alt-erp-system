@@ -669,6 +669,7 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
       return (
         <DailyCashRegisterPage
           editData={menu.data as any}
+          user={user}
           onSelectMenu={handleSelectMenu}
         />
       );
@@ -680,7 +681,7 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
       return <CashChangeApprovalPage user={user} />;
     }
     if (menu.id === "factory-settlement-daily-cash") {
-      return <DailyCashPage onSelectMenu={handleSelectMenu} />;
+      return <DailyCashPage user={user} onSelectMenu={handleSelectMenu} />;
     }
     if (menu.id === "factory-inbound") {
       return <InboundStatusPage onSelectMenu={handleSelectMenu} />;

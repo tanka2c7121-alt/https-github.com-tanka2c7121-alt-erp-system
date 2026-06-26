@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { addLocalDaysText, localDateText } from "../../lib/date";
+import { localDateText } from "../../lib/date";
 import { supabase } from "../../lib/supabase";
 import type { MenuItem } from "../../data/menuData";
+import type { UserRole } from "../../types/roles";
 
 const inputClass =
   "mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:outline-none";
@@ -15,19 +16,10 @@ const normalizeAccountName = (value: string) =>
     ? "BLUE POINT"
     : value;
 
-const unconfirmedIncomeEditStartDate = () => addLocalDaysText(-6);
 const isUnconfirmedIncome = (row: Pick<DailyCashRow, "type" | "category">) =>
   row.type === "수입" && row.category === "미확인";
-const canEditDailyCashRow = (row?: DailyCashRow) => {
-  if (!row) return true;
-  if (row.created_on === localDateText()) return true;
-
-  return Boolean(
-    row.created_on &&
-      isUnconfirmedIncome(row) &&
-      row.created_on >= unconfirmedIncomeEditStartDate()
-  );
-};
+const isFinalizedStatus = (status: unknown) =>
+  status === "완결" || status === "종결";
 
 type FormState = {
   date: string;
@@ -58,6 +50,12 @@ export type DailyCashRow = {
 
 type DailyCashRegisterPageProps = {
   editData?: DailyCashRow;
+  user: {
+    user_id: string;
+    user_name: string;
+    role: UserRole;
+    approval_role?: string | null;
+  };
   onSelectMenu: (menu: MenuItem) => void;
 };
 
@@ -105,6 +103,7 @@ const defaultCategoryOptions: Record<string, string[]> = {
 
 export default function DailyCashRegisterPage({
   editData,
+  user,
   onSelectMenu,
 }: DailyCashRegisterPageProps) {
   const [categoryOptions, setCategoryOptions] = useState(defaultCategoryOptions);
@@ -125,10 +124,9 @@ export default function DailyCashRegisterPage({
   const saveInProgressRef = useRef(false);
 
   const isEditMode = Boolean(editData);
-  const canEditCurrentRow = canEditDailyCashRow(editData);
   const isSettlementPaymentRow = editData?.source_type === "settlement_payment";
-  const requiresAdminUnlock = Boolean(editData && !canEditCurrentRow);
-  const canSaveCurrentRow = !requiresAdminUnlock || adminUnlocked;
+  const requiresAdminUnlock = false;
+  const canSaveCurrentRow = true;
 
   useEffect(() => {
     const loadCategoryOptions = async () => {
@@ -202,11 +200,6 @@ export default function DailyCashRegisterPage({
   }, [editData]);
 
   function canChangeForm() {
-    if (requiresAdminUnlock && !adminUnlocked) {
-      alert("관리자 승인 후 변경할 수 있습니다.");
-      return false;
-    }
-
     return true;
   }
 
@@ -303,6 +296,111 @@ export default function DailyCashRegisterPage({
     alert("관리자 승인이 완료되었습니다. 저장 후 다시 잠금 상태가 됩니다.");
   }
 
+  async function canApplyDailyCashChangeImmediately(row: DailyCashRow) {
+    if (row.source_type !== "settlement_payment") {
+      return row.created_on === localDateText();
+    }
+
+    if (!row.source_work_name) return true;
+
+    const { data, error } = await supabase
+      .from("repair_settlements")
+      .select("progress_status")
+      .eq("work_name", row.source_work_name)
+      .limit(1)
+      .maybeSingle();
+
+    if (error) throw error;
+
+    return !isFinalizedStatus(data?.progress_status);
+  }
+
+  async function createDailyCashCorrectionRequest(
+    row: DailyCashRow,
+    payload: {
+      date: string;
+      account: string;
+      type: string;
+      category: string;
+      content: string;
+      income: number;
+      expense: number;
+      memo: string;
+    },
+    amount: number
+  ) {
+    const sourceKey = `daily_cash_correction:${row.id}`;
+    const { data: existingRequest, error: existingRequestError } = await supabase
+      .from("cash_change_requests")
+      .select("id")
+      .eq("source_key", sourceKey)
+      .eq("status", "pending")
+      .limit(1)
+      .maybeSingle();
+
+    if (existingRequestError) return existingRequestError;
+    if (existingRequest) {
+      alert("이미 관리자 승인 대기 중인 수정 요청이 있습니다.");
+      return null;
+    }
+
+    const paymentId =
+      Number(row.source_detail_id) ||
+      Number(String(row.source_key ?? "").replace("settlement_payment:", ""));
+    const [paymentType = payload.category, paymentDetail = ""] = String(
+      payload.content || ""
+    )
+      .split("/")
+      .map((value) => value.trim());
+
+    const { error } = await supabase.from("cash_change_requests").insert({
+      request_type: "daily_cash_correction",
+      status: "pending",
+      source_type: row.source_type ?? "daily_cash",
+      source_work_name: row.source_work_name,
+      source_detail_id: row.source_detail_id ?? null,
+      source_key: sourceKey,
+      target_table: "daily_cash",
+      target_id: row.id,
+      title: `${row.source_work_name ?? "일일입출금"} 입출금 수정 요청`,
+      reason:
+        row.source_type === "settlement_payment"
+          ? "완결/종결 정산 연동 입출금 수정 요청"
+          : "입력일이 지난 일일입출금 수정 요청",
+      before_payload: {
+        daily_cash: row,
+      },
+      requested_payload: {
+        daily_cash: {
+          ...payload,
+          memo: [
+            payload.memo,
+            "관리자 승인 후 수정 반영",
+            `금액 ${amount.toLocaleString()}원`,
+          ]
+            .filter(Boolean)
+            .join(" / "),
+        },
+        settlement_payment:
+          Number.isFinite(paymentId) && paymentId > 0
+            ? {
+                id: paymentId,
+                payment_type: paymentType || payload.category,
+                payment_detail: paymentDetail,
+                payment_amount: payload.type === "수입" ? amount : 0,
+                payment_date: payload.date || null,
+                payment_method: normalizeAccountName(payload.account),
+                payment_status: payload.date ? "수금" : "청구",
+              }
+            : null,
+      },
+      requested_by: user.user_id,
+      requested_name: user.user_name,
+    });
+
+    return error ?? null;
+  }
+
   async function handleSave() {
     if (saveInProgressRef.current) {
       return;
@@ -312,11 +410,6 @@ export default function DailyCashRegisterPage({
     setSaving(true);
 
     try {
-    if (editData && !canSaveCurrentRow) {
-      alert("관리자 승인 후 수정할 수 있습니다.");
-      return;
-    }
-
     if (!form.date) {
       alert("일자를 입력하세요.");
       return;
@@ -355,21 +448,37 @@ expense:
     let saveResult;
 
     if (editData) {
-      let updateQuery = supabase
+      let canApplyImmediately = false;
+
+      try {
+        canApplyImmediately = await canApplyDailyCashChangeImmediately(editData);
+      } catch (error: any) {
+        alert("수정 가능 여부 확인 실패: " + (error?.message ?? String(error)));
+        return;
+      }
+
+      if (!canApplyImmediately) {
+        const requestError = await createDailyCashCorrectionRequest(
+          editData,
+          payload,
+          amount
+        );
+
+        if (requestError) {
+          alert("수정 승인요청 저장 실패: " + requestError.message);
+          return;
+        }
+
+        alert("관리자에게 수정 요청을 보냈습니다.");
+        handleReset();
+        setAdminUnlocked(false);
+        return;
+      }
+
+      const updateQuery = supabase
         .from("daily_cash")
         .update(payload)
         .eq("id", editData.id);
-
-      if (adminUnlocked) {
-        updateQuery = updateQuery;
-      } else if (isUnconfirmedIncome(editData)) {
-        updateQuery = updateQuery
-          .eq("type", "수입")
-          .eq("category", "미확인")
-          .gte("created_on", unconfirmedIncomeEditStartDate());
-      } else {
-        updateQuery = updateQuery.eq("created_on", localDateText());
-      }
 
       saveResult = await updateQuery.select("id");
     } else {
@@ -448,11 +557,9 @@ expense:
         <section className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
-              <p className="font-bold">
-                입력 당일이 지난 입출금 내역입니다.
-              </p>
+              <p className="font-bold">관리자 승인 후 반영되는 입출금 내역입니다.</p>
               <p className="mt-1">
-                관리자 승인 후 계정, 구분, 금액 등을 정정할 수 있습니다.
+                저장하면 바로 반영하지 않고 입출금 승인요청으로 전달됩니다.
               </p>
             </div>
             <button
@@ -626,7 +733,7 @@ expense:
         <button
           type="button"
           onClick={handleSave}
-          disabled={!canSaveCurrentRow || saving}
+          disabled={saving}
           title={
             canSaveCurrentRow
               ? undefined

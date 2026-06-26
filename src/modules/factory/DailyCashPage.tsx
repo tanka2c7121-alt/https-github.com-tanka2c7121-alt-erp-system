@@ -2,11 +2,18 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { MenuItem } from "../../data/menuData";
-import { addLocalDaysText, localDateText } from "../../lib/date";
+import { localDateText } from "../../lib/date";
 import { fetchAllRows } from "../../lib/fetchAllRows";
 import { supabase } from "../../lib/supabase";
+import type { UserRole } from "../../types/roles";
 
 type DailyCashPageProps = {
+  user: {
+    user_id: string;
+    user_name: string;
+    role: UserRole;
+    approval_role?: string | null;
+  };
   onSelectMenu: (menu: MenuItem) => void;
 };
 
@@ -33,16 +40,10 @@ type DailyCashRow = {
 const formatWon = (amount: number) => amount.toLocaleString();
 const isTodayCreatedRow = (row: DailyCashRow) =>
   row.created_on === localDateText();
-const unconfirmedIncomeEditStartDate = () => addLocalDaysText(-6);
-const isUnconfirmedIncome = (row: Pick<DailyCashRow, "type" | "category">) =>
-  row.type === "수입" && row.category === "미확인";
 const canEditDailyCashRow = (row: DailyCashRow) =>
-  isTodayCreatedRow(row) ||
-  Boolean(
-    row.created_on &&
-      isUnconfirmedIncome(row) &&
-      row.created_on >= unconfirmedIncomeEditStartDate()
-  );
+  row.source_type === "settlement_payment" || isTodayCreatedRow(row);
+const isFinalizedStatus = (status: unknown) =>
+  status === "완결" || status === "종결";
 const sortDailyCashRows = (rows: DailyCashRow[]) =>
   [...rows].sort((left, right) => {
     const createdCompare = String(right.created_on ?? "").localeCompare(
@@ -93,7 +94,7 @@ const normalizeAccountName = (value: unknown) => {
 };
 
 
-export default function DailyCashPage({ onSelectMenu }: DailyCashPageProps) {
+export default function DailyCashPage({ user, onSelectMenu }: DailyCashPageProps) {
   const [rows, setRows] = useState<DailyCashRow[]>([]);
   const [balanceRows, setBalanceRows] = useState<DailyCashRow[]>([]);
   const [searchText, setSearchText] = useState("");
@@ -211,9 +212,104 @@ export default function DailyCashPage({ onSelectMenu }: DailyCashPageProps) {
   setRows(mergeDailyCashRows(data ?? [], unconfirmedRows ?? []));
 }
 
+  async function canApplyDailyCashChangeImmediately(row: DailyCashRow) {
+    if (row.source_type !== "settlement_payment") {
+      return isTodayCreatedRow(row);
+    }
+
+    if (!row.source_work_name) return true;
+
+    const { data, error } = await supabase
+      .from("repair_settlements")
+      .select("progress_status")
+      .eq("work_name", row.source_work_name)
+      .limit(1)
+      .maybeSingle();
+
+    if (error) throw error;
+
+    return !isFinalizedStatus(data?.progress_status);
+  }
+
+  async function createDailyCashDeleteRequest(row: DailyCashRow) {
+    const sourceKey = `daily_cash_delete:${row.id}`;
+    const { data: existingRequest, error: existingRequestError } = await supabase
+      .from("cash_change_requests")
+      .select("id")
+      .eq("source_key", sourceKey)
+      .eq("status", "pending")
+      .limit(1)
+      .maybeSingle();
+
+    if (existingRequestError) return existingRequestError;
+    if (existingRequest) {
+      alert("이미 관리자 승인 대기 중인 삭제 요청이 있습니다.");
+      return null;
+    }
+
+    const paymentId =
+      Number(row.source_detail_id) ||
+      Number(String(row.source_key ?? "").replace("settlement_payment:", ""));
+    const { error } = await supabase.from("cash_change_requests").insert({
+      request_type: "daily_cash_delete",
+      status: "pending",
+      source_type: row.source_type ?? "daily_cash",
+      source_work_name: row.source_work_name,
+      source_detail_id: row.source_detail_id ?? null,
+      source_key: sourceKey,
+      target_table: "daily_cash",
+      target_id: row.id,
+      title: `${row.source_work_name ?? "일일입출금"} 입출금 삭제 요청`,
+      reason:
+        row.source_type === "settlement_payment"
+          ? "완결/종결 정산 연동 입출금 삭제 요청"
+          : "입력일이 지난 일일입출금 삭제 요청",
+      before_payload: {
+        daily_cash: row,
+      },
+      requested_payload: {
+        delete_daily_cash: true,
+        settlement_payment:
+          Number.isFinite(paymentId) && paymentId > 0
+            ? {
+                id: paymentId,
+                payment_date: null,
+                payment_method: "",
+                approval_number: "",
+                merchant_number: "",
+                card_number: "",
+                payment_status: "청구",
+              }
+            : null,
+      },
+      requested_by: user.user_id,
+      requested_name: user.user_name,
+    });
+
+    return error ?? null;
+  }
+
   async function handleDelete(row: DailyCashRow) {
-    if (!isTodayCreatedRow(row)) {
-      alert("입력한 당일 내역만 삭제할 수 있습니다.");
+    let canApplyImmediately = false;
+
+    try {
+      canApplyImmediately = await canApplyDailyCashChangeImmediately(row);
+    } catch (error: any) {
+      alert("삭제 가능 여부 확인 실패: " + (error?.message ?? String(error)));
+      return;
+    }
+
+    if (!canApplyImmediately) {
+      const requestOk = confirm("잠긴 입출금 내역입니다. 관리자에게 삭제 요청을 보낼까요?");
+      if (!requestOk) return;
+
+      const requestError = await createDailyCashDeleteRequest(row);
+      if (requestError) {
+        alert("삭제 승인요청 저장 실패: " + requestError.message);
+        return;
+      }
+
+      alert("관리자에게 삭제 요청을 보냈습니다.");
       return;
     }
 
@@ -234,7 +330,7 @@ export default function DailyCashPage({ onSelectMenu }: DailyCashPageProps) {
     }
 
     if (!data || data.length === 0) {
-      alert("입력한 당일 내역만 삭제할 수 있습니다.");
+      alert("삭제할 입출금 내역을 찾지 못했습니다.");
       await fetchRows(period);
       void fetchBalanceRows();
       return;
@@ -599,11 +695,11 @@ export default function DailyCashPage({ onSelectMenu }: DailyCashPageProps) {
                             onClick={() => {
                               void handleDelete(item);
                             }}
-                            disabled={!canEditRow}
+                            disabled={false}
                             title={
                               canEditRow
                                 ? undefined
-                                : "입력한 당일 내역만 삭제할 수 있습니다."
+                                : "관리자 승인 후 삭제할 수 있습니다."
                             }
                             className="rounded border border-red-300 px-3 py-1 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:border-slate-200 disabled:text-slate-400 disabled:hover:bg-white"
                           >

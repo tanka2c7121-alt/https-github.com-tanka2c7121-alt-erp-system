@@ -37,6 +37,7 @@ const requestTypeLabel: Record<string, string> = {
   settlement_refund: "환불처리",
   daily_cash_posting: "미수 입금 반영",
   daily_cash_correction: "일일입출금 수정",
+  daily_cash_delete: "일일입출금 삭제",
   reopen_settlement: "완결/종결 해제",
 };
 
@@ -185,6 +186,7 @@ export default function CashChangeApprovalPage({
         }
       } else if (row.request_type === "daily_cash_correction") {
         const dailyCashPayload = row.requested_payload?.daily_cash;
+        const settlementPaymentPayload = row.requested_payload?.settlement_payment;
 
         if (!dailyCashPayload || !row.target_id) {
           throw new Error("일일입출금 수정 payload가 없습니다.");
@@ -196,6 +198,39 @@ export default function CashChangeApprovalPage({
           .eq("id", row.target_id);
 
         if (cashError) throw cashError;
+
+        if (settlementPaymentPayload?.id) {
+          const { id, ...paymentPayload } = settlementPaymentPayload;
+          const { error: paymentError } = await supabase
+            .from("settlement_payments")
+            .update(paymentPayload)
+            .eq("id", id);
+
+          if (paymentError) throw paymentError;
+        }
+      } else if (row.request_type === "daily_cash_delete") {
+        if (!row.target_id) {
+          throw new Error("삭제할 일일입출금 ID가 없습니다.");
+        }
+
+        const settlementPaymentPayload = row.requested_payload?.settlement_payment;
+
+        const { error: cashError } = await supabase
+          .from("daily_cash")
+          .delete()
+          .eq("id", row.target_id);
+
+        if (cashError) throw cashError;
+
+        if (settlementPaymentPayload?.id) {
+          const { id, ...paymentPayload } = settlementPaymentPayload;
+          const { error: paymentError } = await supabase
+            .from("settlement_payments")
+            .update(paymentPayload)
+            .eq("id", id);
+
+          if (paymentError) throw paymentError;
+        }
       } else if (row.request_type === "reopen_settlement") {
         if (!row.source_work_name) {
           throw new Error("정산 작명이 없습니다.");
@@ -267,7 +302,7 @@ export default function CashChangeApprovalPage({
       <div>
         <h3 className="text-xl font-bold">입출금 승인요청</h3>
         <p className="text-sm text-slate-700">
-          미수 입금 반영, 환불처리, 일일입출금 수정, 완결/종결 해제 요청을 확인합니다.
+          미수 입금 반영, 환불처리, 일일입출금 수정/삭제, 완결/종결 해제 요청을 확인합니다.
         </p>
       </div>
 
@@ -326,7 +361,10 @@ export default function CashChangeApprovalPage({
                 </tr>
               ) : (
                 rows.map((row) => {
-                  const dailyCash = row.requested_payload?.daily_cash ?? {};
+                  const dailyCash =
+                    row.requested_payload?.daily_cash ??
+                    row.before_payload?.daily_cash ??
+                    {};
                   const amount = Number(dailyCash.income || dailyCash.expense || 0);
 
                   return (
