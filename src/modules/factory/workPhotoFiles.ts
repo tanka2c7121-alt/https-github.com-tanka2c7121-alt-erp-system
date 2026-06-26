@@ -26,6 +26,26 @@ export function safeFileName(name: string, fallback = "photo.jpg") {
     : `${withSafeReservedName}${fallbackExtension}`;
 }
 
+export function safeStorageFileName(name: string, fallback = "photo.jpg") {
+  const fallbackExtension = fallback.includes(".")
+    ? fallback.slice(fallback.lastIndexOf("."))
+    : ".jpg";
+  const safeName = safeFileName(name, fallback)
+    .replace(/[^0-9A-Za-z._-]/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^\.+/, "")
+    .replace(/[.\s_]+$/g, "")
+    .slice(0, 120);
+  const withFallback = safeName || fallback.replace(/[^0-9A-Za-z._-]/g, "_");
+  const withSafeReservedName = windowsReservedFileNames.test(withFallback)
+    ? `photo_${withFallback}`
+    : withFallback;
+
+  return imageFilePattern.test(withSafeReservedName)
+    ? withSafeReservedName
+    : `${withSafeReservedName}${fallbackExtension}`;
+}
+
 export const getDownloadFileName = (photo: { name: string }, index: number) =>
   `${String(index + 1).padStart(2, "0")}_${safeFileName(
     photo.name,
@@ -70,5 +90,14 @@ export function getStoredWorkPhotoFileName({
   return safeFileName(
     `${baseName}_${formatPhotoTimestamp(date)}_${sequence}${extension}`,
     `photo-${sequence}.jpg`
+  );
+}
+
+export function getStoredWorkPhotoStorageFileName(
+  options: Parameters<typeof getStoredWorkPhotoFileName>[0]
+) {
+  return safeStorageFileName(
+    getStoredWorkPhotoFileName(options),
+    `photo-${String(options.index + 1).padStart(2, "0")}.jpg`
   );
 }

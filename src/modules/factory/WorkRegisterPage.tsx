@@ -14,6 +14,7 @@ import { createPortal } from "react-dom";
 import {
   getDownloadFileName,
   getStoredWorkPhotoFileName,
+  getStoredWorkPhotoStorageFileName,
   imageFilePattern,
   photoBatchSize,
   workPhotoBucket,
@@ -1202,7 +1203,7 @@ async function uploadPendingWorkPhotos(targetWorkName = workName) {
 
       for (const [index, photo] of photosToUpload.entries()) {
         const uploadFile = await compressImage(photo.file);
-        const fileName = getStoredWorkPhotoFileName({
+        const fileName = getStoredWorkPhotoStorageFileName({
           carNumber,
           workName: targetWorkName,
           originalName: uploadFile.name,
