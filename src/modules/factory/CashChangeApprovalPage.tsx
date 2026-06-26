@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
@@ -34,10 +34,10 @@ type CashChangeRequest = {
 const cashChangeRealtimeTables = [{ table: "cash_change_requests" }];
 
 const requestTypeLabel: Record<string, string> = {
-  settlement_refund: "?섎텋泥섎━",
-  daily_cash_posting: "誘몄닔 ?낃툑 諛섏쁺",
-  daily_cash_correction: "?쇱씪?낆텧湲??섏젙",
-  reopen_settlement: "?꾧껐/醫낃껐 ?댁젣",
+  settlement_refund: "환불처리",
+  daily_cash_posting: "미수 입금 반영",
+  daily_cash_correction: "일일입출금 수정",
+  reopen_settlement: "완결/종결 해제",
 };
 
 const formatWon = (amount: number) => Number(amount || 0).toLocaleString();
@@ -114,8 +114,8 @@ export default function CashChangeApprovalPage({
       setRows([]);
       setSetupError(
         isMissingSchemaError(error)
-          ? "?낆텧湲??뱀씤?붿껌 DB ?낅뜲?댄듃媛 ?꾩쭅 ?곸슜?섏? ?딆븯?듬땲?? supabase_cash_control_workflow.sql???ㅽ뻾??二쇱꽭??"
-          : `?뱀씤?붿껌 議고쉶 ?ㅽ뙣: ${error.message}`
+          ? "입출금 승인요청 DB 업데이트가 아직 적용되지 않았습니다. supabase_cash_control_workflow.sql을 실행해 주세요."
+          : `승인요청 조회 실패: ${error.message}`
       );
       return;
     }
@@ -143,11 +143,11 @@ export default function CashChangeApprovalPage({
 
   async function approveRequest(row: CashChangeRequest) {
     if (!canApprove) {
-      alert("愿由ъ옄留??뱀씤?????덉뒿?덈떎.");
+      alert("관리자만 승인할 수 있습니다.");
       return;
     }
 
-    const confirmed = window.confirm("???붿껌???뱀씤?좉퉴??");
+    const confirmed = window.confirm("이 요청을 승인할까요?");
     if (!confirmed) return;
 
     setProcessingId(row.id);
@@ -160,7 +160,7 @@ export default function CashChangeApprovalPage({
         const dailyCashPayload = row.requested_payload?.daily_cash;
 
         if (!dailyCashPayload) {
-          throw new Error("?쇱씪?낆텧湲?諛섏쁺 payload媛 ?놁뒿?덈떎.");
+          throw new Error("일일입출금 반영 payload가 없습니다.");
         }
 
         const { data: cashData, error: cashError } =
@@ -187,7 +187,7 @@ export default function CashChangeApprovalPage({
         const dailyCashPayload = row.requested_payload?.daily_cash;
 
         if (!dailyCashPayload || !row.target_id) {
-          throw new Error("?쇱씪?낆텧湲??섏젙 payload媛 ?놁뒿?덈떎.");
+          throw new Error("일일입출금 수정 payload가 없습니다.");
         }
 
         const { error: cashError } = await supabase
@@ -198,12 +198,12 @@ export default function CashChangeApprovalPage({
         if (cashError) throw cashError;
       } else if (row.request_type === "reopen_settlement") {
         if (!row.source_work_name) {
-          throw new Error("?뺤궛 ?묐챸???놁뒿?덈떎.");
+          throw new Error("정산 작명이 없습니다.");
         }
 
         const { error: settlementError } = await supabase
           .from("repair_settlements")
-          .update({ progress_status: "誘멸껐" })
+          .update({ progress_status: "미결" })
           .eq("work_name", row.source_work_name);
 
         if (settlementError) throw settlementError;
@@ -222,9 +222,9 @@ export default function CashChangeApprovalPage({
       if (requestError) throw requestError;
 
       await fetchRows();
-      alert("?뱀씤 泥섎━?덉뒿?덈떎.");
+      alert("승인 처리했습니다.");
     } catch (error: any) {
-      alert("?뱀씤 泥섎━ ?ㅽ뙣: " + (error?.message ?? String(error)));
+      alert("승인 처리 실패: " + (error?.message ?? String(error)));
     } finally {
       setProcessingId(null);
     }
@@ -232,11 +232,11 @@ export default function CashChangeApprovalPage({
 
   async function rejectRequest(row: CashChangeRequest) {
     if (!canApprove) {
-      alert("愿由ъ옄留?諛섎젮?????덉뒿?덈떎.");
+      alert("관리자만 반려할 수 있습니다.");
       return;
     }
 
-    const reason = window.prompt("諛섎젮 ?ъ쑀瑜??낅젰?섏꽭??");
+    const reason = window.prompt("반려 사유를 입력하세요.");
     if (reason === null) return;
 
     setProcessingId(row.id);
@@ -255,7 +255,7 @@ export default function CashChangeApprovalPage({
     setProcessingId(null);
 
     if (error) {
-      alert("諛섎젮 泥섎━ ?ㅽ뙣: " + error.message);
+      alert("반려 처리 실패: " + error.message);
       return;
     }
 
@@ -265,29 +265,36 @@ export default function CashChangeApprovalPage({
   return (
     <div className="space-y-4 text-slate-900">
       <div>
-        <h3 className="text-xl font-bold">?낆텧湲??뱀씤?붿껌</h3>
+        <h3 className="text-xl font-bold">입출금 승인요청</h3>
         <p className="text-sm text-slate-700">
-          誘몄닔 ?낃툑 諛섏쁺, ?섎텋泥섎━, ?쇱씪?낆텧湲??섏젙, ?꾧껐/醫낃껐 ?댁젣 ?붿껌???뱀씤?⑸땲??
+          미수 입금 반영, 환불처리, 일일입출금 수정, 완결/종결 해제 요청을 확인합니다.
         </p>
       </div>
 
       <div className="rounded-xl border border-slate-200 bg-white p-4">
         {setupError && (
           <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-            <p className="font-bold">?뱀씤?붿껌 議고쉶瑜?以鍮꾪븷 ???놁뒿?덈떎.</p>
+            <p className="font-bold">승인요청 조회를 준비할 수 없습니다.</p>
             <p className="mt-1">{setupError}</p>
+          </div>
+        )}
+
+        {!canApprove && (
+          <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-800">
+            총괄관리는 요청 조회만 가능하며 승인/반려는 관리자만 처리할 수 있습니다.
           </div>
         )}
 
         <div className="mb-3 flex items-center justify-between gap-3">
           <div className="text-sm font-semibold text-slate-700">
-            ?뱀씤?湲?{rows.length.toLocaleString()}嫄?          </div>
+            승인대기 {rows.length.toLocaleString()}건
+          </div>
           <button
             type="button"
             onClick={() => void fetchRows()}
             className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
           >
-            ?덈줈怨좎묠
+            새로고침
           </button>
         </div>
 
@@ -296,10 +303,10 @@ export default function CashChangeApprovalPage({
             <thead>
               <tr className="bg-slate-50">
                 <th className="border border-slate-300 px-3 py-2">요청일</th>
-                <th className="border border-slate-300 px-3 py-2">援щ텇</th>
-                <th className="border border-slate-300 px-3 py-2">?묐챸</th>
-                <th className="border border-slate-300 px-3 py-2">?댁슜</th>
-                <th className="border border-slate-300 px-3 py-2">湲덉븸</th>
+                <th className="border border-slate-300 px-3 py-2">구분</th>
+                <th className="border border-slate-300 px-3 py-2">작명</th>
+                <th className="border border-slate-300 px-3 py-2">내용</th>
+                <th className="border border-slate-300 px-3 py-2">금액</th>
                 <th className="border border-slate-300 px-3 py-2">요청자</th>
                 <th className="border border-slate-300 px-3 py-2">관리</th>
               </tr>
@@ -308,13 +315,13 @@ export default function CashChangeApprovalPage({
               {loading ? (
                 <tr>
                   <td colSpan={7} className="border border-slate-300 px-3 py-6 text-center">
-                    議고쉶 以묒엯?덈떎.
+                    조회 중입니다.
                   </td>
                 </tr>
               ) : rows.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="border border-slate-300 px-3 py-6 text-center text-slate-500">
-                    ?뱀씤 ?湲??붿껌???놁뒿?덈떎.
+                    승인 대기 요청이 없습니다.
                   </td>
                 </tr>
               ) : (
@@ -351,7 +358,7 @@ export default function CashChangeApprovalPage({
                             onClick={() => void approveRequest(row)}
                             className="rounded border border-blue-300 px-3 py-1 text-xs font-semibold text-blue-600 hover:bg-blue-50 disabled:border-slate-200 disabled:text-slate-400"
                           >
-                            ?뱀씤
+                            승인
                           </button>
                           <button
                             type="button"
@@ -359,7 +366,7 @@ export default function CashChangeApprovalPage({
                             onClick={() => void rejectRequest(row)}
                             className="rounded border border-red-300 px-3 py-1 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:border-slate-200 disabled:text-slate-400"
                           >
-                            諛섎젮
+                            반려
                           </button>
                         </div>
                       </td>
@@ -374,4 +381,3 @@ export default function CashChangeApprovalPage({
     </div>
   );
 }
-
