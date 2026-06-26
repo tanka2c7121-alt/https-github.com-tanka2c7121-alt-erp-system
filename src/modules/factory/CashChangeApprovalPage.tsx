@@ -35,6 +35,7 @@ const cashChangeRealtimeTables = [{ table: "cash_change_requests" }];
 
 const requestTypeLabel: Record<string, string> = {
   settlement_refund: "환불처리",
+  settlement_refund_cancel: "환불취소",
   daily_cash_posting: "미수 입금 반영",
   daily_cash_correction: "일일입출금 수정",
   daily_cash_delete: "일일입출금 삭제",
@@ -87,6 +88,43 @@ const saveDailyCashBySourceKey = async (payload: any) => {
   }
 
   return supabase.from("daily_cash").insert(payload).select("id").maybeSingle();
+};
+
+const refreshSettlementTotalAmount = async (workName: string | null) => {
+  if (!workName) return null;
+
+  const { data: paymentRows, error: paymentError } = await supabase
+    .from("settlement_payments")
+    .select("payment_amount, refund_status")
+    .eq("work_name", workName);
+
+  if (paymentError) return paymentError;
+
+  const { data: expenseRows, error: expenseError } = await supabase
+    .from("settlement_expenses")
+    .select("expense_amount")
+    .eq("work_name", workName);
+
+  if (expenseError) return expenseError;
+
+  const paymentTotal = (paymentRows ?? []).reduce(
+    (sum: number, row: any) =>
+      row.refund_status === "approved"
+        ? sum
+        : sum + Number(row.payment_amount ?? 0),
+    0
+  );
+  const expenseTotal = (expenseRows ?? []).reduce(
+    (sum: number, row: any) => sum + Number(row.expense_amount ?? 0),
+    0
+  );
+
+  const { error } = await supabase
+    .from("repair_settlements")
+    .update({ total_amount: paymentTotal - expenseTotal })
+    .eq("work_name", workName);
+
+  return error ?? null;
 };
 
 export default function CashChangeApprovalPage({
@@ -156,6 +194,7 @@ export default function CashChangeApprovalPage({
     try {
       if (
         row.request_type === "settlement_refund" ||
+        row.request_type === "settlement_refund_cancel" ||
         row.request_type === "daily_cash_posting"
       ) {
         const dailyCashPayload = row.requested_payload?.daily_cash;
@@ -183,6 +222,28 @@ export default function CashChangeApprovalPage({
             .eq("id", row.target_id);
 
           if (paymentError) throw paymentError;
+
+          const totalError = await refreshSettlementTotalAmount(row.source_work_name);
+          if (totalError) throw totalError;
+        }
+
+        if (row.request_type === "settlement_refund_cancel") {
+          const { error: paymentError } = await supabase
+            .from("settlement_payments")
+            .update({
+              refund_requested: false,
+              refund_status: "none",
+              refund_reason: null,
+              refund_requested_at: null,
+              refund_requested_by: null,
+              refund_requested_name: null,
+            })
+            .eq("id", row.target_id);
+
+          if (paymentError) throw paymentError;
+
+          const totalError = await refreshSettlementTotalAmount(row.source_work_name);
+          if (totalError) throw totalError;
         }
       } else if (row.request_type === "daily_cash_correction") {
         const dailyCashPayload = row.requested_payload?.daily_cash;
@@ -302,7 +363,7 @@ export default function CashChangeApprovalPage({
       <div>
         <h3 className="text-xl font-bold">입출금 승인요청</h3>
         <p className="text-sm text-slate-700">
-          미수 입금 반영, 환불처리, 일일입출금 수정/삭제, 완결/종결 해제 요청을 확인합니다.
+          미수 입금 반영, 환불처리/취소, 일일입출금 수정/삭제, 완결/종결 해제 요청을 확인합니다.
         </p>
       </div>
 

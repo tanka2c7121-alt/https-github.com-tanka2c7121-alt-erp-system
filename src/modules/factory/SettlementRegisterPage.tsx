@@ -146,6 +146,10 @@ const formatAmount = (value: string) => {
 };
 
 const toNumber = (value: string) => Number(value.replaceAll(",", "") || 0);
+const isApprovedRefundPayment = (row: Pick<PaymentRow, "refundStatus">) =>
+  row.refundStatus === "approved";
+const getEffectivePaymentAmount = (row: PaymentRow) =>
+  isApprovedRefundPayment(row) ? 0 : toNumber(row.amount);
 const isPartnerSupportPaymentRow = (row: Pick<PaymentRow, "paymentType" | "paymentDetail">) =>
   [row.paymentType, row.paymentDetail]
     .map((value) => String(value ?? "").replace(/\s+/g, ""))
@@ -195,6 +199,9 @@ const getSettlementPaymentSourceKey = (paymentId: number) =>
 
 const getSettlementRefundSourceKey = (paymentId: number) =>
   `settlement_payment_refund:${paymentId}`;
+
+const getSettlementRefundCancelSourceKey = (paymentId: number) =>
+  `settlement_payment_refund_cancel:${paymentId}`;
 
 const getSettlementPaymentPostingRequestKey = (paymentId: number) =>
   `settlement_payment_posting:${paymentId}`;
@@ -315,7 +322,7 @@ export default function SettlementRegisterPage({
   });
 
   const paymentTotal = useMemo(
-    () => paymentRows.reduce((sum, row) => sum + toNumber(row.amount), 0),
+    () => paymentRows.reduce((sum, row) => sum + getEffectivePaymentAmount(row), 0),
     [paymentRows]
   );
   const expenseTotal = useMemo(
@@ -401,6 +408,100 @@ export default function SettlementRegisterPage({
           : row
       )
     );
+  };
+
+  const handleRefundCancelRequest = async (index: number) => {
+    const row = paymentRows[index];
+    if (!row?.id || row.refundStatus !== "approved") {
+      alert("환불 승인완료된 입금내역만 취소 요청할 수 있습니다.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "환불취소 요청을 관리자에게 보낼까요? 승인되면 일일입출금에 다시 입금으로 반영됩니다."
+    );
+    if (!confirmed) return;
+
+    const reason =
+      window.prompt("환불취소 사유를 입력하세요.", "환불취소 후 재입금") ??
+      "";
+    const paymentId = Number(row.id);
+    const sourceKey = getSettlementRefundCancelSourceKey(paymentId);
+    const { data: existingRequest, error: existingRequestError } = await supabase
+      .from("cash_change_requests")
+      .select("id")
+      .eq("source_key", sourceKey)
+      .eq("status", "pending")
+      .limit(1)
+      .maybeSingle();
+
+    if (existingRequestError) {
+      alert("환불취소 요청 확인 실패: " + formatCashWorkflowError(existingRequestError));
+      return;
+    }
+
+    if (existingRequest) {
+      alert("이미 관리자 승인 대기 중인 환불취소 요청이 있습니다.");
+      return;
+    }
+
+    const refundCancelAmount = toNumber(row.amount);
+    const refundCancelContent = getDailyCashContent(row, form.carNumber);
+    const refundCancelMemo = [
+      form.workName,
+      "환불취소 승인 후 일일입출금 입금 반영",
+      reason,
+    ]
+      .filter(Boolean)
+      .join(" / ");
+
+    const { error } = await supabase.from("cash_change_requests").insert({
+      request_type: "settlement_refund_cancel",
+      status: "pending",
+      source_type: "settlement_payment_refund_cancel",
+      source_work_name: form.workName,
+      source_detail_id: paymentId,
+      source_key: sourceKey,
+      target_table: "settlement_payments",
+      target_id: paymentId,
+      title: `${form.workName} ${refundCancelContent} 환불취소 요청`,
+      reason: reason || "환불취소 후 재입금 요청",
+      before_payload: {
+        payment_id: paymentId,
+        amount: refundCancelAmount,
+        payment_date: row.date,
+        payment_method: row.method,
+        refund_status: row.refundStatus,
+      },
+      requested_payload: {
+        daily_cash: {
+          date: localDateText(),
+          created_on: localDateText(),
+          account: row.method,
+          type: "수입",
+          category: "차량정산",
+          content: refundCancelContent,
+          income: refundCancelAmount,
+          expense: 0,
+          memo: refundCancelMemo,
+          source_type: "settlement_payment_refund_cancel",
+          source_work_name: form.workName,
+          source_detail_id: paymentId,
+          source_key: sourceKey,
+          ledger_effective: true,
+          approval_status: "approved",
+        },
+      },
+      requested_by: user.user_id,
+      requested_name: user.user_name,
+    });
+
+    if (error) {
+      alert("환불취소 승인요청 저장 실패: " + formatCashWorkflowError(error));
+      return;
+    }
+
+    alert("관리자에게 환불취소 요청을 보냈습니다.");
   };
 
   const handleClaimChange = (
@@ -2153,6 +2254,15 @@ export default function SettlementRegisterPage({
                   <span className="rounded bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-700">
                     승인완료
                   </span>
+                )}
+                {row.refundStatus === "approved" && (
+                  <button
+                    type="button"
+                    onClick={() => void handleRefundCancelRequest(index)}
+                    className="rounded border border-blue-300 px-2 py-0.5 text-xs font-semibold text-blue-600 hover:bg-blue-50"
+                  >
+                    환불취소
+                  </button>
                 )}
               </label>
 
