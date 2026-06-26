@@ -185,8 +185,13 @@ const isReceivablePaymentRow = (payment: PaymentRow) => {
   );
 };
 
+const isGeneralRepairPaymentDetail = (payment: PaymentRow) =>
+  normalizeText(payment.payment_type) === "수리비" &&
+  ["일반", "바디케어"].includes(normalizeText(payment.payment_detail));
+
 const hasSettlementPaymentDetail = (payment: PaymentRow) =>
-  Boolean(normalizeClaimDetail(payment.payment_detail));
+  Boolean(normalizeClaimDetail(payment.payment_detail)) ||
+  isGeneralRepairPaymentDetail(payment);
 
 export const calculateCollectionRate = (claimAmount: number, paidAmount: number) =>
   claimAmount > 0 ? (paidAmount / claimAmount) * 100 : null;

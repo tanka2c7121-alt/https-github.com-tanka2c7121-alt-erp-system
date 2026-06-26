@@ -70,6 +70,10 @@ const displayValue = (value: unknown) => normalizeText(value) || "-";
 const isClaimPayment = (row: PaymentRow) => normalizeText(row.payment_type) === "청구";
 const isDeductiblePayment = (row: PaymentRow) =>
   normalizeText(row.payment_type) === "면책금";
+const isGeneralRepairPayment = (row: PaymentRow, work: WorkOrderRow) =>
+  normalizeText(work.category) === "일반" &&
+  normalizeText(row.payment_type) === "수리비" &&
+  ["일반", "바디케어"].includes(normalizeText(row.payment_detail));
 
 async function fetchAll<T>(tableName: string, selectQuery: string) {
   const pageSize = 1000;
@@ -113,10 +117,16 @@ function getClaimDate(settlement: SettlementRow | undefined, payments: PaymentRo
   );
 }
 
-function getPaidAmount(payments: PaymentRow[]) {
+function getPaidAmount(payments: PaymentRow[], work: WorkOrderRow) {
   return payments
     .filter((row) => !isClaimPayment(row))
     .filter((row) => !isDeductiblePayment(row))
+    .filter(
+      (row) =>
+        normalizeText(row.payment_detail).includes("보험") ||
+        normalizeText(row.payment_detail).includes("캐피탈") ||
+        isGeneralRepairPayment(row, work)
+    )
     .reduce((sum, row) => sum + toAmount(row.payment_amount), 0);
 }
 
@@ -387,7 +397,7 @@ function SearchResultCard({
   const settlement = item.settlement;
   const workName = normalizeText(work.work_name);
   const claimAmount = getClaimAmount(settlement, item.payments);
-  const paidAmount = getPaidAmount(item.payments);
+  const paidAmount = getPaidAmount(item.payments, work);
   const receivableAmount = Math.max(0, claimAmount - paidAmount);
   const rate = claimAmount > 0 ? (paidAmount / claimAmount) * 100 : null;
   const settlementStatus = normalizeText(settlement?.progress_status) || "정산 미등록";

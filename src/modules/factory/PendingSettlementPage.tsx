@@ -64,6 +64,10 @@ const isClaimPaymentRow = (row: any) =>
 const isRepairPaymentAmountRow = (row: any) =>
   toAmountNumber(row.payment_amount) > 0 && !isClaimPaymentRow(row);
 
+const isGeneralRepairPaymentDetail = (payment: any) =>
+  normalizeText(payment.payment_type) === "수리비" &&
+  ["일반", "바디케어"].includes(normalizeText(payment.payment_detail));
+
 const normalizeClaimDetail = (value: unknown): ClaimDetail | null => {
   const text = normalizeText(value);
 
@@ -71,7 +75,8 @@ const normalizeClaimDetail = (value: unknown): ClaimDetail | null => {
 };
 
 const hasSettlementPaymentDetail = (payment: any) =>
-  Boolean(normalizeClaimDetail(payment.payment_detail));
+  Boolean(normalizeClaimDetail(payment.payment_detail)) ||
+  isGeneralRepairPaymentDetail(payment);
 
 const isSettlementReceivablePaymentRow = (payment: any) =>
   toAmountNumber(payment.payment_amount) > 0 &&

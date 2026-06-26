@@ -84,7 +84,7 @@ const isInsuranceOrCapitalDetail = (value: unknown) => {
 const isGeneralSettlementPayment = (row: PaymentRow, category: unknown) =>
   normalizeText(category) === "일반" &&
   normalizeText(row.payment_type) === "수리비" &&
-  normalizeText(row.payment_detail) === "일반";
+  ["일반", "바디케어"].includes(normalizeText(row.payment_detail));
 const isPaidAmountRow = (row: PaymentRow, category: unknown) => {
   const paymentType = normalizeText(row.payment_type);
 
