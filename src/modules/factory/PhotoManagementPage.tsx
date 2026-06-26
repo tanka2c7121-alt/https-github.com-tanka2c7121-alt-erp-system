@@ -457,6 +457,17 @@ export default function PhotoManagementPage({
     photoViewerIndex === null ? null : sortedFolderPhotos[photoViewerIndex] ?? null;
 
   useEffect(() => {
+    if (!selectedFolder && !activeViewerPhoto) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [activeViewerPhoto, selectedFolder]);
+
+  useEffect(() => {
     setSelectedPhotoPaths((prev) =>
       prev.filter((path) => folderPhotos.some((photo) => photo.path === path))
     );
@@ -1087,9 +1098,13 @@ export default function PhotoManagementPage({
         <div
           className="fixed inset-0 z-[60] overscroll-contain bg-slate-950/80"
           onWheelCapture={(event) => {
-            event.preventDefault();
+            const target = event.target as HTMLElement;
+
             event.stopPropagation();
-            movePhotoViewer(event.deltaY > 0 ? 1 : -1);
+
+            if (!target.closest("[data-photo-viewer-scroll]")) {
+              event.preventDefault();
+            }
           }}
         >
           <div
@@ -1142,7 +1157,10 @@ export default function PhotoManagementPage({
               </div>
             </div>
 
-            <div className="flex min-h-0 flex-1 items-center justify-center bg-slate-100 p-3">
+            <div
+              data-photo-viewer-scroll
+              className="flex min-h-0 flex-1 items-center justify-center overflow-auto overscroll-contain bg-slate-100 p-3"
+            >
               {/* eslint-disable-next-line @next/next/no-img-element -- Viewer shows NAS and Supabase runtime URLs. */}
               <img
                 src={activeViewerPhoto.url}
