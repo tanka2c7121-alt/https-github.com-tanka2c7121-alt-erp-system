@@ -40,7 +40,44 @@ const isNasHost = () => {
   return hostname === "192.168.1.103" || hostname.endsWith(".local");
 };
 
-async function compressImage(file: File) {
+function drawPhotoWatermark(
+  context: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  text: string
+) {
+  const label = text.trim();
+
+  if (!label) return;
+
+  const fontSize = Math.max(28, Math.round(width * 0.04));
+  const paddingX = Math.round(fontSize * 0.55);
+  const paddingY = Math.round(fontSize * 0.35);
+  const margin = Math.round(fontSize * 0.45);
+
+  context.save();
+  context.font = `800 ${fontSize}px Arial, sans-serif`;
+  context.textBaseline = "bottom";
+
+  const textWidth = context.measureText(label).width;
+  const boxWidth = textWidth + paddingX * 2;
+  const boxHeight = fontSize + paddingY * 2;
+  const left = margin;
+  const top = height - margin - boxHeight;
+
+  context.fillStyle = "rgba(15, 23, 42, 0.68)";
+  context.fillRect(left, top, boxWidth, boxHeight);
+  context.strokeStyle = "rgba(255, 255, 255, 0.45)";
+  context.lineWidth = Math.max(2, Math.round(fontSize * 0.06));
+  context.strokeRect(left, top, boxWidth, boxHeight);
+  context.fillStyle = "rgba(255, 255, 255, 0.96)";
+  context.shadowColor = "rgba(0, 0, 0, 0.45)";
+  context.shadowBlur = Math.round(fontSize * 0.14);
+  context.fillText(label, left + paddingX, top + boxHeight - paddingY);
+  context.restore();
+}
+
+async function compressImage(file: File, watermarkText = "") {
   if (!file.type.startsWith("image/")) return file;
 
   const objectUrl = URL.createObjectURL(file);
@@ -60,7 +97,12 @@ async function compressImage(file: File) {
 
     canvas.width = width;
     canvas.height = height;
-    canvas.getContext("2d")?.drawImage(image, 0, 0, width, height);
+    const context = canvas.getContext("2d");
+
+    if (!context) return file;
+
+    context.drawImage(image, 0, 0, width, height);
+    drawPhotoWatermark(context, width, height, watermarkText);
 
     const blob = await new Promise<Blob | null>((resolve) =>
       canvas.toBlob(resolve, "image/jpeg", 0.86)
@@ -269,7 +311,10 @@ export default function MobilePhotoUploadPage() {
       formData.append("folder", getWorkPhotoFolder(selectedWorkName));
 
       for (const file of files) {
-        const uploadFile = await compressImage(file);
+        const uploadFile = await compressImage(
+          file,
+          normalizeText(selectedWork?.car_number)
+        );
         formData.append("files", uploadFile, uploadFile.name);
       }
 

@@ -1098,13 +1098,9 @@ export default function PhotoManagementPage({
         <div
           className="fixed inset-0 z-[60] overscroll-contain bg-slate-950/80"
           onWheelCapture={(event) => {
-            const target = event.target as HTMLElement;
-
+            event.preventDefault();
             event.stopPropagation();
-
-            if (!target.closest("[data-photo-viewer-scroll]")) {
-              event.preventDefault();
-            }
+            movePhotoViewer(event.deltaY > 0 ? 1 : -1);
           }}
         >
           <div
@@ -1157,10 +1153,7 @@ export default function PhotoManagementPage({
               </div>
             </div>
 
-            <div
-              data-photo-viewer-scroll
-              className="flex min-h-0 flex-1 items-center justify-center overflow-auto overscroll-contain bg-slate-100 p-3"
-            >
+            <div className="flex min-h-0 flex-1 items-center justify-center bg-slate-100 p-3">
               {/* eslint-disable-next-line @next/next/no-img-element -- Viewer shows NAS and Supabase runtime URLs. */}
               <img
                 src={activeViewerPhoto.url}
