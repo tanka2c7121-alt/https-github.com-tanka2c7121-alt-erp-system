@@ -70,6 +70,7 @@ export async function GET(request: NextRequest) {
         name: photo.name,
         path: photo.path,
         url: photo.url,
+        createdAt: photo.createdAt,
       })),
     });
   } catch (error: unknown) {

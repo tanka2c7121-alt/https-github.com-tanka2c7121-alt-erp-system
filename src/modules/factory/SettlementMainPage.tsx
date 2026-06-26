@@ -30,6 +30,29 @@ const isCashWorkflowSetupError = (error: any) => {
   );
 };
 
+const saveDailyCashBySourceKey = async (payload: any) => {
+  const sourceKey = String(payload?.source_key ?? "");
+
+  if (!sourceKey) {
+    return supabase.from("daily_cash").insert(payload);
+  }
+
+  const { data: existingRow, error: findError } = await supabase
+    .from("daily_cash")
+    .select("id")
+    .eq("source_key", sourceKey)
+    .limit(1)
+    .maybeSingle();
+
+  if (findError) return { error: findError };
+
+  if (existingRow?.id) {
+    return supabase.from("daily_cash").update(payload).eq("id", existingRow.id);
+  }
+
+  return supabase.from("daily_cash").insert(payload);
+};
+
 
 export default function SettlementMainPage({
   onSelectMenu,
@@ -427,9 +450,7 @@ const handleReceivableDateSave = async (row: any) => {
   };
 
   const { error: cashError } = supportsCashWorkflowColumns
-    ? await supabase
-        .from("daily_cash")
-        .upsert(cashPayload, { onConflict: "source_key" })
+    ? await saveDailyCashBySourceKey(cashPayload)
     : await supabase.from("daily_cash").insert(legacyCashPayload);
 
   savingReceivableIdsRef.current.delete(row.id);

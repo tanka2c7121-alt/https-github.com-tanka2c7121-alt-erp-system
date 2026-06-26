@@ -36,12 +36,37 @@ const isMissingSchemaError = (error: any) => {
   return (
     code === "42P01" ||
     code === "42703" ||
-    message.includes("cash_change_requests") ||
-    message.includes("ledger_effective") ||
-    message.includes("source_key") ||
-    message.includes("does not exist") ||
+    code === "PGRST204" ||
     message.includes("schema cache")
   );
+};
+
+const saveDailyCashBySourceKey = async (payload: any) => {
+  const sourceKey = String(payload?.source_key ?? "");
+
+  if (!sourceKey) {
+    return supabase.from("daily_cash").insert(payload).select("id").maybeSingle();
+  }
+
+  const { data: existingRow, error: findError } = await supabase
+    .from("daily_cash")
+    .select("id")
+    .eq("source_key", sourceKey)
+    .limit(1)
+    .maybeSingle();
+
+  if (findError) return { data: null, error: findError };
+
+  if (existingRow?.id) {
+    return supabase
+      .from("daily_cash")
+      .update(payload)
+      .eq("id", existingRow.id)
+      .select("id")
+      .maybeSingle();
+  }
+
+  return supabase.from("daily_cash").insert(payload).select("id").maybeSingle();
 };
 
 export default function CashChangeApprovalPage({
@@ -94,34 +119,36 @@ export default function CashChangeApprovalPage({
     setProcessingId(row.id);
 
     try {
-      if (row.request_type === "settlement_refund") {
+      if (
+        row.request_type === "settlement_refund" ||
+        row.request_type === "daily_cash_posting"
+      ) {
         const dailyCashPayload = row.requested_payload?.daily_cash;
 
         if (!dailyCashPayload) {
-          throw new Error("환불 일일입출금 payload가 없습니다.");
+          throw new Error("일일입출금 반영 payload가 없습니다.");
         }
 
-        const { data: cashData, error: cashError } = await supabase
-          .from("daily_cash")
-          .upsert(dailyCashPayload, { onConflict: "source_key" })
-          .select("id")
-          .maybeSingle();
+        const { data: cashData, error: cashError } =
+          await saveDailyCashBySourceKey(dailyCashPayload);
 
         if (cashError) throw cashError;
 
-        const { error: paymentError } = await supabase
-          .from("settlement_payments")
-          .update({
-            refund_requested: true,
-            refund_status: "approved",
-            refund_approved_at: new Date().toISOString(),
-            refund_approved_by: user.user_id,
-            refund_approved_name: user.user_name,
-            refund_daily_cash_id: cashData?.id ?? null,
-          })
-          .eq("id", row.target_id);
+        if (row.request_type === "settlement_refund") {
+          const { error: paymentError } = await supabase
+            .from("settlement_payments")
+            .update({
+              refund_requested: true,
+              refund_status: "approved",
+              refund_approved_at: new Date().toISOString(),
+              refund_approved_by: user.user_id,
+              refund_approved_name: user.user_name,
+              refund_daily_cash_id: cashData?.id ?? null,
+            })
+            .eq("id", row.target_id);
 
-        if (paymentError) throw paymentError;
+          if (paymentError) throw paymentError;
+        }
       } else if (row.request_type === "daily_cash_correction") {
         const dailyCashPayload = row.requested_payload?.daily_cash;
 

@@ -22,6 +22,14 @@ type WorkOrder = {
 };
 
 type ProgressTone = "red" | "orange" | "blue" | "green" | "emerald";
+type PhotoSortOrder = "desc" | "asc";
+
+type FolderPhoto = {
+  name: string;
+  path: string;
+  url: string;
+  createdAt?: number | string | null;
+};
 
 const getWorkPhotoFolder = (workName: string) =>
   workName.trim().replace(/[^0-9A-Za-z가-힣_-]/g, "_");
@@ -149,6 +157,10 @@ export default function PhotoManagementPage({
   const [photoCounts, setPhotoCounts] = useState<Record<number, number>>({});
   const [searchText, setSearchText] = useState("");
   const [loading, setLoading] = useState(true);
+  const [selectedFolder, setSelectedFolder] = useState<WorkOrder | null>(null);
+  const [folderPhotos, setFolderPhotos] = useState<FolderPhoto[]>([]);
+  const [folderPhotosLoading, setFolderPhotosLoading] = useState(false);
+  const [photoSortOrder, setPhotoSortOrder] = useState<PhotoSortOrder>("desc");
 
   const loadRows = useCallback(async () => {
     setLoading(true);
@@ -262,13 +274,105 @@ export default function PhotoManagementPage({
     };
   }, [filteredRows]);
 
-  const openWorkPhotos = (row: WorkOrder, openCamera = false) => {
+  const loadFolderPhotos = async (row: WorkOrder) => {
+    const folder = getWorkPhotoFolder(row.work_name);
+
+    setSelectedFolder(row);
+    setFolderPhotos([]);
+    setFolderPhotosLoading(true);
+
+    try {
+      if (shouldUseNasPhotoStorage()) {
+        const response = await fetch(
+          `/api/work-photos?folder=${encodeURIComponent(folder)}`
+        );
+        const result = (await response.json()) as { photos?: FolderPhoto[] };
+
+        setFolderPhotos(result.photos ?? []);
+        return;
+      }
+
+      const { data, error } = await supabase.storage
+        .from(workPhotoBucket)
+        .list(folder, { limit: 300, sortBy: { column: "created_at", order: "desc" } });
+
+      if (error) {
+        alert("사진 목록 조회 실패: " + error.message);
+        return;
+      }
+
+      const photoPaths = (data ?? [])
+        .filter(
+          (item) =>
+            item.name &&
+            !item.name.endsWith("/") &&
+            !item.name.startsWith(".") &&
+            imageFilePattern.test(item.name)
+        )
+        .map((item) => `${folder}/${item.name}`);
+
+      if (photoPaths.length === 0) {
+        setFolderPhotos([]);
+        return;
+      }
+
+      const { data: signedUrls, error: signedUrlError } = await supabase.storage
+        .from(workPhotoBucket)
+        .createSignedUrls(photoPaths, 60 * 60);
+
+      if (signedUrlError) {
+        alert("사진 URL 생성 실패: " + signedUrlError.message);
+        return;
+      }
+
+      setFolderPhotos(
+        photoPaths.map((path, index) => {
+          const item = data?.find((entry) => path.endsWith(`/${entry.name}`));
+
+          return {
+            name: path.split("/").pop() ?? `photo-${index + 1}.jpg`,
+            path,
+            url: signedUrls?.[index]?.signedUrl ?? "",
+            createdAt: item?.created_at ?? item?.updated_at ?? null,
+          };
+        })
+      );
+    } finally {
+      setFolderPhotosLoading(false);
+    }
+  };
+
+  const sortedFolderPhotos = useMemo(() => {
+    const timestamp = (photo: FolderPhoto) => {
+      if (typeof photo.createdAt === "number") return photo.createdAt;
+      if (photo.createdAt) {
+        const parsed = new Date(photo.createdAt).getTime();
+        return Number.isFinite(parsed) ? parsed : 0;
+      }
+
+      return 0;
+    };
+
+    return [...folderPhotos].sort((left, right) => {
+      const dateCompare = timestamp(left) - timestamp(right);
+
+      if (dateCompare !== 0) {
+        return photoSortOrder === "asc" ? dateCompare : -dateCompare;
+      }
+
+      return photoSortOrder === "asc"
+        ? left.name.localeCompare(right.name)
+        : right.name.localeCompare(left.name);
+    });
+  }, [folderPhotos, photoSortOrder]);
+
+  const openWorkCamera = (row: WorkOrder) => {
     onSelectMenu({
       id: "factory-work-register",
-      title: openCamera ? "사진촬영" : "사진관리",
+      title: "사진촬영",
       data: {
         workName: row.work_name,
-        openCamera,
+        openCamera: true,
       },
     });
   };
@@ -340,7 +444,7 @@ export default function PhotoManagementPage({
                 >
                   <button
                     type="button"
-                    onClick={() => openWorkPhotos(row)}
+                    onClick={() => void loadFolderPhotos(row)}
                     className="flex min-h-48 w-full flex-col p-0 text-left"
                   >
                     <div className={`relative h-20 ${progressTone.bg}`}>
@@ -360,18 +464,20 @@ export default function PhotoManagementPage({
                       >
                         {photoCount}장
                       </div>
-                      {isDueToday && (
-                        <div className="absolute left-4 bottom-4 rounded-full bg-slate-950 px-2 py-1 text-[11px] font-bold text-white">
-                          {progress.percent < 80 ? "출고임박" : "금일 출고"}
-                        </div>
-                      )}
                     </div>
 
                     <div className="flex flex-1 flex-col gap-2 p-3">
                       <div>
-                        <h4 className="truncate text-lg font-black leading-tight text-slate-950">
-                          {row.car_number || "-"}
-                        </h4>
+                        <div className="flex items-start justify-between gap-2">
+                          <h4 className="min-w-0 truncate text-lg font-black leading-tight text-slate-950">
+                            {row.car_number || "-"}
+                          </h4>
+                          {isDueToday && (
+                            <span className="shrink-0 rounded-full bg-slate-950 px-2 py-1 text-[11px] font-bold text-white">
+                              {progress.percent < 80 ? "출고임박" : "금일 출고"}
+                            </span>
+                          )}
+                        </div>
                         <p className="mt-1 truncate text-sm font-bold text-slate-700">
                           {row.car_model || "-"}
                         </p>
@@ -400,14 +506,14 @@ export default function PhotoManagementPage({
                   <div className="flex border-t border-slate-100 bg-slate-50">
                     <button
                       type="button"
-                      onClick={() => openWorkPhotos(row)}
+                      onClick={() => void loadFolderPhotos(row)}
                       className="flex-1 px-2 py-2 text-xs font-bold text-blue-700 hover:bg-blue-50"
                     >
                       열기
                     </button>
                     <button
                       type="button"
-                      onClick={() => openWorkPhotos(row, true)}
+                      onClick={() => openWorkCamera(row)}
                       className="flex-1 border-l border-slate-200 px-2 py-2 text-xs font-bold text-green-700 hover:bg-green-50"
                     >
                       카메라
@@ -419,6 +525,107 @@ export default function PhotoManagementPage({
           </div>
         )}
       </section>
+
+      {selectedFolder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-3 md:p-6">
+          <div className="flex max-h-[92vh] w-full max-w-6xl flex-col rounded-xl bg-white shadow-2xl">
+            <div className="flex flex-col gap-3 border-b border-slate-200 p-4 md:flex-row md:items-center md:justify-between">
+              <div className="min-w-0">
+                <h4 className="truncate text-lg font-black text-slate-950">
+                  {selectedFolder.car_number || "-"} 사진 폴더
+                </h4>
+                <p className="mt-1 truncate text-sm font-semibold text-slate-500">
+                  {selectedFolder.work_name} / {selectedFolder.car_model || "-"}
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex overflow-hidden rounded-lg border border-slate-300">
+                  <button
+                    type="button"
+                    onClick={() => setPhotoSortOrder("desc")}
+                    className={
+                      photoSortOrder === "desc"
+                        ? "bg-blue-600 px-3 py-2 text-xs font-bold text-white"
+                        : "bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"
+                    }
+                  >
+                    내림차순
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPhotoSortOrder("asc")}
+                    className={
+                      photoSortOrder === "asc"
+                        ? "bg-blue-600 px-3 py-2 text-xs font-bold text-white"
+                        : "border-l border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"
+                    }
+                  >
+                    오름차순
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => void loadFolderPhotos(selectedFolder)}
+                  className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"
+                >
+                  새로고침
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedFolder(null);
+                    setFolderPhotos([]);
+                  }}
+                  className="rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white hover:bg-slate-700"
+                >
+                  닫기
+                </button>
+              </div>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto p-4">
+              {folderPhotosLoading ? (
+                <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-14 text-center text-sm font-semibold text-slate-500">
+                  사진 목록을 불러오는 중입니다.
+                </div>
+              ) : sortedFolderPhotos.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-14 text-center text-sm font-semibold text-slate-500">
+                  이 폴더에 등록된 사진이 없습니다.
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-6">
+                  {sortedFolderPhotos.map((photo, index) => (
+                    <a
+                      key={photo.path}
+                      href={photo.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="group overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm hover:border-blue-300 hover:shadow-md"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element -- NAS and Supabase photos are runtime URLs. */}
+                      <img
+                        src={photo.url}
+                        alt={photo.name}
+                        className="aspect-square w-full bg-slate-100 object-cover transition group-hover:scale-[1.02]"
+                      />
+                      <div className="space-y-1 px-2 py-2">
+                        <p className="truncate text-xs font-bold text-slate-800">
+                          {photo.name}
+                        </p>
+                        <p className="text-[11px] font-semibold text-slate-400">
+                          {index + 1} / {sortedFolderPhotos.length}
+                        </p>
+                      </div>
+                    </a>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
