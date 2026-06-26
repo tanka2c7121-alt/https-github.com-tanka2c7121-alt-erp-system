@@ -10,7 +10,11 @@ import {
 import type { MenuItem } from "../../data/menuData";
 import { localDateText } from "../../lib/date";
 import { supabase } from "../../lib/supabase";
-import { imageFilePattern, workPhotoBucket } from "./workPhotoFiles";
+import {
+  getDownloadFileName,
+  imageFilePattern,
+  workPhotoBucket,
+} from "./workPhotoFiles";
 
 type PhotoManagementPageProps = {
   onSelectMenu: (menu: MenuItem) => void;
@@ -42,6 +46,20 @@ type PhotoViewerFrame = {
   top: number;
   width: number;
   height: number;
+};
+
+type DirectoryPickerWindow = Window & {
+  showDirectoryPicker?: () => Promise<{
+    getFileHandle: (
+      name: string,
+      options?: { create?: boolean }
+    ) => Promise<{
+      createWritable: () => Promise<{
+        write: (data: Blob) => Promise<void>;
+        close: () => Promise<void>;
+      }>;
+    }>;
+  }>;
 };
 
 const getWorkPhotoFolder = (workName: string) =>
@@ -215,6 +233,7 @@ export default function PhotoManagementPage({
   const [folderPhotos, setFolderPhotos] = useState<FolderPhoto[]>([]);
   const [folderPhotosLoading, setFolderPhotosLoading] = useState(false);
   const [photoSortOrder, setPhotoSortOrder] = useState<PhotoSortOrder>("desc");
+  const [selectedPhotoPaths, setSelectedPhotoPaths] = useState<string[]>([]);
   const [photoViewerIndex, setPhotoViewerIndex] = useState<number | null>(null);
   const [photoViewerFrame, setPhotoViewerFrame] = useState<PhotoViewerFrame>(() =>
     getDefaultPhotoViewerFrame()
@@ -337,6 +356,7 @@ export default function PhotoManagementPage({
 
     setSelectedFolder(row);
     setFolderPhotos([]);
+    setSelectedPhotoPaths([]);
     setPhotoViewerIndex(null);
     setFolderPhotosLoading(true);
 
@@ -425,8 +445,18 @@ export default function PhotoManagementPage({
     });
   }, [folderPhotos, photoSortOrder]);
 
+  const selectedFolderPhotos = sortedFolderPhotos.filter((photo) =>
+    selectedPhotoPaths.includes(photo.path)
+  );
+
   const activeViewerPhoto =
     photoViewerIndex === null ? null : sortedFolderPhotos[photoViewerIndex] ?? null;
+
+  useEffect(() => {
+    setSelectedPhotoPaths((prev) =>
+      prev.filter((path) => folderPhotos.some((photo) => photo.path === path))
+    );
+  }, [folderPhotos]);
 
   const openPhotoViewer = (photoPath?: string) => {
     if (sortedFolderPhotos.length === 0) {
@@ -455,6 +485,137 @@ export default function PhotoManagementPage({
         sortedFolderPhotos.length
       );
     });
+  };
+
+  const togglePhotoSelection = (photo: FolderPhoto) => {
+    setSelectedPhotoPaths((prev) =>
+      prev.includes(photo.path)
+        ? prev.filter((path) => path !== photo.path)
+        : [...prev, photo.path]
+    );
+  };
+
+  const selectAllPhotos = () => {
+    setSelectedPhotoPaths(sortedFolderPhotos.map((photo) => photo.path));
+  };
+
+  const clearPhotoSelection = () => {
+    setSelectedPhotoPaths([]);
+  };
+
+  const downloadPhotosWithBrowser = (photos: FolderPhoto[]) => {
+    photos.forEach((photo, index) => {
+      setTimeout(() => {
+        const link = document.createElement("a");
+        link.href = photo.url;
+        link.download = getDownloadFileName(photo, index);
+        link.target = "_blank";
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+      }, index * 200);
+    });
+  };
+
+  const downloadSelectedPhotosToFolder = async () => {
+    if (selectedFolderPhotos.length === 0) {
+      alert("다운로드할 사진을 선택하세요.");
+      return;
+    }
+
+    const directoryPicker = (window as DirectoryPickerWindow).showDirectoryPicker;
+
+    if (!directoryPicker) {
+      alert("이 브라우저는 폴더 선택 저장을 지원하지 않습니다. 기본 다운로드로 저장합니다.");
+      downloadPhotosWithBrowser(selectedFolderPhotos);
+      return;
+    }
+
+    try {
+      const directoryHandle = await directoryPicker();
+
+      for (let index = 0; index < selectedFolderPhotos.length; index += 1) {
+        const photo = selectedFolderPhotos[index];
+        const response = await fetch(photo.url);
+
+        if (!response.ok) {
+          throw new Error(`${photo.name} 다운로드 실패`);
+        }
+
+        const blob = await response.blob();
+        const fileHandle = await directoryHandle.getFileHandle(
+          getDownloadFileName(photo, index),
+          { create: true }
+        );
+        const writable = await fileHandle.createWritable();
+
+        await writable.write(blob);
+        await writable.close();
+      }
+
+      alert(`선택한 사진 ${selectedFolderPhotos.length}장을 저장했습니다.`);
+    } catch (error) {
+      if ((error as DOMException).name === "AbortError") return;
+
+      alert("폴더 저장에 실패해 기본 다운로드로 저장합니다.");
+      downloadPhotosWithBrowser(selectedFolderPhotos);
+    }
+  };
+
+  const deleteWorkPhotos = async (paths: string[]) => {
+    if (paths.length === 0) return "";
+
+    if (shouldUseNasPhotoStorage()) {
+      const response = await fetch("/api/work-photos", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ paths }),
+      });
+
+      if (!response.ok) {
+        const result = (await response.json().catch(() => null)) as {
+          error?: string;
+        } | null;
+
+        return result?.error ?? "NAS 사진 삭제에 실패했습니다.";
+      }
+
+      return "";
+    }
+
+    const { error } = await supabase.storage.from(workPhotoBucket).remove(paths);
+
+    return error?.message ?? "";
+  };
+
+  const deleteSelectedPhotos = async () => {
+    if (selectedFolderPhotos.length === 0) {
+      alert("삭제할 사진을 선택하세요.");
+      return;
+    }
+
+    if (!confirm(`선택한 사진 ${selectedFolderPhotos.length}장을 삭제할까요?`)) {
+      return;
+    }
+
+    const paths = selectedFolderPhotos.map((photo) => photo.path);
+    const errorMessage = await deleteWorkPhotos(paths);
+
+    if (errorMessage) {
+      alert("사진 삭제 실패: " + errorMessage);
+      return;
+    }
+
+    setFolderPhotos((prev) => prev.filter((photo) => !paths.includes(photo.path)));
+    setSelectedPhotoPaths([]);
+    setPhotoViewerIndex(null);
+
+    if (selectedFolder) {
+      setPhotoCounts((prev) => ({
+        ...prev,
+        [selectedFolder.id]: Math.max((prev[selectedFolder.id] ?? 0) - paths.length, 0),
+      }));
+    }
   };
 
   const startPhotoViewerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -721,6 +882,7 @@ export default function PhotoManagementPage({
                   onClick={() => {
                     setSelectedFolder(null);
                     setFolderPhotos([]);
+                    setSelectedPhotoPaths([]);
                     setPhotoViewerIndex(null);
                   }}
                   className="rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white hover:bg-slate-700"
@@ -740,30 +902,89 @@ export default function PhotoManagementPage({
                   이 폴더에 등록된 사진이 없습니다.
                 </div>
               ) : (
-                <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-6">
-                  {sortedFolderPhotos.map((photo, index) => (
-                    <button
-                      type="button"
-                      key={photo.path}
-                      onClick={() => openPhotoViewer(photo.path)}
-                      className="group overflow-hidden rounded-lg border border-slate-200 bg-white text-left shadow-sm hover:border-blue-300 hover:shadow-md"
-                    >
-                      {/* eslint-disable-next-line @next/next/no-img-element -- NAS and Supabase photos are runtime URLs. */}
-                      <img
-                        src={photo.url}
-                        alt={photo.name}
-                        className="aspect-square w-full bg-slate-100 object-cover transition group-hover:scale-[1.02]"
-                      />
-                      <div className="space-y-1 px-2 py-2">
-                        <p className="truncate text-xs font-bold text-slate-800">
-                          {photo.name}
-                        </p>
-                        <p className="text-[11px] font-semibold text-slate-400">
-                          {index + 1} / {sortedFolderPhotos.length}
-                        </p>
-                      </div>
-                    </button>
-                  ))}
+                <div className="space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                    <p className="text-xs font-bold text-slate-600">
+                      전체 {sortedFolderPhotos.length}장 / 선택 {selectedFolderPhotos.length}장
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={selectAllPhotos}
+                        className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                      >
+                        전체 선택
+                      </button>
+                      <button
+                        type="button"
+                        onClick={clearPhotoSelection}
+                        className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                      >
+                        선택 해제
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void downloadSelectedPhotosToFolder();
+                        }}
+                        className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700"
+                      >
+                        선택 다운로드
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void deleteSelectedPhotos();
+                        }}
+                        className="rounded-lg border border-red-300 bg-white px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50"
+                      >
+                        선택 삭제
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-6">
+                    {sortedFolderPhotos.map((photo, index) => {
+                      const selected = selectedPhotoPaths.includes(photo.path);
+
+                      return (
+                        <button
+                          type="button"
+                          key={photo.path}
+                          onClick={() => openPhotoViewer(photo.path)}
+                          className={`group relative overflow-hidden rounded-lg border bg-white text-left shadow-sm hover:border-blue-300 hover:shadow-md ${
+                            selected
+                              ? "border-blue-500 ring-2 ring-blue-200"
+                              : "border-slate-200"
+                          }`}
+                        >
+                          <span className="absolute left-2 top-2 z-10 flex h-6 w-6 items-center justify-center rounded bg-white/95 shadow">
+                            <input
+                              type="checkbox"
+                              checked={selected}
+                              onChange={() => togglePhotoSelection(photo)}
+                              onClick={(event) => event.stopPropagation()}
+                              className="h-4 w-4 accent-blue-600"
+                            />
+                          </span>
+                          {/* eslint-disable-next-line @next/next/no-img-element -- NAS and Supabase photos are runtime URLs. */}
+                          <img
+                            src={photo.url}
+                            alt={photo.name}
+                            className="aspect-square w-full bg-slate-100 object-cover transition group-hover:scale-[1.02]"
+                          />
+                          <div className="space-y-1 px-2 py-2">
+                            <p className="truncate text-xs font-bold text-slate-800">
+                              {photo.name}
+                            </p>
+                            <p className="text-[11px] font-semibold text-slate-400">
+                              {index + 1} / {sortedFolderPhotos.length}
+                            </p>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
             </div>
@@ -773,9 +994,10 @@ export default function PhotoManagementPage({
 
       {activeViewerPhoto && (
         <div
-          className="fixed inset-0 z-[60] bg-slate-950/80"
-          onWheel={(event) => {
+          className="fixed inset-0 z-[60] overscroll-contain bg-slate-950/80"
+          onWheelCapture={(event) => {
             event.preventDefault();
+            event.stopPropagation();
             movePhotoViewer(event.deltaY > 0 ? 1 : -1);
           }}
         >
