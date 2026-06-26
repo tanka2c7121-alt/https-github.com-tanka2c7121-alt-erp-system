@@ -506,6 +506,13 @@ export default function PhotoManagementPage({
 
     const scrollX = window.scrollX;
     const scrollY = window.scrollY;
+    const scrollContainers = Array.from(
+      document.querySelectorAll<HTMLElement>(".erp-main-scroll")
+    ).map((element) => ({
+      element,
+      overflowY: element.style.overflowY,
+      scrollTop: element.scrollTop,
+    }));
     const previousHtmlOverflow = document.documentElement.style.overflow;
     const previousHtmlTouchAction = document.documentElement.style.touchAction;
     const previousOverflow = document.body.style.overflow;
@@ -521,6 +528,9 @@ export default function PhotoManagementPage({
     document.body.style.position = "fixed";
     document.body.style.top = `-${scrollY}px`;
     document.body.style.width = "100%";
+    scrollContainers.forEach(({ element }) => {
+      element.style.overflowY = "hidden";
+    });
 
     return () => {
       document.documentElement.style.overflow = previousHtmlOverflow;
@@ -530,6 +540,10 @@ export default function PhotoManagementPage({
       document.body.style.position = previousPosition;
       document.body.style.top = previousTop;
       document.body.style.width = previousWidth;
+      scrollContainers.forEach(({ element, overflowY, scrollTop }) => {
+        element.style.overflowY = overflowY;
+        element.scrollTop = scrollTop;
+      });
       window.scrollTo(scrollX, scrollY);
     };
   }, [activeViewerPhoto, selectedFolder]);
@@ -554,7 +568,7 @@ export default function PhotoManagementPage({
     setPhotoViewerIndex(nextIndex >= 0 ? nextIndex : 0);
   };
 
-  const movePhotoViewer = (direction: 1 | -1) => {
+  const movePhotoViewer = useCallback((direction: 1 | -1) => {
     if (sortedFolderPhotos.length === 0) {
       setPhotoViewerIndex(null);
       return;
@@ -567,7 +581,26 @@ export default function PhotoManagementPage({
         sortedFolderPhotos.length
       );
     });
-  };
+  }, [sortedFolderPhotos.length]);
+
+  useEffect(() => {
+    if (!activeViewerPhoto) return;
+
+    const handleWheel = (event: WheelEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+      movePhotoViewer(event.deltaY > 0 ? 1 : -1);
+    };
+
+    document.addEventListener("wheel", handleWheel, {
+      capture: true,
+      passive: false,
+    });
+
+    return () => {
+      document.removeEventListener("wheel", handleWheel, { capture: true });
+    };
+  }, [activeViewerPhoto, movePhotoViewer]);
 
   const togglePhotoSelection = (photo: FolderPhoto) => {
     setSelectedPhotoPaths((prev) =>

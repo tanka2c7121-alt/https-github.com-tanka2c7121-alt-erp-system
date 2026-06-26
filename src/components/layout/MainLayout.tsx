@@ -883,7 +883,7 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
           </div>
         </div>
 
-        <main className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto p-2 md:p-5">
+        <main className="erp-main-scroll min-w-0 flex-1 overflow-x-hidden overflow-y-auto p-2 md:p-5">
           <div className="mb-2 overflow-hidden rounded-xl border border-blue-100 bg-blue-50/75 shadow-lg shadow-slate-300/30 backdrop-blur-xl md:hidden">
             <div className="flex items-center justify-between gap-2 border-b border-blue-100/80 bg-white/80 px-2 py-2">
               <div className="min-w-0">
