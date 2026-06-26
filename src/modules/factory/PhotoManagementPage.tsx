@@ -1,6 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 import type { MenuItem } from "../../data/menuData";
 import { localDateText } from "../../lib/date";
 import { supabase } from "../../lib/supabase";
@@ -29,6 +35,13 @@ type FolderPhoto = {
   path: string;
   url: string;
   createdAt?: number | string | null;
+};
+
+type PhotoViewerFrame = {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
 };
 
 const getWorkPhotoFolder = (workName: string) =>
@@ -150,6 +163,47 @@ const shouldUseNasPhotoStorage = () => {
   return hostname === "192.168.1.103" || hostname.endsWith(".local");
 };
 
+function getDefaultPhotoViewerFrame(): PhotoViewerFrame {
+  if (typeof window === "undefined") {
+    return { left: 80, top: 60, width: 960, height: 680 };
+  }
+
+  const width = Math.min(Math.max(window.innerWidth * 0.78, 520), 1120);
+  const height = Math.min(Math.max(window.innerHeight * 0.78, 380), 820);
+
+  return {
+    left: Math.max((window.innerWidth - width) / 2, 12),
+    top: Math.max((window.innerHeight - height) / 2, 12),
+    width,
+    height,
+  };
+}
+
+function constrainPhotoViewerFrame(frame: PhotoViewerFrame): PhotoViewerFrame {
+  if (typeof window === "undefined") {
+    return frame;
+  }
+
+  const margin = 12;
+  const minWidth = Math.min(420, window.innerWidth - margin * 2);
+  const minHeight = Math.min(300, window.innerHeight - margin * 2);
+  const width = Math.min(
+    Math.max(frame.width, minWidth),
+    window.innerWidth - margin * 2
+  );
+  const height = Math.min(
+    Math.max(frame.height, minHeight),
+    window.innerHeight - margin * 2
+  );
+
+  return {
+    left: Math.min(Math.max(frame.left, margin), window.innerWidth - width - margin),
+    top: Math.min(Math.max(frame.top, margin), window.innerHeight - height - margin),
+    width,
+    height,
+  };
+}
+
 export default function PhotoManagementPage({
   onSelectMenu,
 }: PhotoManagementPageProps) {
@@ -161,6 +215,10 @@ export default function PhotoManagementPage({
   const [folderPhotos, setFolderPhotos] = useState<FolderPhoto[]>([]);
   const [folderPhotosLoading, setFolderPhotosLoading] = useState(false);
   const [photoSortOrder, setPhotoSortOrder] = useState<PhotoSortOrder>("desc");
+  const [photoViewerIndex, setPhotoViewerIndex] = useState<number | null>(null);
+  const [photoViewerFrame, setPhotoViewerFrame] = useState<PhotoViewerFrame>(() =>
+    getDefaultPhotoViewerFrame()
+  );
 
   const loadRows = useCallback(async () => {
     setLoading(true);
@@ -279,6 +337,7 @@ export default function PhotoManagementPage({
 
     setSelectedFolder(row);
     setFolderPhotos([]);
+    setPhotoViewerIndex(null);
     setFolderPhotosLoading(true);
 
     try {
@@ -365,6 +424,91 @@ export default function PhotoManagementPage({
         : right.name.localeCompare(left.name);
     });
   }, [folderPhotos, photoSortOrder]);
+
+  const activeViewerPhoto =
+    photoViewerIndex === null ? null : sortedFolderPhotos[photoViewerIndex] ?? null;
+
+  const openPhotoViewer = (photoPath?: string) => {
+    if (sortedFolderPhotos.length === 0) {
+      alert("볼 사진이 없습니다.");
+      return;
+    }
+
+    const nextIndex = photoPath
+      ? sortedFolderPhotos.findIndex((photo) => photo.path === photoPath)
+      : 0;
+
+    setPhotoViewerFrame(getDefaultPhotoViewerFrame());
+    setPhotoViewerIndex(nextIndex >= 0 ? nextIndex : 0);
+  };
+
+  const movePhotoViewer = (direction: 1 | -1) => {
+    if (sortedFolderPhotos.length === 0) {
+      setPhotoViewerIndex(null);
+      return;
+    }
+
+    setPhotoViewerIndex((currentIndex) => {
+      const safeIndex = currentIndex ?? 0;
+      return (
+        (safeIndex + direction + sortedFolderPhotos.length) %
+        sortedFolderPhotos.length
+      );
+    });
+  };
+
+  const startPhotoViewerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const startFrame = photoViewerFrame;
+
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      setPhotoViewerFrame(
+        constrainPhotoViewerFrame({
+          ...startFrame,
+          left: startFrame.left + moveEvent.clientX - startX,
+          top: startFrame.top + moveEvent.clientY - startY,
+        })
+      );
+    };
+
+    const handlePointerUp = () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+    };
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+  };
+
+  const startPhotoViewerResize = (
+    event: ReactPointerEvent<HTMLButtonElement>
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const startFrame = photoViewerFrame;
+
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      setPhotoViewerFrame(
+        constrainPhotoViewerFrame({
+          ...startFrame,
+          width: startFrame.width + moveEvent.clientX - startX,
+          height: startFrame.height + moveEvent.clientY - startY,
+        })
+      );
+    };
+
+    const handlePointerUp = () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+    };
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+  };
 
   const openWorkCamera = (row: WorkOrder) => {
     onSelectMenu({
@@ -577,6 +721,7 @@ export default function PhotoManagementPage({
                   onClick={() => {
                     setSelectedFolder(null);
                     setFolderPhotos([]);
+                    setPhotoViewerIndex(null);
                   }}
                   className="rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white hover:bg-slate-700"
                 >
@@ -597,12 +742,11 @@ export default function PhotoManagementPage({
               ) : (
                 <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-6">
                   {sortedFolderPhotos.map((photo, index) => (
-                    <a
+                    <button
+                      type="button"
                       key={photo.path}
-                      href={photo.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="group overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm hover:border-blue-300 hover:shadow-md"
+                      onClick={() => openPhotoViewer(photo.path)}
+                      className="group overflow-hidden rounded-lg border border-slate-200 bg-white text-left shadow-sm hover:border-blue-300 hover:shadow-md"
                     >
                       {/* eslint-disable-next-line @next/next/no-img-element -- NAS and Supabase photos are runtime URLs. */}
                       <img
@@ -618,11 +762,89 @@ export default function PhotoManagementPage({
                           {index + 1} / {sortedFolderPhotos.length}
                         </p>
                       </div>
-                    </a>
+                    </button>
                   ))}
                 </div>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {activeViewerPhoto && (
+        <div
+          className="fixed inset-0 z-[60] bg-slate-950/80"
+          onWheel={(event) => {
+            event.preventDefault();
+            movePhotoViewer(event.deltaY > 0 ? 1 : -1);
+          }}
+        >
+          <div
+            className="absolute flex min-h-0 flex-col overflow-hidden rounded-xl border border-white/70 bg-white shadow-2xl"
+            style={{
+              left: photoViewerFrame.left,
+              top: photoViewerFrame.top,
+              width: photoViewerFrame.width,
+              height: photoViewerFrame.height,
+            }}
+          >
+            <div
+              className="flex cursor-move flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-slate-50 p-3"
+              onPointerDown={startPhotoViewerMove}
+            >
+              <div className="min-w-0">
+                <p className="truncate text-sm font-bold text-slate-900">
+                  {activeViewerPhoto.name}
+                </p>
+                <p className="text-xs text-slate-500">
+                  {(photoViewerIndex ?? 0) + 1} / {sortedFolderPhotos.length}
+                </p>
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onClick={() => movePhotoViewer(-1)}
+                  className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  이전
+                </button>
+                <button
+                  type="button"
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onClick={() => movePhotoViewer(1)}
+                  className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  다음
+                </button>
+                <button
+                  type="button"
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onClick={() => setPhotoViewerIndex(null)}
+                  className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+                >
+                  닫기
+                </button>
+              </div>
+            </div>
+
+            <div className="flex min-h-0 flex-1 items-center justify-center bg-slate-100 p-3">
+              {/* eslint-disable-next-line @next/next/no-img-element -- Viewer shows NAS and Supabase runtime URLs. */}
+              <img
+                src={activeViewerPhoto.url}
+                alt={activeViewerPhoto.name}
+                className="max-h-full max-w-full object-contain"
+              />
+            </div>
+            <button
+              type="button"
+              aria-label="사진 보기 창 크기 조절"
+              onPointerDown={startPhotoViewerResize}
+              className="group absolute bottom-2 right-2 h-7 w-7 cursor-nwse-resize rounded-br-xl opacity-80 transition hover:opacity-100"
+            >
+              <span className="absolute bottom-0 right-0 h-5 w-5 overflow-hidden rounded-br-xl border-b-[3px] border-r-[3px] border-slate-300 text-transparent shadow-[2px_2px_3px_rgba(15,23,42,0.12)] transition group-hover:border-slate-500" />
+            </button>
           </div>
         </div>
       )}
