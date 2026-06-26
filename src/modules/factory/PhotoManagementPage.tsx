@@ -6,6 +6,7 @@ import {
   useMemo,
   useState,
   type PointerEvent as ReactPointerEvent,
+  type WheelEvent as ReactWheelEvent,
 } from "react";
 import type { MenuItem } from "../../data/menuData";
 import { localDateText } from "../../lib/date";
@@ -220,6 +221,50 @@ function constrainPhotoViewerFrame(frame: PhotoViewerFrame): PhotoViewerFrame {
     width,
     height,
   };
+}
+
+function containWheelToScrollArea(
+  event: ReactWheelEvent<HTMLElement>,
+  selector: string
+) {
+  const target = event.target as HTMLElement;
+  const scrollArea = target.closest(selector) as HTMLElement | null;
+
+  event.stopPropagation();
+
+  if (!scrollArea) {
+    event.preventDefault();
+    return;
+  }
+
+  const canScroll =
+    scrollArea.scrollHeight > scrollArea.clientHeight ||
+    scrollArea.scrollWidth > scrollArea.clientWidth;
+
+  if (!canScroll) {
+    event.preventDefault();
+    return;
+  }
+
+  const movingDown = event.deltaY > 0;
+  const movingUp = event.deltaY < 0;
+  const movingRight = event.deltaX > 0;
+  const movingLeft = event.deltaX < 0;
+  const atTop = scrollArea.scrollTop <= 0;
+  const atBottom =
+    scrollArea.scrollTop + scrollArea.clientHeight >= scrollArea.scrollHeight - 1;
+  const atLeft = scrollArea.scrollLeft <= 0;
+  const atRight =
+    scrollArea.scrollLeft + scrollArea.clientWidth >= scrollArea.scrollWidth - 1;
+
+  if (
+    (movingUp && atTop) ||
+    (movingDown && atBottom) ||
+    (movingLeft && atLeft) ||
+    (movingRight && atRight)
+  ) {
+    event.preventDefault();
+  }
 }
 
 export default function PhotoManagementPage({
@@ -459,11 +504,33 @@ export default function PhotoManagementPage({
   useEffect(() => {
     if (!selectedFolder && !activeViewerPhoto) return;
 
+    const scrollX = window.scrollX;
+    const scrollY = window.scrollY;
+    const previousHtmlOverflow = document.documentElement.style.overflow;
+    const previousHtmlTouchAction = document.documentElement.style.touchAction;
     const previousOverflow = document.body.style.overflow;
+    const previousTouchAction = document.body.style.touchAction;
+    const previousPosition = document.body.style.position;
+    const previousTop = document.body.style.top;
+    const previousWidth = document.body.style.width;
+
+    document.documentElement.style.overflow = "hidden";
+    document.documentElement.style.touchAction = "none";
     document.body.style.overflow = "hidden";
+    document.body.style.touchAction = "none";
+    document.body.style.position = "fixed";
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.width = "100%";
 
     return () => {
+      document.documentElement.style.overflow = previousHtmlOverflow;
+      document.documentElement.style.touchAction = previousHtmlTouchAction;
       document.body.style.overflow = previousOverflow;
+      document.body.style.touchAction = previousTouchAction;
+      document.body.style.position = previousPosition;
+      document.body.style.top = previousTop;
+      document.body.style.width = previousWidth;
+      window.scrollTo(scrollX, scrollY);
     };
   }, [activeViewerPhoto, selectedFolder]);
 
@@ -909,15 +976,9 @@ export default function PhotoManagementPage({
               width: folderPopupFrame.width,
               height: folderPopupFrame.height,
             }}
-            onWheelCapture={(event) => {
-              const target = event.target as HTMLElement;
-
-              event.stopPropagation();
-
-              if (!target.closest("[data-folder-popup-scroll]")) {
-                event.preventDefault();
-              }
-            }}
+            onWheelCapture={(event) =>
+              containWheelToScrollArea(event, "[data-folder-popup-scroll]")
+            }
           >
             <div
               className="flex cursor-move flex-col gap-3 border-b border-slate-200 p-4 md:flex-row md:items-center md:justify-between"
@@ -1097,11 +1158,9 @@ export default function PhotoManagementPage({
       {activeViewerPhoto && (
         <div
           className="fixed inset-0 z-[60] overscroll-contain bg-slate-950/80"
-          onWheelCapture={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            movePhotoViewer(event.deltaY > 0 ? 1 : -1);
-          }}
+          onWheelCapture={(event) =>
+            containWheelToScrollArea(event, "[data-photo-viewer-scroll]")
+          }
         >
           <div
             className="absolute flex min-h-0 flex-col overflow-hidden rounded-xl border border-white/70 bg-white shadow-2xl"
@@ -1153,7 +1212,10 @@ export default function PhotoManagementPage({
               </div>
             </div>
 
-            <div className="flex min-h-0 flex-1 items-center justify-center bg-slate-100 p-3">
+            <div
+              data-photo-viewer-scroll
+              className="flex min-h-0 flex-1 items-center justify-center overflow-auto overscroll-contain bg-slate-100 p-3"
+            >
               {/* eslint-disable-next-line @next/next/no-img-element -- Viewer shows NAS and Supabase runtime URLs. */}
               <img
                 src={activeViewerPhoto.url}
