@@ -447,13 +447,7 @@ export default function SettlementRegisterPage({
 
     const refundCancelAmount = toNumber(row.amount);
     const refundCancelContent = getDailyCashContent(row, form.carNumber);
-    const refundCancelMemo = [
-      form.workName,
-      "환불취소 승인 후 일일입출금 입금 반영",
-      reason,
-    ]
-      .filter(Boolean)
-      .join(" / ");
+    const refundCancelMemo = `${form.workName} 환불취소`;
 
     const { error } = await supabase.from("cash_change_requests").insert({
       request_type: "settlement_refund_cancel",
@@ -1139,13 +1133,7 @@ export default function SettlementRegisterPage({
         requested_payload: {
           daily_cash: {
             ...payload,
-            memo: [
-              payload.memo,
-              "관리자 승인 후 미수 입금 반영",
-              `입금금액 ${payload.income.toLocaleString()}원`,
-            ]
-              .filter(Boolean)
-              .join(" / "),
+            memo: `${targetForm.workName} 미수입금`,
           },
         },
         requested_by: user.user_id,
@@ -1469,13 +1457,7 @@ export default function SettlementRegisterPage({
 
       const refundAmount = toNumber(row.amount);
       const refundContent = getDailyCashContent(row, targetForm.carNumber);
-      const refundMemo = [
-        targetForm.workName,
-        "환불 승인 후 일일입출금 지출 반영",
-        row.refundReason,
-      ]
-        .filter(Boolean)
-        .join(" / ");
+      const refundMemo = `${targetForm.workName} 환불`;
 
       const { error } = await supabase.from("cash_change_requests").insert({
         request_type: "settlement_refund",

@@ -375,8 +375,7 @@ export default function DailyCashRegisterPage({
           ...payload,
           memo: [
             payload.memo,
-            "관리자 승인 후 수정 반영",
-            `금액 ${amount.toLocaleString()}원`,
+            "수정승인",
           ]
             .filter(Boolean)
             .join(" / "),
