@@ -234,6 +234,9 @@ export default function PhotoManagementPage({
   const [folderPhotosLoading, setFolderPhotosLoading] = useState(false);
   const [photoSortOrder, setPhotoSortOrder] = useState<PhotoSortOrder>("desc");
   const [selectedPhotoPaths, setSelectedPhotoPaths] = useState<string[]>([]);
+  const [folderPopupFrame, setFolderPopupFrame] = useState<PhotoViewerFrame>(() =>
+    getDefaultPhotoViewerFrame()
+  );
   const [photoViewerIndex, setPhotoViewerIndex] = useState<number | null>(null);
   const [photoViewerFrame, setPhotoViewerFrame] = useState<PhotoViewerFrame>(() =>
     getDefaultPhotoViewerFrame()
@@ -357,6 +360,7 @@ export default function PhotoManagementPage({
     setSelectedFolder(row);
     setFolderPhotos([]);
     setSelectedPhotoPaths([]);
+    setFolderPopupFrame(getDefaultPhotoViewerFrame());
     setPhotoViewerIndex(null);
     setFolderPhotosLoading(true);
 
@@ -618,6 +622,59 @@ export default function PhotoManagementPage({
     }
   };
 
+  const startFolderPopupMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const startFrame = folderPopupFrame;
+
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      setFolderPopupFrame(
+        constrainPhotoViewerFrame({
+          ...startFrame,
+          left: startFrame.left + moveEvent.clientX - startX,
+          top: startFrame.top + moveEvent.clientY - startY,
+        })
+      );
+    };
+
+    const handlePointerUp = () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+    };
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+  };
+
+  const startFolderPopupResize = (
+    event: ReactPointerEvent<HTMLButtonElement>
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const startFrame = folderPopupFrame;
+
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      setFolderPopupFrame(
+        constrainPhotoViewerFrame({
+          ...startFrame,
+          width: startFrame.width + moveEvent.clientX - startX,
+          height: startFrame.height + moveEvent.clientY - startY,
+        })
+      );
+    };
+
+    const handlePointerUp = () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+    };
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+  };
+
   const startPhotoViewerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
     const startX = event.clientX;
     const startY = event.clientY;
@@ -832,9 +889,29 @@ export default function PhotoManagementPage({
       </section>
 
       {selectedFolder && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-3 md:p-6">
-          <div className="flex max-h-[92vh] w-full max-w-6xl flex-col rounded-xl bg-white shadow-2xl">
-            <div className="flex flex-col gap-3 border-b border-slate-200 p-4 md:flex-row md:items-center md:justify-between">
+        <div className="fixed inset-0 z-50 overscroll-contain bg-slate-950/60">
+          <div
+            className="absolute flex min-h-0 flex-col overflow-hidden rounded-xl bg-white shadow-2xl"
+            style={{
+              left: folderPopupFrame.left,
+              top: folderPopupFrame.top,
+              width: folderPopupFrame.width,
+              height: folderPopupFrame.height,
+            }}
+            onWheelCapture={(event) => {
+              const target = event.target as HTMLElement;
+
+              event.stopPropagation();
+
+              if (!target.closest("[data-folder-popup-scroll]")) {
+                event.preventDefault();
+              }
+            }}
+          >
+            <div
+              className="flex cursor-move flex-col gap-3 border-b border-slate-200 p-4 md:flex-row md:items-center md:justify-between"
+              onPointerDown={startFolderPopupMove}
+            >
               <div className="min-w-0">
                 <h4 className="truncate text-lg font-black text-slate-950">
                   {selectedFolder.car_number || "-"} 사진 폴더
@@ -844,7 +921,10 @@ export default function PhotoManagementPage({
                 </p>
               </div>
 
-              <div className="flex flex-wrap items-center gap-2">
+              <div
+                className="flex flex-wrap items-center gap-2"
+                onPointerDown={(event) => event.stopPropagation()}
+              >
                 <div className="flex overflow-hidden rounded-lg border border-slate-300">
                   <button
                     type="button"
@@ -892,7 +972,10 @@ export default function PhotoManagementPage({
               </div>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto p-4">
+            <div
+              data-folder-popup-scroll
+              className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4"
+            >
               {folderPhotosLoading ? (
                 <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-14 text-center text-sm font-semibold text-slate-500">
                   사진 목록을 불러오는 중입니다.
@@ -988,6 +1071,14 @@ export default function PhotoManagementPage({
                 </div>
               )}
             </div>
+            <button
+              type="button"
+              aria-label="사진 폴더 창 크기 조절"
+              onPointerDown={startFolderPopupResize}
+              className="group absolute bottom-2 right-2 h-7 w-7 cursor-nwse-resize rounded-br-xl opacity-80 transition hover:opacity-100"
+            >
+              <span className="absolute bottom-0 right-0 h-5 w-5 overflow-hidden rounded-br-xl border-b-[3px] border-r-[3px] border-slate-300 text-transparent shadow-[2px_2px_3px_rgba(15,23,42,0.12)] transition group-hover:border-slate-500" />
+            </button>
           </div>
         </div>
       )}
