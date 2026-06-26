@@ -137,24 +137,17 @@ const notificationRealtimeTables = [
   { table: "app_users" },
 ];
 
-const hasAdminApprovalRole = (approvalRole?: string | null) => {
-  const value = String(approvalRole ?? "");
-
-  return value.includes("관리자") || value.includes("관리부");
-};
-
 export default function MainLayout({ user, onLogout }: MainLayoutProps) {
   const isAdmin = user.role === "ADMIN";
   const userRole = user.role ?? "STAFF";
   const canViewSales = ["ADMIN", "CHIEF"].includes(userRole);
   const approvalRole = getApprovalRole(user);
   const canCheckIncident = approvalRole === "관리자";
-  const canApproveCashChanges =
+  const canViewCashChanges =
     isAdmin ||
-    hasAdminApprovalRole(approvalRole) ||
-    hasAdminApprovalRole(user.approval_role) ||
-    hasAdminApprovalRole(user.department);
-
+    userRole === "CHIEF" ||
+    approvalRole === "관리자" ||
+    approvalRole === "총괄관리";
   const [selectedMenu, setSelectedMenu] = useState<MenuItem>(initialMenu);
   const [menuHistory, setMenuHistory] = useState<MenuItem[]>([]);
   const [cachedMenus, setCachedMenus] = useState<MenuItem[]>([initialMenu]);
@@ -413,7 +406,7 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
             .select("id", { count: "exact", head: true })
             .eq("status", "확인대기")
         : Promise.resolve({ count: 0, error: null }),
-      canApproveCashChanges
+      canViewCashChanges
         ? supabase
             .from("cash_change_requests")
             .select("id", { count: "exact", head: true })
@@ -451,7 +444,7 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
     });
   }, [
     approvalRole,
-    canApproveCashChanges,
+    canViewCashChanges,
     isAdmin,
     user.department,
     user.user_id,
@@ -504,7 +497,7 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
           },
         ]
       : []),
-    ...(canApproveCashChanges
+    ...(canViewCashChanges
       ? [
           {
             id: "cashChanges",
