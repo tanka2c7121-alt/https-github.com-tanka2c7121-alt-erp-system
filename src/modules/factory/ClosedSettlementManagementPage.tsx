@@ -45,6 +45,7 @@ type PaymentRow = {
   payment_type: string | null;
   payment_detail: string | null;
   payment_amount: number | null;
+  refund_status?: string | null;
 };
 
 type WorkOrderRow = {
@@ -79,6 +80,26 @@ const isInsuranceOrCapitalDetail = (value: unknown) => {
   const text = normalizeText(value);
 
   return text.includes("보험") || text.includes("캐피탈");
+};
+const isGeneralSettlementPayment = (row: PaymentRow, category: unknown) =>
+  normalizeText(category) === "일반" &&
+  normalizeText(row.payment_type) === "수리비" &&
+  normalizeText(row.payment_detail) === "일반";
+const isPaidAmountRow = (row: PaymentRow, category: unknown) => {
+  const paymentType = normalizeText(row.payment_type);
+
+  if (
+    paymentType === "청구" ||
+    paymentType === "면책금" ||
+    normalizeText(row.refund_status) === "approved"
+  ) {
+    return false;
+  }
+
+  return (
+    isInsuranceOrCapitalDetail(row.payment_detail) ||
+    isGeneralSettlementPayment(row, category)
+  );
 };
 const currentDateText = localDateText();
 const currentYear = currentDateText.slice(0, 4);
@@ -125,7 +146,7 @@ export default function ClosedSettlementManagementPage({
       ),
       fetchAllRows<PaymentRow>(
         "settlement_payments",
-        "id, work_name, payment_type, payment_detail, payment_amount"
+        "id, work_name, payment_type, payment_detail, payment_amount, refund_status"
       ),
       fetchAllRows<WorkOrderRow>(
         "work_orders",
@@ -155,24 +176,16 @@ export default function ClosedSettlementManagementPage({
         .map((row) => [normalizeText(row.work_name), row] as const)
         .filter(([workName]) => Boolean(workName))
     );
-    const paidAmountByWorkName = (payments ?? []).reduce<Map<string, number>>(
+    const paymentsByWorkName = (payments ?? []).reduce<Map<string, PaymentRow[]>>(
       (map, row) => {
         const workName = normalizeText(row.work_name);
-        const paymentType = normalizeText(row.payment_type);
 
-        if (
-          !workName ||
-          paymentType === "청구" ||
-          paymentType === "면책금" ||
-          !isInsuranceOrCapitalDetail(row.payment_detail)
-        ) {
-          return map;
-        }
+        if (!workName) return map;
 
-        map.set(workName, (map.get(workName) ?? 0) + toAmountNumber(row.payment_amount));
+        map.set(workName, [...(map.get(workName) ?? []), row]);
         return map;
       },
-      new Map<string, number>()
+      new Map<string, PaymentRow[]>()
     );
 
     setRows(
@@ -181,7 +194,12 @@ export default function ClosedSettlementManagementPage({
         .map((row) => {
           const workName = normalizeText(row.work_name);
           const claimAmount = toAmountNumber(row.claim_amount);
-          const paidAmount = paidAmountByWorkName.get(workName) ?? 0;
+          const paidAmount = (paymentsByWorkName.get(workName) ?? [])
+            .filter((payment) => isPaidAmountRow(payment, row.category))
+            .reduce(
+              (sum, payment) => sum + toAmountNumber(payment.payment_amount),
+              0
+            );
           const workInfo = workInfoByWorkName.get(workName);
 
           return {
