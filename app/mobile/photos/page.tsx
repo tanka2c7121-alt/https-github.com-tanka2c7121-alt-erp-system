@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 
 import { supabaseAuthPassword } from "../../../src/lib/authPassword";
 import { supabase } from "../../../src/lib/supabase";
+import { getStoredWorkPhotoFileName } from "../../../src/modules/factory/workPhotoFiles";
 
 type WorkOrderRow = {
   id: number;
@@ -309,13 +310,22 @@ export default function MobilePhotoUploadPage() {
     try {
       const formData = new FormData();
       formData.append("folder", getWorkPhotoFolder(selectedWorkName));
+      const uploadDate = new Date();
 
-      for (const file of files) {
+      for (const [index, file] of files.entries()) {
         const uploadFile = await compressImage(
           file,
           normalizeText(selectedWork?.car_number)
         );
-        formData.append("files", uploadFile, uploadFile.name);
+        const fileName = getStoredWorkPhotoFileName({
+          carNumber: normalizeText(selectedWork?.car_number),
+          workName: selectedWorkName,
+          originalName: uploadFile.name,
+          index,
+          date: uploadDate,
+        });
+
+        formData.append("files", uploadFile, fileName);
       }
 
       const response = await fetch("/api/work-photos", {

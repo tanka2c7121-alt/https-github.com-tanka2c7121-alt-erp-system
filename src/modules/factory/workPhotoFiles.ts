@@ -31,3 +31,44 @@ export const getDownloadFileName = (photo: { name: string }, index: number) =>
     photo.name,
     `photo-${index + 1}.jpg`
   )}`;
+
+const getPhotoExtension = (name: string) => {
+  const safeName = safeFileName(name, "photo.jpg");
+  const extensionIndex = safeName.lastIndexOf(".");
+
+  return extensionIndex >= 0 ? safeName.slice(extensionIndex) : ".jpg";
+};
+
+const formatPhotoTimestamp = (date: Date) => {
+  const yyyy = String(date.getFullYear());
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const dd = String(date.getDate()).padStart(2, "0");
+  const hh = String(date.getHours()).padStart(2, "0");
+  const mi = String(date.getMinutes()).padStart(2, "0");
+  const ss = String(date.getSeconds()).padStart(2, "0");
+
+  return `${yyyy}${mm}${dd}-${hh}${mi}${ss}`;
+};
+
+export function getStoredWorkPhotoFileName({
+  carNumber,
+  workName,
+  originalName,
+  index,
+  date = new Date(),
+}: {
+  carNumber?: string | null;
+  workName?: string | null;
+  originalName: string;
+  index: number;
+  date?: Date;
+}) {
+  const baseName = (carNumber ?? "").trim() || (workName ?? "").trim() || "photo";
+  const sequence = String(index + 1).padStart(2, "0");
+  const extension = getPhotoExtension(originalName);
+
+  return safeFileName(
+    `${baseName}_${formatPhotoTimestamp(date)}_${sequence}${extension}`,
+    `photo-${sequence}.jpg`
+  );
+}

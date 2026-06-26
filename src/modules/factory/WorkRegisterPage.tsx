@@ -13,6 +13,7 @@ import {
 import { createPortal } from "react-dom";
 import {
   getDownloadFileName,
+  getStoredWorkPhotoFileName,
   imageFilePattern,
   photoBatchSize,
   workPhotoBucket,
@@ -1180,6 +1181,7 @@ async function captureCameraPhoto() {
 
 async function uploadPendingWorkPhotos(targetWorkName = workName) {
   const photosToUpload = pendingWorkPhotos;
+  const uploadDate = new Date();
 
   if (photosToUpload.length === 0) {
     return 0;
@@ -1198,9 +1200,17 @@ async function uploadPendingWorkPhotos(targetWorkName = workName) {
       const formData = new FormData();
       formData.append("folder", folder);
 
-      for (const photo of photosToUpload) {
+      for (const [index, photo] of photosToUpload.entries()) {
         const uploadFile = await compressImage(photo.file);
-        formData.append("files", uploadFile, uploadFile.name);
+        const fileName = getStoredWorkPhotoFileName({
+          carNumber,
+          workName: targetWorkName,
+          originalName: uploadFile.name,
+          index,
+          date: uploadDate,
+        });
+
+        formData.append("files", uploadFile, fileName);
       }
 
       const response = await fetch("/api/work-photos", {
@@ -1212,12 +1222,16 @@ async function uploadPendingWorkPhotos(targetWorkName = workName) {
         throw new Error(await response.text());
       }
     } else {
-      for (const photo of photosToUpload) {
+      for (const [index, photo] of photosToUpload.entries()) {
         const uploadFile = await compressImage(photo.file);
-        const extension = uploadFile.name.split(".").pop() || "jpg";
-        const filePath = `${folder}/${Date.now()}-${Math.random()
-          .toString(36)
-          .slice(2, 8)}.${extension}`;
+        const fileName = getStoredWorkPhotoFileName({
+          carNumber,
+          workName: targetWorkName,
+          originalName: uploadFile.name,
+          index,
+          date: uploadDate,
+        });
+        const filePath = `${folder}/${fileName}`;
 
         const { error } = await supabase.storage
           .from(workPhotoBucket)

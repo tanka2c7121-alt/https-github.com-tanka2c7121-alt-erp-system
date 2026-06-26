@@ -36,6 +36,34 @@ const resolvePhotoPath = (relativePath: string) => {
   return absolutePath.startsWith(`${rootPath}${path.sep}`) ? absolutePath : null;
 };
 
+const getAvailablePhotoFilePath = async (folderPath: string, requestedName: string) => {
+  const safeName = safeFileName(requestedName, "photo.jpg");
+  const extensionIndex = safeName.lastIndexOf(".");
+  const baseName = extensionIndex >= 0 ? safeName.slice(0, extensionIndex) : safeName;
+  const extension = extensionIndex >= 0 ? safeName.slice(extensionIndex) : ".jpg";
+
+  for (let index = 0; index < 1000; index += 1) {
+    const fileName =
+      index === 0 ? safeName : safeFileName(`${baseName}_${index + 1}${extension}`);
+    const filePath = path.join(folderPath, fileName);
+
+    try {
+      await stat(filePath);
+    } catch (error: unknown) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+        return filePath;
+      }
+
+      throw error;
+    }
+  }
+
+  return path.join(
+    folderPath,
+    safeFileName(`${baseName}_${Date.now()}${extension}`, "photo.jpg")
+  );
+};
+
 export async function GET(request: NextRequest) {
   const folder = safeFolderName(request.nextUrl.searchParams.get("folder"));
 
@@ -100,15 +128,7 @@ export async function POST(request: NextRequest) {
   await mkdir(folderPath, { recursive: true });
 
   for (const file of files) {
-    const originalName = safeFileName(file.name, "photo.jpg");
-    const extension = originalName.includes(".")
-      ? originalName.slice(originalName.lastIndexOf("."))
-      : ".jpg";
-    const fileName = safeFileName(
-      `${Date.now()}-${Math.random().toString(36).slice(2, 8)}${extension}`,
-      "photo.jpg"
-    );
-    const filePath = path.join(folderPath, fileName);
+    const filePath = await getAvailablePhotoFilePath(folderPath, file.name);
     const bytes = Buffer.from(await file.arrayBuffer());
 
     await writeFile(filePath, bytes);
