@@ -25,6 +25,8 @@ type DailyCashRow = {
   memo: string | null;
   source_type: string | null;
   source_work_name: string | null;
+  source_detail_id?: number | null;
+  source_key?: string | null;
   ledger_effective?: boolean | null;
 };
 
@@ -236,6 +238,31 @@ export default function DailyCashPage({ onSelectMenu }: DailyCashPageProps) {
       await fetchRows(period);
       void fetchBalanceRows();
       return;
+    }
+
+    if (row.source_type === "settlement_payment") {
+      const paymentId =
+        Number(row.source_detail_id) ||
+        Number(String(row.source_key ?? "").replace("settlement_payment:", ""));
+
+      if (Number.isFinite(paymentId) && paymentId > 0) {
+        const { error: paymentError } = await supabase
+          .from("settlement_payments")
+          .update({
+            payment_date: null,
+            payment_method: "",
+            approval_number: "",
+            merchant_number: "",
+            card_number: "",
+            payment_status: "청구",
+          })
+          .eq("id", paymentId);
+
+        if (paymentError) {
+          alert("차량정산 미수 전환 실패: " + paymentError.message);
+          return;
+        }
+      }
     }
 
     alert("삭제되었습니다.");
@@ -517,8 +544,6 @@ export default function DailyCashPage({ onSelectMenu }: DailyCashPageProps) {
                   const canEditRow = canEditDailyCashRow(item);
                   const isSettlementPaymentRow =
                     item.source_type === "settlement_payment";
-                  const settlementWorkName =
-                    item.source_work_name || item.memo || "";
                   const editButtonTitle = isSettlementPaymentRow
                     ? "차량정산에서 수정 후 저장하면 일일입출금에 반영됩니다."
                     : canEditRow
@@ -556,20 +581,6 @@ export default function DailyCashPage({ onSelectMenu }: DailyCashPageProps) {
                         <button
                           type="button"
                           onClick={() => {
-                            if (isSettlementPaymentRow) {
-                              if (!settlementWorkName) {
-                                alert("연결된 작업명을 찾지 못했습니다.");
-                                return;
-                              }
-
-                              onSelectMenu({
-                                id: "factory-settlement-repair-register",
-                                title: "정산등록",
-                                data: { workName: settlementWorkName },
-                              });
-                              return;
-                            }
-
                             onSelectMenu({
                               id: "factory-settlement-daily-cash-register",
                               title: "입출금수정",
@@ -582,7 +593,7 @@ export default function DailyCashPage({ onSelectMenu }: DailyCashPageProps) {
                           {isSettlementPaymentRow ? "정산수정" : "수정"}
                         </button>
 
-                        {item.source_type !== "settlement_payment" && (
+                        {true && (
                           <button
                             type="button"
                             onClick={() => {

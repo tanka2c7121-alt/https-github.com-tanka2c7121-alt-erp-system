@@ -52,6 +52,8 @@ export type DailyCashRow = {
   memo: string | null;
   source_type?: string | null;
   source_work_name?: string | null;
+  source_detail_id?: number | null;
+  source_key?: string | null;
 };
 
 type DailyCashRegisterPageProps = {
@@ -125,11 +127,8 @@ export default function DailyCashRegisterPage({
   const isEditMode = Boolean(editData);
   const canEditCurrentRow = canEditDailyCashRow(editData);
   const isSettlementPaymentRow = editData?.source_type === "settlement_payment";
-  const requiresAdminUnlock = Boolean(
-    editData && !canEditCurrentRow && !isSettlementPaymentRow
-  );
-  const canSaveCurrentRow =
-    !isSettlementPaymentRow && (!requiresAdminUnlock || adminUnlocked);
+  const requiresAdminUnlock = Boolean(editData && !canEditCurrentRow);
+  const canSaveCurrentRow = !requiresAdminUnlock || adminUnlocked;
 
   useEffect(() => {
     const loadCategoryOptions = async () => {
@@ -203,11 +202,6 @@ export default function DailyCashRegisterPage({
   }, [editData]);
 
   function canChangeForm() {
-    if (isSettlementPaymentRow) {
-      alert("차량정산에서 입력된 내역은 정산등록에서 수정 후 저장하세요.");
-      return false;
-    }
-
     if (requiresAdminUnlock && !adminUnlocked) {
       alert("관리자 승인 후 변경할 수 있습니다.");
       return false;
@@ -318,11 +312,6 @@ export default function DailyCashRegisterPage({
     setSaving(true);
 
     try {
-    if (isSettlementPaymentRow) {
-      alert("차량정산에서 입력된 내역은 정산등록에서 수정 후 저장하세요.");
-      return;
-    }
-
     if (editData && !canSaveCurrentRow) {
       alert("관리자 승인 후 수정할 수 있습니다.");
       return;
@@ -403,6 +392,36 @@ expense:
           : "입력 당일 내역 또는 최근 7일 이내 수입 미확인 내역만 수정할 수 있습니다."
       );
       return;
+    }
+
+    if (editData && isSettlementPaymentRow) {
+      const paymentId =
+        Number(editData.source_detail_id) ||
+        Number(String(editData.source_key ?? "").replace("settlement_payment:", ""));
+      const [paymentType = form.category, paymentDetail = ""] = String(
+        form.content || ""
+      )
+        .split("/")
+        .map((value) => value.trim());
+
+      if (Number.isFinite(paymentId) && paymentId > 0) {
+        const { error: paymentError } = await supabase
+          .from("settlement_payments")
+          .update({
+            payment_type: paymentType || form.category,
+            payment_detail: paymentDetail,
+            payment_amount: form.type === "수입" ? amount : 0,
+            payment_date: form.date || null,
+            payment_method: normalizeAccountName(form.account),
+            payment_status: form.date ? "수금" : "청구",
+          })
+          .eq("id", paymentId);
+
+        if (paymentError) {
+          alert("차량정산 연동 실패: " + paymentError.message);
+          return;
+        }
+      }
     }
 
     alert(isEditMode ? "수정되었습니다." : "저장되었습니다.");

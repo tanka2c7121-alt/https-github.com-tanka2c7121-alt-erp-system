@@ -90,50 +90,10 @@ const normalizeProgressStatus = (value: unknown) => {
 };
 
 const claimDetails = ["보험", "캐피탈", "일반", "바디케어"];
-const receivableAccountNames = ["국민은행", "부산은행", "BLUE POINT"];
-
-function normalizeBluePointAccount(value: unknown) {
-  const rawText = normalizeText(value);
-  const accountKey = rawText
-    .replace(/\s+/g, "")
-    .replaceAll("-", "")
-    .replaceAll("_", "")
-    .toUpperCase();
-
-  return accountKey.includes("BLUE") || accountKey.includes("블루")
-    ? "BLUE POINT"
-    : rawText;
-}
-
-function normalizeAccountName(value: unknown) {
-  const rawText = normalizeBluePointAccount(value);
-  const accountKey = rawText
-    .replace(/\s+/g, "")
-    .replaceAll("-", "")
-    .replaceAll("_", "")
-    .toUpperCase();
-
-  if (accountKey.includes("국민") || accountKey.includes("KB")) return "국민은행";
-  if (accountKey.includes("부산") || accountKey.includes("BNK")) return "부산은행";
-  if (accountKey.includes("BLUE") || accountKey.includes("블루")) return "BLUE POINT";
-
-  return rawText;
-}
-
 const isClaimPaymentRow = (row: any) => normalizeText(row.payment_type) === "청구";
 
-const isDeductiblePaymentRow = (row: any) => normalizeText(row.payment_type) === "면책금";
-
-const isRepairPaymentAmountRow = (row: any) => {
-  const paymentType = normalizeText(row.payment_type);
-
-  return (
-    toAmountNumber(row.payment_amount) > 0 &&
-    (paymentType === "수리비" || paymentType === "부가세") &&
-    !isClaimPaymentRow(row) &&
-    !isDeductiblePaymentRow(row)
-  );
-};
+const isRepairPaymentAmountRow = (row: any) =>
+  toAmountNumber(row.payment_amount) > 0 && !isClaimPaymentRow(row);
 
 const hasSettlementPaymentDetail = (row: any) => {
   const detail = normalizeText(row.payment_detail);
@@ -143,8 +103,7 @@ const hasSettlementPaymentDetail = (row: any) => {
 
 const isReceivablePaymentRow = (row: any) =>
   toAmountNumber(row.payment_amount) > 0 &&
-  isEmptyDateValue(row.payment_date) &&
-  receivableAccountNames.includes(normalizeAccountName(row.payment_method));
+  isEmptyDateValue(row.payment_date);
 
 const getSettlementItemStatus = ({
   progressStatus,

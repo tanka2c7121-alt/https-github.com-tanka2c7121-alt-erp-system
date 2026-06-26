@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { getApprovalRole } from "../../lib/approval";
 import { supabase } from "../../lib/supabase";
 import { useRealtimeRefresh } from "../../lib/useRealtimeRefresh";
 import type { UserRole } from "../../types/roles";
@@ -11,6 +10,7 @@ type CashChangeApprovalPageProps = {
     user_id: string;
     user_name: string;
     approval_role?: string | null;
+    department?: string | null;
     role: UserRole;
   };
 };
@@ -31,8 +31,29 @@ type CashChangeRequest = {
   requested_at: string;
 };
 
-const formatWon = (amount: number) => Number(amount || 0).toLocaleString();
 const cashChangeRealtimeTables = [{ table: "cash_change_requests" }];
+
+const requestTypeLabel: Record<string, string> = {
+  settlement_refund: "환불처리",
+  daily_cash_posting: "미수 입금 반영",
+  daily_cash_correction: "일일입출금 수정",
+  reopen_settlement: "완결/종결 해제",
+};
+
+const formatWon = (amount: number) => Number(amount || 0).toLocaleString();
+
+const canApproveCashChange = (user: CashChangeApprovalPageProps["user"]) => {
+  const approvalRole = String(user.approval_role ?? "");
+  const department = String(user.department ?? "");
+
+  return (
+    user.role === "ADMIN" ||
+    approvalRole.includes("관리자") ||
+    approvalRole.includes("관리부") ||
+    department.includes("관리부")
+  );
+};
+
 const isMissingSchemaError = (error: any) => {
   const message = String(error?.message ?? "").toLowerCase();
   const code = String(error?.code ?? "");
@@ -81,14 +102,12 @@ export default function CashChangeApprovalPage({
   const [processingId, setProcessingId] = useState<number | null>(null);
   const [setupError, setSetupError] = useState<string | null>(null);
 
-  const canApprove =
-    user.role === "ADMIN" ||
-    getApprovalRole(user) === "관리자" ||
-    user.approval_role === "관리자";
+  const canApprove = canApproveCashChange(user);
 
   const fetchRows = useCallback(async () => {
     setLoading(true);
     setSetupError(null);
+
     const { data, error } = await supabase
       .from("cash_change_requests")
       .select("*")
@@ -101,7 +120,7 @@ export default function CashChangeApprovalPage({
       setRows([]);
       setSetupError(
         isMissingSchemaError(error)
-          ? "입출금 승인요청 DB 업데이트가 아직 적용되지 않았습니다. Supabase 운영 DB는 supabase_cash_control_workflow.sql, NAS DB는 nas_cash_control_workflow.sql을 먼저 실행해 주세요."
+          ? "입출금 승인요청 DB 업데이트가 아직 적용되지 않았습니다. supabase_cash_control_workflow.sql을 실행해 주세요."
           : `승인요청 조회 실패: ${error.message}`
       );
       return;
@@ -174,7 +193,7 @@ export default function CashChangeApprovalPage({
         const dailyCashPayload = row.requested_payload?.daily_cash;
 
         if (!dailyCashPayload || !row.target_id) {
-          throw new Error("일일입출금 정정 payload가 없습니다.");
+          throw new Error("일일입출금 수정 payload가 없습니다.");
         }
 
         const { error: cashError } = await supabase
@@ -252,9 +271,9 @@ export default function CashChangeApprovalPage({
   return (
     <div className="space-y-4 text-slate-900">
       <div>
-        <h3 className="text-xl font-bold">일일입출금 승인요청</h3>
+        <h3 className="text-xl font-bold">입출금 승인요청</h3>
         <p className="text-sm text-slate-700">
-          환불, 과거 입금 정정, 완결/종결 정산 해제 요청을 승인합니다.
+          미수 입금 반영, 환불처리, 일일입출금 수정, 완결/종결 해제 요청을 승인합니다.
         </p>
       </div>
 
@@ -263,16 +282,13 @@ export default function CashChangeApprovalPage({
           <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
             <p className="font-bold">승인요청 조회를 준비할 수 없습니다.</p>
             <p className="mt-1">{setupError}</p>
-            <p className="mt-2">
-              SQL 파일 위치:{" "}
-              <span className="font-mono">
-                supabase_cash_control_workflow.sql / nas_cash_control_workflow.sql
-              </span>
-            </p>
           </div>
         )}
 
-        <div className="mb-3 flex justify-end">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div className="text-sm font-semibold text-slate-700">
+            승인대기 {rows.length.toLocaleString()}건
+          </div>
           <button
             type="button"
             onClick={() => void fetchRows()}
@@ -319,7 +335,7 @@ export default function CashChangeApprovalPage({
                         {row.requested_at?.slice(0, 10)}
                       </td>
                       <td className="border border-slate-300 px-3 py-2">
-                        {row.request_type}
+                        {requestTypeLabel[row.request_type] ?? row.request_type}
                       </td>
                       <td className="border border-slate-300 px-3 py-2">
                         {row.source_work_name ?? ""}

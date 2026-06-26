@@ -137,6 +137,12 @@ const notificationRealtimeTables = [
   { table: "app_users" },
 ];
 
+const hasAdminApprovalRole = (approvalRole?: string | null) => {
+  const value = String(approvalRole ?? "");
+
+  return value.includes("관리자") || value.includes("관리부");
+};
+
 export default function MainLayout({ user, onLogout }: MainLayoutProps) {
   const isAdmin = user.role === "ADMIN";
   const userRole = user.role ?? "STAFF";
@@ -144,7 +150,10 @@ export default function MainLayout({ user, onLogout }: MainLayoutProps) {
   const approvalRole = getApprovalRole(user);
   const canCheckIncident = approvalRole === "관리자";
   const canApproveCashChanges =
-    isAdmin || approvalRole === "관리자" || user.approval_role === "관리자";
+    isAdmin ||
+    hasAdminApprovalRole(approvalRole) ||
+    hasAdminApprovalRole(user.approval_role) ||
+    hasAdminApprovalRole(user.department);
 
   const [selectedMenu, setSelectedMenu] = useState<MenuItem>(initialMenu);
   const [menuHistory, setMenuHistory] = useState<MenuItem[]>([]);

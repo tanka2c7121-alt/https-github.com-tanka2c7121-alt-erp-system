@@ -38,45 +38,7 @@ type RiskSortField = keyof RiskRow;
 
 const pendingCutoffDays = 90;
 const claimDetails: ClaimDetail[] = ["보험", "캐피탈", "일반", "바디케어"];
-const receivableAccountNames = ["국민은행", "부산은행", "BLUE POINT"];
-
 const normalizeText = (value: unknown) => String(value ?? "").trim();
-
-function normalizeBluePointAccount(value: unknown) {
-  const rawText = normalizeText(value);
-  const accountKey = rawText
-    .replace(/\s+/g, "")
-    .replaceAll("-", "")
-    .replaceAll("_", "")
-    .toUpperCase();
-
-  return accountKey.includes("BLUE") || accountKey.includes("블루")
-    ? "BLUE POINT"
-    : rawText;
-}
-
-function normalizeAccountName(value: unknown) {
-  const rawText = normalizeBluePointAccount(value);
-  const accountKey = rawText
-    .replace(/\s+/g, "")
-    .replaceAll("-", "")
-    .replaceAll("_", "")
-    .toUpperCase();
-
-  if (accountKey.includes("국민") || accountKey.includes("KB")) {
-    return "국민은행";
-  }
-
-  if (accountKey.includes("부산") || accountKey.includes("BNK")) {
-    return "부산은행";
-  }
-
-  if (accountKey.includes("BLUE") || accountKey.includes("블루")) {
-    return "BLUE POINT";
-  }
-
-  return rawText;
-}
 
 const normalizeStatus = (value: unknown) => {
   const text = normalizeText(value);
@@ -99,19 +61,8 @@ const toAmountNumber = (value: unknown) =>
 const isClaimPaymentRow = (row: any) =>
   normalizeText(row.payment_type) === "청구";
 
-const isDeductiblePaymentRow = (row: any) =>
-  normalizeText(row.payment_type) === "면책금";
-
-const isRepairPaymentAmountRow = (row: any) => {
-  const paymentType = normalizeText(row.payment_type);
-
-  return (
-    toAmountNumber(row.payment_amount) > 0 &&
-    (paymentType === "수리비" || paymentType === "부가세") &&
-    !isClaimPaymentRow(row) &&
-    !isDeductiblePaymentRow(row)
-  );
-};
+const isRepairPaymentAmountRow = (row: any) =>
+  toAmountNumber(row.payment_amount) > 0 && !isClaimPaymentRow(row);
 
 const normalizeClaimDetail = (value: unknown): ClaimDetail | null => {
   const text = normalizeText(value);
@@ -122,13 +73,9 @@ const normalizeClaimDetail = (value: unknown): ClaimDetail | null => {
 const hasSettlementPaymentDetail = (payment: any) =>
   Boolean(normalizeClaimDetail(payment.payment_detail));
 
-const isReceivableAccountPaymentRow = (payment: any) =>
-  receivableAccountNames.includes(normalizeAccountName(payment.payment_method));
-
 const isSettlementReceivablePaymentRow = (payment: any) =>
   toAmountNumber(payment.payment_amount) > 0 &&
-  isEmptyDateValue(payment.payment_date) &&
-  isReceivableAccountPaymentRow(payment);
+  isEmptyDateValue(payment.payment_date);
 
 const getClaimStatus = (claimDate: string, claimAmount: number) => {
   if (!claimAmount && isEmptyDateValue(claimDate)) return "미청구";
@@ -353,7 +300,6 @@ export default function PendingSettlementPage({
       const receivableAmount = workPayments
         .filter(isRepairPaymentAmountRow)
         .filter(hasSettlementPaymentDetail)
-        .filter(isReceivableAccountPaymentRow)
         .filter((payment) => isEmptyDateValue(payment.payment_date))
         .reduce((sum, payment) => sum + toAmountNumber(payment.payment_amount), 0);
       const collectionAmount = paidAmount + receivableAmount;

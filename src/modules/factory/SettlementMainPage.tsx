@@ -221,6 +221,7 @@ const receivableAccountNames = [
   "국민은행",
   "부산은행",
   "BLUE POINT",
+  "미지정",
 ];
 
 function normalizeText(value: unknown) {
@@ -276,7 +277,7 @@ const getReceivableAmount = (row: any) =>
   toAmountNumber(row.payment_amount);
 
 const getReceivableAccountName = (row: any) =>
-  normalizeAccountName(row.payment_method);
+  normalizeAccountName(row.payment_method) || "미지정";
 
 const getDailyCashContent = (row: any) =>
   `${row.payment_type ?? ""} / ${row.payment_detail ?? ""} / ${row.car_number ?? ""}`;
@@ -285,12 +286,9 @@ const getLegacyDailyCashContent = (row: any) =>
   `${row.payment_type ?? ""} / ${row.payment_detail ?? ""} / ${row.work_name ?? ""}`;
 
 const isReceivableAccountRow = (row: any) => {
-  const accountName = getReceivableAccountName(row);
-
   return (
     getReceivableAmount(row) > 0 &&
-    isEmptyDateValue(row.payment_date) &&
-    receivableAccountNames.includes(accountName)
+    isEmptyDateValue(row.payment_date)
   );
 };
 
@@ -327,7 +325,14 @@ const receivableRows = paymentRows
     return String(a.work_name ?? "").localeCompare(String(b.work_name ?? ""), "ko");
   });
 
-const receivableSummary = receivableAccountNames.map((accountName) => {
+const receivableSummaryAccountNames = Array.from(
+  new Set([
+    ...receivableAccountNames,
+    ...receivableRows.map((row) => row.normalized_payment_method || "미지정"),
+  ])
+);
+
+const receivableSummary = receivableSummaryAccountNames.map((accountName) => {
 
   const rows = receivableRows.filter(
     (row) => row.normalized_payment_method === accountName
@@ -353,8 +358,7 @@ const receivableAmount = receivableSummary.reduce(
 
 const receivableSourceCount = paymentRows.filter(
   (row) =>
-    getReceivableAmount(row) > 0 &&
-    receivableAccountNames.includes(getReceivableAccountName(row))
+    getReceivableAmount(row) > 0
 ).length;
 
 const handleReceivableDateSave = async (row: any) => {

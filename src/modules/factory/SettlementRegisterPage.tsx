@@ -364,8 +364,8 @@ export default function SettlementRegisterPage({
 
         const nextRow = { ...row, [field]: value } as PaymentRow;
 
-        if (field === "date" && value) {
-          nextRow.paymentStatus = "수금";
+        if (field === "date") {
+          nextRow.paymentStatus = value ? "수금" : "청구";
         }
 
         if (field === "invoiceIssued" && value === true) {
@@ -686,6 +686,7 @@ export default function SettlementRegisterPage({
   const savePaymentRows = async (targetForm = form) => {
     const inputRows = paymentRows.filter(hasPaymentInputValue);
     const savedRows: PaymentRow[] = [];
+    const removedRows: any[] = [];
     const keptIds = new Set(
       inputRows
         .map((row) => row.id)
@@ -695,15 +696,16 @@ export default function SettlementRegisterPage({
     const { data: existingPaymentRows, error: existingPaymentError } =
       await supabase
         .from("settlement_payments")
-        .select("id, payment_type, payment_amount, payment_date, payment_method")
+        .select(
+          "id, payment_type, payment_detail, claim_amount, payment_amount, payment_date, payment_method"
+        )
         .eq("work_name", targetForm.workName);
 
     if (existingPaymentError) {
-      return { error: existingPaymentError, rows: savedRows };
+      return { error: existingPaymentError, rows: savedRows, removedRows };
     }
 
-    const removableIds = (existingPaymentRows ?? [])
-      .filter((item: any) => {
+    const removableItems = (existingPaymentRows ?? []).filter((item: any) => {
         const isClaimOnly =
           item.payment_type === "청구" &&
           Number(item.payment_amount ?? 0) === 0 &&
@@ -711,7 +713,10 @@ export default function SettlementRegisterPage({
           !item.payment_method;
 
         return !isClaimOnly && !keptIds.has(Number(item.id));
-      })
+      });
+    removedRows.push(...removableItems);
+
+    const removableIds = removableItems
       .map((item: any) => Number(item.id))
       .filter((id) => Number.isFinite(id));
 
@@ -722,7 +727,7 @@ export default function SettlementRegisterPage({
         .in("id", removableIds);
 
       if (deleteError) {
-        return { error: deleteError, rows: savedRows };
+        return { error: deleteError, rows: savedRows, removedRows };
       }
     }
 
@@ -744,7 +749,7 @@ export default function SettlementRegisterPage({
           card_number: row.cardNumber,
           invoice_issued: row.invoiceIssued,
           claim_date: row.claimDate || null,
-          payment_status: row.paymentStatus,
+          payment_status: row.date ? "수금" : "청구",
           refund_requested: Boolean(row.refundRequested),
           refund_status: row.refundRequested ? row.refundStatus || "pending" : "none",
           refund_reason: row.refundRequested ? row.refundReason || null : null,
@@ -780,7 +785,7 @@ export default function SettlementRegisterPage({
       }
 
       if (saveResult.error) {
-        return { error: saveResult.error, rows: savedRows };
+        return { error: saveResult.error, rows: savedRows, removedRows };
       }
 
       savedRows.push({
@@ -790,7 +795,7 @@ export default function SettlementRegisterPage({
       });
     }
 
-    return { error: null, rows: savedRows };
+    return { error: null, rows: savedRows, removedRows };
   };
 
   const saveClaimRows = async (targetForm = form) => {
@@ -913,8 +918,44 @@ export default function SettlementRegisterPage({
     });
   };
 
-  const requiresDailyCashAdminApproval = async (targetForm = form) => {
-    const today = localDateText();
+  const findExactDailyCashPostingRow = (
+    existingRows: any[],
+    usedExistingIds: Set<number>,
+    row: PaymentRow,
+    targetForm = form
+  ) => {
+    const payload = toDailyCashPayload(row, targetForm);
+
+    return existingRows.find((cashRow: any) => {
+      const id = Number(cashRow.id);
+      if (usedExistingIds.has(id)) return false;
+
+      if (
+        row.id &&
+        String(cashRow.source_key ?? "") === getSettlementPaymentSourceKey(row.id)
+      ) {
+        return true;
+      }
+
+      return (
+        String(cashRow.date ?? "") === payload.date &&
+        String(cashRow.account ?? "") === payload.account &&
+        String(cashRow.content ?? "") === payload.content &&
+        Number(cashRow.income ?? 0) === payload.income &&
+        Number(cashRow.expense ?? 0) === payload.expense
+      );
+    });
+  };
+
+  const createReceivablePostingApprovalRequests = async (
+    targetForm = form,
+    targetPaymentRows = paymentRows
+  ) => {
+    const rows = getDailyCashEligiblePaymentRows(targetPaymentRows).filter(
+      requiresAdminApprovalForPastPaymentPosting
+    );
+    if (rows.length === 0) return { error: null, requestCount: 0 };
+
     const { data: existingCashRows, error: existingCashError } = await supabase
       .from("daily_cash")
       .select("id, source_key, created_on, date, account, content, income, expense, memo")
@@ -926,7 +967,7 @@ export default function SettlementRegisterPage({
 
     if (existingCashError) {
       if (!isCashWorkflowSetupError(existingCashError)) {
-        return { error: existingCashError, requiresApproval: false };
+        return { error: existingCashError, requestCount: 0 };
       }
 
       const { data: legacyRows, error: legacyError } = await supabase
@@ -936,201 +977,19 @@ export default function SettlementRegisterPage({
         .eq("source_work_name", targetForm.workName)
         .eq("category", "차량정산");
 
-      if (legacyError) {
-        return { error: legacyError, requiresApproval: false };
-      }
-
-      existingRows = legacyRows ?? [];
-    }
-
-    const eligibleRows = getDailyCashEligiblePaymentRows(paymentRows);
-    const usedExistingIds = new Set<number>();
-
-    for (const row of eligibleRows) {
-      const payload = toDailyCashPayload(row, targetForm);
-      const matchingCashRow = findMatchingDailyCashRow(
-        existingRows,
-        usedExistingIds,
-        row,
-        targetForm
-      );
-
-      if (!matchingCashRow) continue;
-
-      usedExistingIds.add(Number(matchingCashRow.id));
-
-      if (matchingCashRow.created_on === today) continue;
-
-      const willChange =
-        String(matchingCashRow.date ?? "") !== payload.date ||
-        String(matchingCashRow.account ?? "") !== payload.account ||
-        String(matchingCashRow.content ?? "") !== payload.content ||
-        Number(matchingCashRow.income ?? 0) !== payload.income ||
-        Number(matchingCashRow.expense ?? 0) !== payload.expense ||
-        String(matchingCashRow.memo ?? "") !== payload.memo;
-
-      if (willChange) {
-        return { error: null, requiresApproval: true };
-      }
-    }
-
-    const removedStoredPaymentRows = paymentRows.filter(
-      (row) =>
-        row.id &&
-        !getDailyCashEligiblePaymentRows([row]).length &&
-        !isPartnerSupportPaymentRow(row)
-    );
-    const willDeleteLockedRow = removedStoredPaymentRows.some((row) => {
-      const matchingCashRow = findMatchingDailyCashRow(
-        existingRows,
-        usedExistingIds,
-        row,
-        targetForm
-      );
-
-      return Boolean(matchingCashRow && matchingCashRow.created_on !== today);
-    });
-
-    return { error: null, requiresApproval: willDeleteLockedRow };
-  };
-
-  const createDailyCashCorrectionRequests = async (targetForm = form) => {
-    const today = localDateText();
-    const { data: existingCashRows, error: existingCashError } = await supabase
-      .from("daily_cash")
-      .select("id, source_key, created_on, date, account, content, income, expense, memo")
-      .eq("source_type", "settlement_payment")
-      .eq("source_work_name", targetForm.workName)
-      .eq("category", "차량정산");
-
-    if (existingCashError) return existingCashError;
-
-    const existingRows = existingCashRows ?? [];
-    const eligibleRows = getDailyCashEligiblePaymentRows(paymentRows);
-    const usedExistingIds = new Set<number>();
-
-    for (const row of eligibleRows) {
-      const payload = toDailyCashPayload(row, targetForm);
-      const matchingCashRow = findMatchingDailyCashRow(
-        existingRows,
-        usedExistingIds,
-        row,
-        targetForm
-      );
-
-      if (!matchingCashRow) continue;
-      usedExistingIds.add(Number(matchingCashRow.id));
-
-      if (matchingCashRow.created_on === today) continue;
-
-      const updatePayload = {
-        date: payload.date,
-        account: payload.account,
-        type: payload.type,
-        category: payload.category,
-        content: payload.content,
-        income: payload.income,
-        expense: payload.expense,
-        memo: [
-          payload.memo,
-          "관리자 승인 정정",
-          `입금금액 ${payload.income.toLocaleString()}원`,
-        ].join(" / "),
-        source_type: payload.source_type,
-        source_work_name: payload.source_work_name,
-        source_detail_id: payload.source_detail_id,
-        source_key:
-          payload.source_key ?? matchingCashRow.source_key ?? `daily_cash:${matchingCashRow.id}`,
-        ledger_effective: true,
-        approval_status: "approved",
-      };
-
-      const willChange =
-        String(matchingCashRow.date ?? "") !== updatePayload.date ||
-        String(matchingCashRow.account ?? "") !== updatePayload.account ||
-        String(matchingCashRow.content ?? "") !== updatePayload.content ||
-        Number(matchingCashRow.income ?? 0) !== updatePayload.income ||
-        Number(matchingCashRow.expense ?? 0) !== updatePayload.expense ||
-        String(matchingCashRow.memo ?? "") !== updatePayload.memo;
-
-      if (!willChange) continue;
-
-      const requestSourceKey = `daily_cash_correction:${matchingCashRow.id}`;
-      const { data: existingRequest, error: existingRequestError } =
-        await supabase
-          .from("cash_change_requests")
-          .select("id")
-          .eq("source_key", requestSourceKey)
-          .eq("status", "pending")
-          .limit(1)
-          .maybeSingle();
-
-      if (existingRequestError) return existingRequestError;
-      if (existingRequest) continue;
-
-      const { error } = await supabase.from("cash_change_requests").insert({
-        request_type: "daily_cash_correction",
-        status: "pending",
-        source_type: "settlement_payment",
-        source_work_name: targetForm.workName,
-        source_detail_id: row.id ?? null,
-        source_key: requestSourceKey,
-        target_table: "daily_cash",
-        target_id: Number(matchingCashRow.id),
-        title: `${targetForm.workName} 일일입출금 정정 요청`,
-        reason: "당일이 지난 차량정산 입금내역 수정",
-        before_payload: matchingCashRow,
-        requested_payload: { daily_cash: updatePayload },
-        requested_by: user.user_id,
-        requested_name: user.user_name,
-      });
-
-      if (error) return error;
-    }
-
-    return null;
-  };
-
-  const createReceivablePostingApprovalRequests = async (
-    targetForm = form,
-    targetPaymentRows = paymentRows
-  ) => {
-    const rows = getDailyCashEligiblePaymentRows(targetPaymentRows).filter(
-      requiresAdminApprovalForPastPaymentPosting
-    );
-    if (rows.length === 0) return null;
-
-    const { data: existingCashRows, error: existingCashError } = await supabase
-      .from("daily_cash")
-      .select("id, source_key, created_on, date, account, content, income, expense, memo")
-      .eq("source_type", "settlement_payment")
-      .eq("source_work_name", targetForm.workName)
-      .eq("category", "차량정산");
-
-    let existingRows: any[] = existingCashRows ?? [];
-
-    if (existingCashError) {
-      if (!isCashWorkflowSetupError(existingCashError)) return existingCashError;
-
-      const { data: legacyRows, error: legacyError } = await supabase
-        .from("daily_cash")
-        .select("id, created_on, date, account, content, income, expense, memo")
-        .eq("source_type", "settlement_payment")
-        .eq("source_work_name", targetForm.workName)
-        .eq("category", "차량정산");
-
-      if (legacyError) return legacyError;
+      if (legacyError) return { error: legacyError, requestCount: 0 };
       existingRows = legacyRows ?? [];
     }
 
     const usedExistingIds = new Set<number>();
+    let requestCount = 0;
 
     for (const row of rows) {
       const paymentId = Number(row.id);
       if (!Number.isFinite(paymentId)) continue;
 
       const payload = toDailyCashPayload(row, targetForm);
-      const matchingCashRow = findMatchingDailyCashRow(
+      const matchingCashRow = findExactDailyCashPostingRow(
         existingRows,
         usedExistingIds,
         row,
@@ -1152,7 +1011,9 @@ export default function SettlementRegisterPage({
           .limit(1)
           .maybeSingle();
 
-      if (existingRequestError) return existingRequestError;
+      if (existingRequestError) {
+        return { error: existingRequestError, requestCount };
+      }
       if (existingRequest) continue;
 
       const { error } = await supabase.from("cash_change_requests").insert({
@@ -1190,10 +1051,14 @@ export default function SettlementRegisterPage({
         requested_name: user.user_name,
       });
 
-      if (error && !isDuplicateRequestError(error)) return error;
+      if (error && !isDuplicateRequestError(error)) {
+        return { error, requestCount };
+      }
+
+      requestCount += 1;
     }
 
-    return null;
+    return { error: null, requestCount };
   };
 
   const saveDailyCashRows = async (targetForm = form, targetPaymentRows = paymentRows) => {
@@ -1374,6 +1239,108 @@ export default function SettlementRegisterPage({
 
     const { error } = await supabase.from("daily_cash").insert(insertRows);
     return error;
+  };
+
+  const cleanupRemovedPaymentLinks = async (
+    removedRows: any[],
+    targetForm = form
+  ) => {
+    const removedIds = removedRows
+      .map((row) => Number(row.id))
+      .filter((id) => Number.isFinite(id));
+
+    if (removedIds.length === 0) return null;
+
+    const sourceKeys = removedIds.map(getSettlementPaymentSourceKey);
+    const requestKeys = removedIds.flatMap((id) => [
+      getSettlementPaymentPostingRequestKey(id),
+      getSettlementRefundSourceKey(id),
+    ]);
+
+    const { error: requestDeleteError } = await supabase
+      .from("cash_change_requests")
+      .delete()
+      .in("source_key", requestKeys)
+      .eq("status", "pending");
+
+    if (requestDeleteError && !isCashWorkflowSetupError(requestDeleteError)) {
+      return requestDeleteError;
+    }
+
+    const { data: linkedCashRows, error: linkedCashError } = await supabase
+      .from("daily_cash")
+      .select("id")
+      .in("source_key", sourceKeys);
+
+    if (linkedCashError && !isCashWorkflowSetupError(linkedCashError)) {
+      return linkedCashError;
+    }
+
+    const deleteIds = new Set<number>(
+      (linkedCashRows ?? [])
+        .map((row: any) => Number(row.id))
+        .filter((id) => Number.isFinite(id))
+    );
+
+    const { data: legacyCashRows, error: legacyCashError } = await supabase
+      .from("daily_cash")
+      .select("id, date, account, content, income, expense")
+      .eq("source_type", "settlement_payment")
+      .eq("source_work_name", targetForm.workName)
+      .eq("category", "차량정산");
+
+    if (legacyCashError) return legacyCashError;
+
+    for (const removedRow of removedRows) {
+      const content = getDailyCashContent(
+        {
+          ...emptyPaymentRow(),
+          paymentType: removedRow.payment_type ?? "",
+          paymentDetail: removedRow.payment_detail ?? "",
+        },
+        targetForm.carNumber
+      );
+      const matchingLegacyRow = (legacyCashRows ?? []).find((cashRow: any) => {
+        if (deleteIds.has(Number(cashRow.id))) return false;
+
+        return (
+          String(cashRow.date ?? "") === String(removedRow.payment_date ?? "") &&
+          String(cashRow.account ?? "") === String(removedRow.payment_method ?? "") &&
+          String(cashRow.content ?? "") === content &&
+          Number(cashRow.income ?? 0) === Number(removedRow.payment_amount ?? 0) &&
+          Number(cashRow.expense ?? 0) === 0
+        );
+      });
+
+      if (matchingLegacyRow) {
+        deleteIds.add(Number(matchingLegacyRow.id));
+      }
+    }
+
+    if (deleteIds.size === 0) return null;
+
+    const correctionRequestKeys = Array.from(deleteIds).map(
+      (id) => `daily_cash_correction:${id}`
+    );
+    const { error: correctionRequestDeleteError } = await supabase
+      .from("cash_change_requests")
+      .delete()
+      .in("source_key", correctionRequestKeys)
+      .eq("status", "pending");
+
+    if (
+      correctionRequestDeleteError &&
+      !isCashWorkflowSetupError(correctionRequestDeleteError)
+    ) {
+      return correctionRequestDeleteError;
+    }
+
+    const { error: cashDeleteError } = await supabase
+      .from("daily_cash")
+      .delete()
+      .in("id", Array.from(deleteIds));
+
+    return cashDeleteError ?? null;
   };
 
   const createRefundApprovalRequests = async (
@@ -1673,30 +1640,6 @@ export default function SettlementRegisterPage({
       return;
     }
 
-    const {
-      error: dailyCashApprovalCheckError,
-      requiresApproval: dailyCashRequiresApproval,
-    } = await requiresDailyCashAdminApproval(saveForm);
-
-    if (dailyCashApprovalCheckError) {
-      alert("일일입출금 연동 확인 실패: " + dailyCashApprovalCheckError.message);
-      saveInProgressRef.current = false;
-      return;
-    }
-
-    if (dailyCashRequiresApproval && !dailyCashAdminUnlocked) {
-      const requestError = await createDailyCashCorrectionRequests(saveForm);
-      if (requestError) {
-        alert("일일입출금 정정 요청 실패: " + formatCashWorkflowError(requestError));
-      } else {
-        alert(
-          "이미 일일입출금에 반영된 과거 입금내역은 관리자 승인 후 변경됩니다. 관리자에게 정정 요청을 보냈습니다."
-        );
-      }
-      saveInProgressRef.current = false;
-      return;
-    }
-
     setSaving(true);
 
     await supabase.from("repair_settlements").delete().eq("work_name", saveForm.workName);
@@ -1776,17 +1719,31 @@ export default function SettlementRegisterPage({
       return;
     }
 
-    const receivablePostingApprovalError =
+    const removedPaymentCleanupError = await cleanupRemovedPaymentLinks(
+      paymentSaveResult.removedRows,
+      saveForm
+    );
+    if (removedPaymentCleanupError) {
+      saveInProgressRef.current = false;
+      setSaving(false);
+      alert(
+        "삭제된 입금내역의 일일입출금 정리 실패: " +
+          removedPaymentCleanupError.message
+      );
+      return;
+    }
+
+    const receivablePostingApprovalResult =
       await createReceivablePostingApprovalRequests(
         saveForm,
         paymentSaveResult.rows
       );
-    if (receivablePostingApprovalError) {
+    if (receivablePostingApprovalResult.error) {
       saveInProgressRef.current = false;
       setSaving(false);
       alert(
         "미수 입금 반영 승인요청 저장 실패: " +
-          formatCashWorkflowError(receivablePostingApprovalError)
+          formatCashWorkflowError(receivablePostingApprovalResult.error)
       );
       return;
     }
@@ -1834,7 +1791,13 @@ export default function SettlementRegisterPage({
       return;
     }
 
-    alert(isEditMode ? "수정되었습니다." : "저장되었습니다.");
+    if (receivablePostingApprovalResult.requestCount > 0) {
+      alert(
+        `저장되었습니다. 미수 입금 ${receivablePostingApprovalResult.requestCount}건은 관리자 승인 후 일일입출금에 반영됩니다.`
+      );
+    } else {
+      alert(isEditMode ? "수정되었습니다." : "저장되었습니다.");
+    }
     saveInProgressRef.current = false;
   };
 
